@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/smtp"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -55,11 +56,20 @@ func FromEnv() Mailer {
 	return New(ConfigFromEnv())
 }
 
+// lastMailFile คือไฟล์ที่ LogMailer เขียนอีเมลฉบับล่าสุดทับไว้เสมอ เพื่อให้ dev
+// หาลิงก์ (เช่นลิงก์รีเซ็ตรหัสผ่าน) ได้ง่ายกว่าไล่ดู log ของเซิร์ฟเวอร์ทั้งไฟล์
+// เป็น var (ไม่ใช่ const) เพื่อให้เทสต์เปลี่ยนไปชี้ไฟล์ชั่วคราวได้
+var lastMailFile = filepath.Join(os.TempDir(), "octavia-last-mail.txt")
+
 // LogMailer พิมพ์อีเมลออก console แทนการส่งจริง ใช้ตอน dev ที่ไม่มี SMTP
 type LogMailer struct{}
 
 func (LogMailer) Send(to, subject, body string) error {
-	log.Printf("[mailer] ยังไม่ได้ตั้งค่า SMTP_HOST จึงไม่ได้ส่งอีเมลจริง\nถึง: %s\nหัวข้อ: %s\n%s", to, subject, body)
+	message := "ถึง: " + to + "\nหัวข้อ: " + subject + "\n\n" + body + "\n"
+	log.Printf("[mailer] ยังไม่ได้ตั้งค่า SMTP_HOST จึงไม่ได้ส่งอีเมลจริง\n%s", message)
+	if err := os.WriteFile(lastMailFile, []byte(message), 0o600); err != nil {
+		log.Printf("[mailer] เขียนไฟล์อีเมลล่าสุด (%s) ไม่สำเร็จ: %v", lastMailFile, err)
+	}
 	return nil
 }
 
