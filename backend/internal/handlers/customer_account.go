@@ -79,6 +79,7 @@ func RegisterCustomerAccountRoutes(app *fiber.App, db *gorm.DB) {
 	group.Post("/auth/login", h.login)
 	group.Post("/auth/logout", h.logout)
 	group.Get("/promotions", h.listCustomerPromotions)
+	group.Get("/promotions/redeem", h.redeemCustomerPromotion)
 	group.Get("/promotions/:id", h.getCustomerPromotion)
 	group.Get("/concerts/:id", h.getCustomerConcert)
 	group.Get("/account", h.requireCustomer, h.getAccount)

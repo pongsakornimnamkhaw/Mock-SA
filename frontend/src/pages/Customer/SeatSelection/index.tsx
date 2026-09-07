@@ -8,6 +8,7 @@ import { eventsMap, zonePriceMap, LOCK_DURATION, STEPS, generateSeats } from '@/
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import { formatThaiDate } from '@/utils/customerPromotion';
 import type { CustomerPromotion } from '@/types/customerPromotion';
+import { calculateDiscount, filterEligiblePromotions, type PromotionOrder } from '@/utils/seatPromotion';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
 import { getCustomerSession } from '@/utils/customerSession';
 import { pulse } from '@/assets/Poster';
@@ -20,21 +21,6 @@ import OrderSummary from '@/components/SeatSelection/OrderSummary';
 import QRCodeDialog from '@/components/SeatSelection/dialogs/QRCodeDialog';
 import SuccessDialog from '@/components/SeatSelection/dialogs/SuccessDialog';
 import ExpiredDialog from '@/components/SeatSelection/dialogs/ExpiredDialog';
-
-const normalizeMatchText = (value: string) => value
-    .toLocaleLowerCase('th-TH')
-    .replace(/[^a-z0-9ก-๙]+/g, ' ')
-    .trim();
-
-const calculateDiscount = (promotion: CustomerPromotion, total: number) => {
-    const rawDiscount = promotion.discount.type === 'percent'
-        ? total * promotion.discount.value / 100
-        : promotion.discount.value;
-    const cappedDiscount = promotion.discount.max_discount_amount > 0
-        ? Math.min(rawDiscount, promotion.discount.max_discount_amount)
-        : rawDiscount;
-    return Math.max(0, Math.min(total, Math.round(cappedDiscount * 100) / 100));
-};
 
 const SeatSelectionPage = () => {
     const navigate = useNavigate();
@@ -55,6 +41,11 @@ const SeatSelectionPage = () => {
     const [promotionError, setPromotionError] = useState('');
     const [selectedPromotionId, setSelectedPromotionId] = useState('');
     const [promotionSelectionTouched, setPromotionSelectionTouched] = useState(false);
+    const [redeemedPromotions, setRedeemedPromotions] = useState<CustomerPromotion[]>([]);
+    const [codeValue, setCodeValue] = useState('');
+    const [codeError, setCodeError] = useState('');
+    const [codeSuccess, setCodeSuccess] = useState('');
+    const [codeSubmitting, setCodeSubmitting] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
@@ -87,6 +78,10 @@ const SeatSelectionPage = () => {
         setPromotionError('');
         setSelectedPromotionId('');
         setPromotionSelectionTouched(false);
+        setRedeemedPromotions([]);
+        setCodeValue('');
+        setCodeError('');
+        setCodeSuccess('');
         customerPromotionApi.list().then(({ data }) => {
             if (active) setPromotions(data);
         }).catch((reason) => {
@@ -103,49 +98,78 @@ const SeatSelectionPage = () => {
     const lockedSeats = seats.filter((s) => s.status === 'locked');
     const activeSeats = isLocked ? lockedSeats : selectedSeats;
     const totalPrice = activeSeats.length * zoneInfo.price;
-    const eligiblePromotions = useMemo(() => {
-        const eventName = normalizeMatchText(event.title);
-        const routeZone = (zone || '').toLocaleLowerCase('th-TH');
-        const zoneRow = routeZone.charAt(0);
-        const zoneLabel = normalizeMatchText(zoneInfo.label);
+    const promotionOrder = useMemo<PromotionOrder>(() => ({
+        concertId: id || '',
+        concertName: event.title,
+        zoneId: zone || '',
+        zoneLabel: zoneInfo.label,
+        total: totalPrice,
+    }), [event.title, id, totalPrice, zone, zoneInfo.label]);
 
-        return promotions
-            .filter((promotion) => {
-                const promotionConcertName = normalizeMatchText(promotion.concert.concert_name);
-                const matchesConcert = promotion.concert.concert_id === id
-                    || eventName.includes(promotionConcertName)
-                    || promotionConcertName.includes(eventName);
-                const matchesMinimum = totalPrice >= promotion.discount.minimum_order;
-                const hasQuota = promotion.validity.remaining_quota > 0;
-                const matchesZone = promotion.zones.length === 0 || promotion.zones.some((promotionZone) => {
-                    const promotionZoneId = promotionZone.zone_id.toLocaleLowerCase('th-TH');
-                    const promotionZoneName = normalizeMatchText(promotionZone.zone_name);
-                    return promotionZoneId === routeZone
-                        || promotionZoneId.endsWith(`_${zoneRow}`)
-                        || promotionZoneName === zoneLabel
-                        || promotionZoneName.includes(`โซน ${zoneRow}`);
-                });
-                return matchesConcert && matchesMinimum && hasQuota && matchesZone;
-            })
-            .sort((left, right) => calculateDiscount(right, totalPrice) - calculateDiscount(left, totalPrice));
-    }, [event.title, id, promotions, totalPrice, zone, zoneInfo.label]);
+    const eligiblePromotions = useMemo(
+        () => filterEligiblePromotions(promotions, promotionOrder),
+        [promotions, promotionOrder],
+    );
+
+    // โค้ดที่แลกไว้แล้วอาจใช้ไม่ได้ถ้าลูกค้าเอาที่นั่งออกจนยอดต่ำกว่าขั้นต่ำ
+    const activeRedeemedPromotions = useMemo(
+        () => redeemedPromotions.filter((promotion) => totalPrice >= promotion.discount.minimum_order
+            && promotion.validity.remaining_quota > 0),
+        [redeemedPromotions, totalPrice],
+    );
+
+    const droppedRedeemedCode = activeRedeemedPromotions.length < redeemedPromotions.length;
+
+    const selectablePromotions = useMemo(() => {
+        const merged: CustomerPromotion[] = [];
+        for (const promotion of [...activeRedeemedPromotions, ...eligiblePromotions]) {
+            if (!merged.some((option) => option.promotion_id === promotion.promotion_id)) {
+                merged.push(promotion);
+            }
+        }
+        return merged.sort((left, right) => calculateDiscount(right, totalPrice) - calculateDiscount(left, totalPrice));
+    }, [activeRedeemedPromotions, eligiblePromotions, totalPrice]);
 
     useEffect(() => {
-        if (selectedPromotionId && eligiblePromotions.some((promotion) => promotion.promotion_id === selectedPromotionId)) return;
-        if (!promotionSelectionTouched && eligiblePromotions.length > 0) {
-            setSelectedPromotionId(eligiblePromotions[0].promotion_id);
+        if (selectedPromotionId && selectablePromotions.some((promotion) => promotion.promotion_id === selectedPromotionId)) return;
+        if (!promotionSelectionTouched && selectablePromotions.length > 0) {
+            setSelectedPromotionId(selectablePromotions[0].promotion_id);
             return;
         }
         setSelectedPromotionId('');
-    }, [eligiblePromotions, promotionSelectionTouched, selectedPromotionId]);
+    }, [selectablePromotions, promotionSelectionTouched, selectedPromotionId]);
 
-    const selectedPromotion = eligiblePromotions.find((promotion) => promotion.promotion_id === selectedPromotionId) ?? null;
+    const selectedPromotion = selectablePromotions.find((promotion) => promotion.promotion_id === selectedPromotionId) ?? null;
     const discountAmount = selectedPromotion ? calculateDiscount(selectedPromotion, totalPrice) : 0;
     const finalPrice = Math.max(0, totalPrice - discountAmount);
 
     const handlePromotionChange = (promotionId: string) => {
         setPromotionSelectionTouched(true);
         setSelectedPromotionId(promotionId);
+        setCodeError('');
+    };
+
+    const handleApplyCode = async () => {
+        const code = codeValue.trim();
+        if (!code || codeSubmitting) return;
+        setCodeSubmitting(true);
+        setCodeError('');
+        setCodeSuccess('');
+        try {
+            const { data } = await customerPromotionApi.redeem({ ...promotionOrder, code });
+            setRedeemedPromotions((previous) => [
+                data.promotion,
+                ...previous.filter((promotion) => promotion.promotion_id !== data.promotion.promotion_id),
+            ]);
+            setPromotionSelectionTouched(true);
+            setSelectedPromotionId(data.promotion.promotion_id);
+            setCodeSuccess(`ใช้โค้ด ${data.promotion.discount.promo_code} แล้ว`);
+            setCodeValue('');
+        } catch (reason) {
+            setCodeError(reason instanceof Error ? reason.message : 'ใช้รหัสโปรโมชั่นนี้ไม่ได้');
+        } finally {
+            setCodeSubmitting(false);
+        }
     };
 
     // ========== Countdown Timer ==========
@@ -339,11 +363,22 @@ const SeatSelectionPage = () => {
                         totalPrice={totalPrice}
                         finalPrice={finalPrice}
                         discountAmount={discountAmount}
-                        eligiblePromotions={eligiblePromotions}
-                        selectedPromotionId={selectedPromotionId}
-                        promotionsLoading={promotionsLoading}
-                        promotionError={promotionError}
-                        onPromotionChange={handlePromotionChange}
+                        promotion={{
+                            eligiblePromotions,
+                            redeemedPromotions: activeRedeemedPromotions,
+                            selectedPromotionId,
+                            autoSelected: !promotionSelectionTouched && selectedPromotionId !== '',
+                            loading: promotionsLoading,
+                            loadError: promotionError,
+                            codeValue,
+                            codeError: codeError || (droppedRedeemedCode ? 'ยอดสั่งซื้อตอนนี้ไม่ถึงขั้นต่ำของโค้ดที่กรอกไว้' : ''),
+                            codeSuccess,
+                            codeSubmitting,
+                            disabled: isLocked,
+                            onSelect: handlePromotionChange,
+                            onCodeChange: setCodeValue,
+                            onCodeSubmit: handleApplyCode,
+                        }}
                         handleLockSeats={handleLockSeats}
                         handlePayment={handlePayment}
                         handleCancelLock={handleCancelLock}
