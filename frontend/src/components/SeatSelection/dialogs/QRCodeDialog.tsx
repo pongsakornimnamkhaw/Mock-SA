@@ -5,6 +5,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useState, useEffect } from 'react';
 import { formatTime } from '@/components/SeatSelection/constants';
 import { getCustomerSession } from '@/utils/customerSession';
+import promptPayQr from '@/assets/promptpay-qr/qr.png';
 
 interface QRCodeDialogProps {
     open: boolean;
@@ -143,14 +144,11 @@ const QRCodeDialog = ({ open, onClose, totalPrice, timeLeft, onSubmitPayment }: 
                     p: 1.5, mb: 2, borderRadius: '16px', bgcolor: '#fff',
                     display: 'flex', flexDirection: 'column', alignItems: 'center'
                 }}>
-                    <Box component="img" 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=OctaviaPay_Amount_${totalPrice}`}
-                        alt="QR Code"
-                        sx={{ width: 160, height: 160 }}
+                    <Box component="img"
+                        src={promptPayQr}
+                        alt="PromptPay QR Code"
+                        sx={{ width: 200, height: 'auto' }}
                     />
-                    <Typography variant="caption" sx={{ color: '#666', mt: 0.5 }}>
-                        PromptPay: 098-765-4321 (Octavia Tickets)
-                    </Typography>
                 </Paper>
 
                 {/* Total Price */}
