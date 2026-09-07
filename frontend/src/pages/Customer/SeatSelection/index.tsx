@@ -41,6 +41,11 @@ const SeatSelectionPage = () => {
     const [promotionError, setPromotionError] = useState('');
     const [selectedPromotionId, setSelectedPromotionId] = useState('');
     const [promotionSelectionTouched, setPromotionSelectionTouched] = useState(false);
+    const [redeemedPromotions, setRedeemedPromotions] = useState<CustomerPromotion[]>([]);
+    const [codeValue, setCodeValue] = useState('');
+    const [codeError, setCodeError] = useState('');
+    const [codeSuccess, setCodeSuccess] = useState('');
+    const [codeSubmitting, setCodeSubmitting] = useState(false);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
@@ -73,6 +78,10 @@ const SeatSelectionPage = () => {
         setPromotionError('');
         setSelectedPromotionId('');
         setPromotionSelectionTouched(false);
+        setRedeemedPromotions([]);
+        setCodeValue('');
+        setCodeError('');
+        setCodeSuccess('');
         customerPromotionApi.list().then(({ data }) => {
             if (active) setPromotions(data);
         }).catch((reason) => {
@@ -102,22 +111,65 @@ const SeatSelectionPage = () => {
         [promotions, promotionOrder],
     );
 
+    // โค้ดที่แลกไว้แล้วอาจใช้ไม่ได้ถ้าลูกค้าเอาที่นั่งออกจนยอดต่ำกว่าขั้นต่ำ
+    const activeRedeemedPromotions = useMemo(
+        () => redeemedPromotions.filter((promotion) => totalPrice >= promotion.discount.minimum_order
+            && promotion.validity.remaining_quota > 0),
+        [redeemedPromotions, totalPrice],
+    );
+
+    const droppedRedeemedCode = activeRedeemedPromotions.length < redeemedPromotions.length;
+
+    const selectablePromotions = useMemo(() => {
+        const merged: CustomerPromotion[] = [];
+        for (const promotion of [...activeRedeemedPromotions, ...eligiblePromotions]) {
+            if (!merged.some((option) => option.promotion_id === promotion.promotion_id)) {
+                merged.push(promotion);
+            }
+        }
+        return merged.sort((left, right) => calculateDiscount(right, totalPrice) - calculateDiscount(left, totalPrice));
+    }, [activeRedeemedPromotions, eligiblePromotions, totalPrice]);
+
     useEffect(() => {
-        if (selectedPromotionId && eligiblePromotions.some((promotion) => promotion.promotion_id === selectedPromotionId)) return;
-        if (!promotionSelectionTouched && eligiblePromotions.length > 0) {
-            setSelectedPromotionId(eligiblePromotions[0].promotion_id);
+        if (selectedPromotionId && selectablePromotions.some((promotion) => promotion.promotion_id === selectedPromotionId)) return;
+        if (!promotionSelectionTouched && selectablePromotions.length > 0) {
+            setSelectedPromotionId(selectablePromotions[0].promotion_id);
             return;
         }
         setSelectedPromotionId('');
-    }, [eligiblePromotions, promotionSelectionTouched, selectedPromotionId]);
+    }, [selectablePromotions, promotionSelectionTouched, selectedPromotionId]);
 
-    const selectedPromotion = eligiblePromotions.find((promotion) => promotion.promotion_id === selectedPromotionId) ?? null;
+    const selectedPromotion = selectablePromotions.find((promotion) => promotion.promotion_id === selectedPromotionId) ?? null;
     const discountAmount = selectedPromotion ? calculateDiscount(selectedPromotion, totalPrice) : 0;
     const finalPrice = Math.max(0, totalPrice - discountAmount);
 
     const handlePromotionChange = (promotionId: string) => {
         setPromotionSelectionTouched(true);
         setSelectedPromotionId(promotionId);
+        setCodeError('');
+    };
+
+    const handleApplyCode = async () => {
+        const code = codeValue.trim();
+        if (!code || codeSubmitting) return;
+        setCodeSubmitting(true);
+        setCodeError('');
+        setCodeSuccess('');
+        try {
+            const { data } = await customerPromotionApi.redeem({ ...promotionOrder, code });
+            setRedeemedPromotions((previous) => [
+                data.promotion,
+                ...previous.filter((promotion) => promotion.promotion_id !== data.promotion.promotion_id),
+            ]);
+            setPromotionSelectionTouched(true);
+            setSelectedPromotionId(data.promotion.promotion_id);
+            setCodeSuccess(`ใช้โค้ด ${data.promotion.discount.promo_code} แล้ว`);
+            setCodeValue('');
+        } catch (reason) {
+            setCodeError(reason instanceof Error ? reason.message : 'ใช้รหัสโปรโมชั่นนี้ไม่ได้');
+        } finally {
+            setCodeSubmitting(false);
+        }
     };
 
     // ========== Countdown Timer ==========
@@ -311,11 +363,22 @@ const SeatSelectionPage = () => {
                         totalPrice={totalPrice}
                         finalPrice={finalPrice}
                         discountAmount={discountAmount}
-                        eligiblePromotions={eligiblePromotions}
-                        selectedPromotionId={selectedPromotionId}
-                        promotionsLoading={promotionsLoading}
-                        promotionError={promotionError}
-                        onPromotionChange={handlePromotionChange}
+                        promotion={{
+                            eligiblePromotions,
+                            redeemedPromotions: activeRedeemedPromotions,
+                            selectedPromotionId,
+                            autoSelected: !promotionSelectionTouched && selectedPromotionId !== '',
+                            loading: promotionsLoading,
+                            loadError: promotionError,
+                            codeValue,
+                            codeError: codeError || (droppedRedeemedCode ? 'ยอดสั่งซื้อตอนนี้ไม่ถึงขั้นต่ำของโค้ดที่กรอกไว้' : ''),
+                            codeSuccess,
+                            codeSubmitting,
+                            disabled: isLocked,
+                            onSelect: handlePromotionChange,
+                            onCodeChange: setCodeValue,
+                            onCodeSubmit: handleApplyCode,
+                        }}
                         handleLockSeats={handleLockSeats}
                         handlePayment={handlePayment}
                         handleCancelLock={handleCancelLock}
