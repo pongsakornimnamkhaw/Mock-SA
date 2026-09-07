@@ -34,3 +34,17 @@ export interface CustomerPromotion {
   concert: CustomerPromotionConcert;
 }
 
+export interface RedeemPromotionParams {
+  code: string;
+  concertId: string;
+  concertName: string;
+  zoneId: string;
+  zoneLabel: string;
+  total: number;
+}
+
+export interface RedeemPromotionResult {
+  promotion: CustomerPromotion;
+  discount_amount: number;
+}
+
