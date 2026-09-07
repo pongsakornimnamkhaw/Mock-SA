@@ -1,6 +1,0 @@
-.gocache/
-.gomodcache/
-
-# Local development binaries and runtime logs
-tmp/*.exe
-tmp/*.log
