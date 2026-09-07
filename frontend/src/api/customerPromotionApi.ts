@@ -1,4 +1,9 @@
-import type { CustomerPromotion, CustomerPromotionConcert } from '@/types/customerPromotion';
+import type {
+  CustomerPromotion,
+  CustomerPromotionConcert,
+  RedeemPromotionParams,
+  RedeemPromotionResult,
+} from '@/types/customerPromotion';
 
 async function request<T>(path: string): Promise<T> {
   const controller = new AbortController();
@@ -47,4 +52,15 @@ export const customerPromotionApi = {
   },
   get: (id: string) => request<{ data: CustomerPromotion }>(`/promotions/${encodeURIComponent(id)}`),
   getConcert: (id: string) => request<{ data: CustomerPromotionConcert }>(`/concerts/${encodeURIComponent(id)}`),
+  redeem: (params: RedeemPromotionParams) => {
+    const query = new URLSearchParams({
+      code: params.code,
+      concert_id: params.concertId,
+      concert_name: params.concertName,
+      zone_id: params.zoneId,
+      zone_label: params.zoneLabel,
+      total: String(params.total),
+    });
+    return request<{ data: RedeemPromotionResult }>(`/promotions/redeem?${query.toString()}`);
+  },
 };
