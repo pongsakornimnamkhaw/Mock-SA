@@ -1,0 +1,90 @@
+// Package mailer ส่งอีเมลออกจากระบบ ถ้ายังไม่ได้ตั้งค่า SMTP จะพิมพ์อีเมลออก console แทน
+// เพื่อให้เครื่อง dev ใช้งานฟีเจอร์ที่ต้องส่งอีเมลได้โดยไม่ต้องมีเซิร์ฟเวอร์เมลจริง
+package mailer
+
+import (
+	"errors"
+	"log"
+	"mime"
+	"net"
+	"net/smtp"
+	"os"
+	"strings"
+)
+
+// Mailer ส่งอีเมลหนึ่งฉบับ ผู้เรียกไม่ต้องรู้ว่าเบื้องหลังเป็น SMTP จริงหรือแค่ log
+type Mailer interface {
+	Send(to, subject, body string) error
+}
+
+type Config struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	From     string
+}
+
+func ConfigFromEnv() Config {
+	return Config{
+		Host:     strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		Port:     strings.TrimSpace(os.Getenv("SMTP_PORT")),
+		Username: strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		// รหัสผ่านอาจมีช่องว่างที่มีความหมาย จึงไม่ trim
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     strings.TrimSpace(os.Getenv("SMTP_FROM")),
+	}
+}
+
+// New เลือกวิธีส่งจาก config: ไม่มี Host แปลว่ายังไม่ได้ตั้งค่าเมล ให้ log แทน
+func New(config Config) Mailer {
+	config.Host = strings.TrimSpace(config.Host)
+	if config.Host == "" {
+		return LogMailer{}
+	}
+	if strings.TrimSpace(config.Port) == "" {
+		config.Port = "587"
+	}
+	if strings.TrimSpace(config.From) == "" {
+		config.From = config.Username
+	}
+	return SMTPMailer{config: config}
+}
+
+func FromEnv() Mailer {
+	return New(ConfigFromEnv())
+}
+
+// LogMailer พิมพ์อีเมลออก console แทนการส่งจริง ใช้ตอน dev ที่ไม่มี SMTP
+type LogMailer struct{}
+
+func (LogMailer) Send(to, subject, body string) error {
+	log.Printf("[mailer] ยังไม่ได้ตั้งค่า SMTP_HOST จึงไม่ได้ส่งอีเมลจริง\nถึง: %s\nหัวข้อ: %s\n%s", to, subject, body)
+	return nil
+}
+
+type SMTPMailer struct {
+	config Config
+}
+
+func (m SMTPMailer) Send(to, subject, body string) error {
+	if strings.TrimSpace(to) == "" {
+		return errors.New("ไม่มีอีเมลปลายทาง")
+	}
+	address := net.JoinHostPort(m.config.Host, m.config.Port)
+	auth := smtp.PlainAuth("", m.config.Username, m.config.Password, m.config.Host)
+	return smtp.SendMail(address, auth, m.config.From, []string{to}, BuildMessage(m.config.From, to, subject, body))
+}
+
+// BuildMessage ประกอบอีเมลตาม RFC 5322 หัวข้อภาษาไทยต้องเข้ารหัสแบบ MIME encoded-word
+// ไม่งั้นเซิร์ฟเวอร์เมลจะมองเป็นไบต์เพี้ยน
+func BuildMessage(from, to, subject, body string) []byte {
+	headers := []string{
+		"From: " + from,
+		"To: " + to,
+		"Subject: " + mime.QEncoding.Encode("utf-8", subject),
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=UTF-8",
+	}
+	return []byte(strings.Join(headers, "\r\n") + "\r\n\r\n" + body)
+}
