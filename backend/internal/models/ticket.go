@@ -85,7 +85,9 @@ type Ticket struct {
 	TicketDateTime time.Time `gorm:"type:timestamp;not null" json:"ticket_datetime"`
 	StatusTicket   string    `gorm:"type:varchar(50);not null" json:"status_ticket"`
 	SeatID         string    `gorm:"type:varchar(50);not null" json:"seat_id"`
+	SeatLabel      string    `gorm:"type:varchar(50)" json:"seat_label,omitempty"`
 	BookingID      string    `gorm:"type:varchar(50);not null" json:"booking_id"`
+	QrCodeData     string    `gorm:"type:text" json:"qr_code_data,omitempty"`
 }
 
 func (t *Ticket) BeforeCreate(tx *gorm.DB) (err error) {
@@ -97,9 +99,24 @@ func (t *Ticket) BeforeCreate(tx *gorm.DB) (err error) {
 
 // Booking - การจองตั๋ว
 type Booking struct {
-	BookingID   string    `gorm:"primaryKey;type:varchar(50);not null" json:"booking_id"`
-	BookingDate time.Time `gorm:"type:date;not null" json:"booking_date"`
-	Status      string    `gorm:"type:varchar(50);not null" json:"status"`
+	BookingID      string     `gorm:"primaryKey;type:varchar(50);not null" json:"booking_id"`
+	BookingDate    time.Time  `gorm:"type:date;not null" json:"booking_date"`
+	Status         string     `gorm:"type:varchar(50);not null" json:"status"`
+	UserID         *string    `gorm:"type:varchar(50);index" json:"user_id,omitempty"`
+	CustomerName   string     `gorm:"type:varchar(255)" json:"customer_name,omitempty"`
+	CustomerEmail  string     `gorm:"type:varchar(255)" json:"customer_email,omitempty"`
+	CustomerPhone  string     `gorm:"type:varchar(50)" json:"customer_phone,omitempty"`
+	ConcertID      string     `gorm:"type:varchar(50)" json:"concert_id,omitempty"`
+	ConcertTitle   string     `gorm:"type:varchar(255)" json:"concert_title,omitempty"`
+	ZoneID         string     `gorm:"type:varchar(50)" json:"zone_id,omitempty"`
+	TierName       string     `gorm:"type:varchar(100)" json:"tier_name,omitempty"`
+	Quantity       int        `gorm:"type:int;default:1" json:"quantity"`
+	UnitPrice      float64    `gorm:"type:double precision;default:0" json:"unit_price"`
+	DiscountAmount float64    `gorm:"type:double precision;default:0" json:"discount_amount"`
+	TotalPrice     float64    `gorm:"type:double precision;default:0" json:"total_price"`
+	RejectReason   string     `gorm:"type:text" json:"reject_reason,omitempty"`
+	ReviewedBy     string     `gorm:"type:varchar(100)" json:"reviewed_by,omitempty"`
+	ReviewedAt     *time.Time `gorm:"type:timestamp without time zone" json:"reviewed_at,omitempty"`
 
 	// Relations
 	Tickets  []Ticket  `gorm:"foreignKey:BookingID" json:"tickets,omitempty"`
@@ -115,10 +132,12 @@ func (b *Booking) BeforeCreate(tx *gorm.DB) (err error) {
 
 // Payment - การชำระเงิน
 type Payment struct {
-	PaymentID     string `gorm:"primaryKey;type:varchar(50);not null" json:"payment_id"`
-	EvidenceFile  []byte `gorm:"type:bytea;not null" json:"evidence_file,omitempty"`
-	PaymentStatus string `gorm:"type:varchar(50);not null" json:"payment_status"`
-	BookingID     string `gorm:"type:varchar(50);not null" json:"booking_id"`
+	PaymentID     string    `gorm:"primaryKey;type:varchar(50);not null" json:"payment_id"`
+	EvidenceFile  []byte    `gorm:"type:bytea" json:"evidence_file,omitempty"`
+	FileName      string    `gorm:"type:varchar(255)" json:"file_name,omitempty"`
+	PaymentStatus string    `gorm:"type:varchar(50);not null" json:"payment_status"`
+	BookingID     string    `gorm:"type:varchar(50);not null" json:"booking_id"`
+	CreatedAt     time.Time `gorm:"type:timestamp without time zone;autoCreateTime" json:"created_at"`
 }
 
 func (p *Payment) BeforeCreate(tx *gorm.DB) (err error) {

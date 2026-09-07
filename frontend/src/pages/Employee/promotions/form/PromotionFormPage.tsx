@@ -29,6 +29,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { managementApi } from '../../../../api/managementApi';
 import type { DiscountType, Concert, Zone } from '../../../../types/promotion';
 import { useNavigate, useParams } from 'react-router-dom';
+import ConfirmDeleteDialog from '../../../../components/common/ConfirmDeleteDialog';
 
 interface FormState {
   promotion_name: string;
@@ -76,6 +77,8 @@ export default function PromotionFormPage() {
   const [error, setError] = useState('');
   const [imageError, setImageError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [readingImage, setReadingImage] = useState(false);
   const [retry, setRetry] = useState(0);
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -83,6 +86,7 @@ export default function PromotionFormPage() {
   const readerRef = useRef<FileReader | null>(null);
   const generation = useRef(0);
   const savingRef = useRef(false);
+  const deletingRef = useRef(false);
 
   useEffect(() => {
     const request = ++generation.current;
@@ -93,6 +97,9 @@ export default function PromotionFormPage() {
     setImageError('');
     setSaving(false);
     savingRef.current = false;
+    setDeleteOpen(false);
+    setDeleting(false);
+    deletingRef.current = false;
     setReadingImage(false);
     setForm(EMPTY_FORM);
     setConcerts([]);
@@ -138,7 +145,7 @@ export default function PromotionFormPage() {
   }, [id, retry]);
 
   const ready = !loading && !loadError && loadedId === (id ?? '');
-  const disabled = !ready || saving;
+  const disabled = !ready || saving || deleting;
 
   const set = (key: keyof FormState, value: string | string[]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -260,6 +267,28 @@ export default function PromotionFormPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (mode !== 'edit' || !id || !ready || deletingRef.current || savingRef.current) return;
+    const request = generation.current;
+    deletingRef.current = true;
+    setDeleting(true);
+    setError('');
+    try {
+      await managementApi.deletePromotion(id);
+      if (generation.current === request) navigate('/promotions');
+    } catch (err) {
+      if (generation.current === request) {
+        setDeleteOpen(false);
+        setError(err instanceof Error ? err.message : 'ลบโปรโมชั่นไม่สำเร็จ');
+      }
+    } finally {
+      if (generation.current === request) {
+        deletingRef.current = false;
+        setDeleting(false);
+      }
+    }
+  };
+
   const sectionTitle = (title: string) => (
     <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#1e293b', mb: 2 }}>
       {title}
@@ -271,18 +300,29 @@ export default function PromotionFormPage() {
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <IconButton size="small" disabled={saving} onClick={() => navigate('/promotions')} sx={{ border: '1px solid #e2e8f0' }}>
+          <IconButton size="small" disabled={saving || deleting} onClick={() => navigate('/promotions')} sx={{ border: '1px solid #e2e8f0' }}>
             <ArrowBackIcon fontSize="small" />
           </IconButton>
           <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b' }}>
             {mode === 'create' ? 'สร้างโปรโมชั่นใหม่' : 'แก้ไขโปรโมชั่น'}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {mode === 'edit' && (
+            <Button
+              variant="outlined"
+              startIcon={<DeleteIcon />}
+              disabled={!ready || saving || deleting}
+              onClick={() => setDeleteOpen(true)}
+              sx={{ borderColor: '#dc2626', color: '#dc2626', '&:hover': { borderColor: '#b91c1c', bgcolor: '#fef2f2' } }}
+            >
+              {deleting ? 'กำลังลบ...' : 'ลบโปรโมชั่น'}
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={<CancelIcon />}
-            disabled={saving}
+            disabled={saving || deleting}
             onClick={() => navigate('/promotions')}
             sx={{ borderColor: '#ef4444', color: '#ef4444' }}
           >
@@ -548,6 +588,14 @@ export default function PromotionFormPage() {
           </Card>
         </Box>
       </Box>
+
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onCancel={() => { if (!deletingRef.current) setDeleteOpen(false); }}
+        onConfirm={handleDelete}
+        loading={deleting}
+        message={`ยืนยันว่าจะลบโปรโมชั่น “${form.promotion_name}” จริงหรือไม่?`}
+      />
 
     </Box>
   );

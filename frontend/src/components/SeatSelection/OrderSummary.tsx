@@ -1,7 +1,10 @@
-import { Box, Typography, Button, Paper, LinearProgress } from '@mui/material';
+import { Box, Typography, Button, Paper, LinearProgress, FormControl, Select, MenuItem, Chip, CircularProgress } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import type { EventData, ZoneInfo, SeatData } from '@/components/SeatSelection/types';
 import { formatTime, LOCK_DURATION } from '@/components/SeatSelection/constants';
+import type { CustomerPromotion } from '@/types/customerPromotion';
+import { discountLabel } from '@/utils/customerPromotion';
 
 interface OrderSummaryProps {
     event: EventData;
@@ -12,6 +15,13 @@ interface OrderSummaryProps {
     isLocked: boolean;
     timeLeft: number;
     totalPrice: number;
+    finalPrice: number;
+    discountAmount: number;
+    eligiblePromotions: CustomerPromotion[];
+    selectedPromotionId: string;
+    promotionsLoading: boolean;
+    promotionError: string;
+    onPromotionChange: (promotionId: string) => void;
     handleLockSeats: () => void;
     handlePayment: () => void;
     handleCancelLock: () => void;
@@ -20,6 +30,8 @@ interface OrderSummaryProps {
 
 const OrderSummary = ({
     event, zone, zoneInfo, activeSeats, selectedSeats, isLocked, timeLeft, totalPrice,
+    finalPrice, discountAmount, eligiblePromotions, selectedPromotionId,
+    promotionsLoading, promotionError, onPromotionChange,
     handleLockSeats, handlePayment, handleCancelLock, onBack
 }: OrderSummaryProps) => {
     const timerProgress = (timeLeft / LOCK_DURATION) * 100;
@@ -114,13 +126,72 @@ const OrderSummary = ({
                 )}
             </Box>
 
+            <Box sx={{ borderTop: '1px solid #eee', pt: 2, mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <LocalOfferOutlinedIcon sx={{ color: '#d63384', fontSize: 19 }} />
+                        <Typography sx={{ fontWeight: 'bold', color: '#1a1a1a' }}>โปรโมชั่น</Typography>
+                    </Box>
+                    {selectedPromotionId && <Chip size="small" label="เลือกให้อัตโนมัติ" color="success" sx={{ height: 22, fontSize: '0.68rem' }} />}
+                </Box>
+
+                {promotionsLoading ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: '#777', py: 1 }}>
+                        <CircularProgress size={16} />
+                        <Typography sx={{ fontSize: '0.78rem' }}>กำลังตรวจสอบโปรโมชั่น...</Typography>
+                    </Box>
+                ) : promotionError ? (
+                    <Typography sx={{ color: '#d32f2f', fontSize: '0.75rem' }}>ตรวจสอบโปรโมชั่นไม่ได้</Typography>
+                ) : eligiblePromotions.length === 0 ? (
+                    <Typography sx={{ color: '#999', fontSize: '0.78rem' }}>
+                        ยังไม่มีโปรโมชั่นที่ตรงกับยอดและโซนที่เลือก
+                    </Typography>
+                ) : (
+                    <>
+                        <FormControl fullWidth size="small">
+                            <Select
+                                value={selectedPromotionId}
+                                onChange={(event) => onPromotionChange(event.target.value)}
+                                displayEmpty
+                                aria-label="เลือกโปรโมชั่น"
+                                sx={{ fontSize: '0.8rem', bgcolor: '#fff8fb' }}
+                            >
+                                <MenuItem value=""><em>ไม่ใช้โปรโมชั่น</em></MenuItem>
+                                {eligiblePromotions.map((promotion) => (
+                                    <MenuItem key={promotion.promotion_id} value={promotion.promotion_id} sx={{ fontSize: '0.8rem' }}>
+                                        {discountLabel(promotion)} · {promotion.discount.promo_code}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        {selectedPromotionId && (
+                            <Typography sx={{ color: '#2e7d32', fontSize: '0.72rem', mt: 0.75 }}>
+                                ✓ ระบบเลือกโปรโมชั่นที่ประหยัดที่สุดให้แล้ว
+                            </Typography>
+                        )}
+                    </>
+                )}
+            </Box>
+
             <Box sx={{ borderTop: '1px solid #eee', pt: 2, mb: 3 }}>
+                {discountAmount > 0 && (
+                    <>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+                            <Typography sx={{ color: '#666', fontSize: '0.85rem' }}>ราคาก่อนส่วนลด</Typography>
+                            <Typography sx={{ color: '#666', fontSize: '0.85rem' }}>{totalPrice.toLocaleString()} บาท</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography sx={{ color: '#2e7d32', fontSize: '0.85rem', fontWeight: 'bold' }}>ส่วนลด</Typography>
+                            <Typography sx={{ color: '#2e7d32', fontSize: '0.85rem', fontWeight: 'bold' }}>−{discountAmount.toLocaleString()} บาท</Typography>
+                        </Box>
+                    </>
+                )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#1a1a1a' }}>
-                        ราคารวม
+                        ยอดชำระ
                     </Typography>
                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.3rem', color: '#E53935' }}>
-                        {totalPrice.toLocaleString()} บาท
+                        {finalPrice.toLocaleString()} บาท
                     </Typography>
                 </Box>
             </Box>

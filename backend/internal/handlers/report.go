@@ -72,6 +72,20 @@ type concertReport struct {
 	Zones         []reportZone `json:"zones"`
 }
 
+func reportConcertBase(concert models.Concert) concertReport {
+	return concertReport{
+		ID:         concert.ConcertID,
+		Title:      concert.ConcertName,
+		StartDate:  dateOnly(concert.StartDate),
+		EndDate:    dateOnly(concert.EndDate),
+		Location:   concert.Location,
+		Status:     reportStatus(concert.Status),
+		LastUpdate: concert.UpdatedAt,
+		PosterURL:  fmt.Sprintf("/api/concerts/%s/poster", concert.ConcertID),
+		Zones:      []reportZone{},
+	}
+}
+
 func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 	var concerts []models.Concert
 	// A report is useful once an event has ended. Include explicitly completed
@@ -84,9 +98,7 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 
 	result := make([]concertReport, 0, len(concerts))
 	for _, concert := range concerts {
-		row := concertReport{ID: concert.ConcertID, Title: concert.ConcertName, StartDate: concert.StartDate,
-			EndDate: concert.EndDate, Location: concert.Location, Status: reportStatus(concert.Status),
-			LastUpdate: concert.UpdatedAt, PosterURL: fmt.Sprintf("/api/concerts/%s/poster", concert.ConcertID), Zones: []reportZone{}}
+		row := reportConcertBase(concert)
 
 		// Ticket -> Seat is the authoritative link from a sale to its concert/zone.
 		type zoneAggregate struct {

@@ -31,9 +31,10 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:3000",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
-		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowOrigins:     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:3000",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowCredentials: true,
 	}))
 
 	// Routes
@@ -48,6 +49,9 @@ func main() {
 	handlers.RegisterArtistRoutes(app, config.DB)
 	handlers.RegisterManagementRoutes(app, config.DB)
 	handlers.RegisterReportRoutes(app, config.DB)
+	handlers.RegisterCustomerAccountRoutes(app, config.DB)
+	handlers.RegisterEmployeeAuthRoutes(app, config.DB)
+	handlers.RegisterBookingPaymentRoutes(app, config.DB)
 
 	// Start Server
 	port := os.Getenv("PORT")

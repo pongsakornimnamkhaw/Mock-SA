@@ -14,8 +14,8 @@ type Promotion struct {
 	BannerImageUrl []byte    `gorm:"type:bytea;not null" json:"banner_image_url,omitempty"`
 	Status         string    `gorm:"type:varchar(50);not null" json:"status"`
 	ZoneType       string    `gorm:"type:varchar(100);not null" json:"zone_type"`
-	CreatedAt      time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	CreatedAt      time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"type:timestamp without time zone;autoUpdateTime" json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 	TotalRevenue   float64   `gorm:"type:double precision;not null" json:"total_revenue"`
 	ConcertID      string    `gorm:"type:varchar(50);not null" json:"concert_id"`
@@ -110,7 +110,7 @@ func (q *Quota) BeforeCreate(tx *gorm.DB) (err error) {
 // PromotionUsageLog is populated by the booking/redemption workflow, not by page views.
 type PromotionUsageLog struct {
 	UsageLogID string `gorm:"primaryKey;type:varchar(50)" json:"usage_log_id"`
-	UsedAt time.Time `gorm:"autoCreateTime" json:"used_at"`
+	UsedAt time.Time `gorm:"type:timestamp without time zone;autoCreateTime" json:"used_at"`
 	UserName string `json:"user_name"`
 	UserID string `json:"user_id"`
 	OrderID string `json:"order_id"`

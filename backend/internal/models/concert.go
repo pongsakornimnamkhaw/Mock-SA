@@ -58,7 +58,7 @@ type ModifiedHistory struct {
 	HistoryID   string    `gorm:"primaryKey;type:varchar(50);not null" json:"history_id"`
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
-	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
+	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
 	ConcertID   string    `gorm:"type:varchar(50);not null" json:"concert_id"`
 }
 

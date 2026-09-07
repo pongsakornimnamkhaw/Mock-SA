@@ -3,13 +3,13 @@ import type { Theme } from '@mui/material/styles';
 
 // Match ArtistDashboard and the shared artist/performance Header.
 export const promotionFontSizes = {
-  body: '1.125rem', // 18px
-  secondary: '0.875rem', // 14px
-  heading: '1.75rem', // 28px
+  body: '1rem', // 16px
+  secondary: '0.8125rem', // 13px
+  heading: '1.5rem', // 24px
 } as const;
 
 export const promotionTitleSx = {
-  fontSize: { xs: '2rem', lg: '3rem' },
+  fontSize: { xs: '1.75rem', lg: '2rem' },
   fontWeight: 700,
   lineHeight: 1.2,
   color: '#0d1b5e',

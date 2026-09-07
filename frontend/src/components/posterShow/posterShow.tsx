@@ -1,26 +1,34 @@
-import { Box, Typography, Button, Container, Grid } from '@mui/material';
+import { Box, Typography, Button, Chip, Container, Grid } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import { starlight, pulse, flux, celestial } from '@/assets/Poster';
+import SearchOffRoundedIcon from '@mui/icons-material/SearchOffRounded';
 import { Link as RouterLink } from 'react-router-dom';
+import { customerEvents } from '@/data/customerEvents';
 
-const eventsData = [
-  { id: 1, image: flux, title: 'Neon Flux Festival 2024', date: '16-18 ส.ค. 2024', location: 'กรุงเทพมหานคร' },
-  { id: 2, image: pulse, title: 'Neon Pulse', date: '18 ต.ค. 2024', location: 'นครราชสีมา' },
-  { id: 3, image: celestial, title: 'Celestial Sounds', date: '26 ต.ค. 2024', location: 'เชียงใหม่' },
-  { id: 4, image: starlight, title: 'Starlight Festival', date: '23-25 ส.ค. 2024', location: 'ขอนแก่น' },
-];
+export default function EventList({ title = 'ทุกงานแสดง', query = '' }: { title?: string; query?: string }) {
+  const normalizedQuery = query.trim().toLocaleLowerCase('th-TH');
+  const events = normalizedQuery
+    ? customerEvents.filter((event) => `${event.title} ${event.location}`.toLocaleLowerCase('th-TH').includes(normalizedQuery))
+    : customerEvents;
 
-export default function EventList({ title = 'ทุกงานแสดง' }: { title?: string }) {
   return (
     <Container maxWidth="xl" sx={{ py: 5, px: { xs: 2, md: 6 } }}>
       <Typography variant="h5" sx={{ mb: 4, color: '#1a1a1a', fontWeight: 'bold' }}>
         {title}
       </Typography>
-      <Grid container spacing={4}>
-        {eventsData.map((item) => (
+      {events.length === 0 ? (
+        <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#f8f9fc', borderRadius: 4 }}>
+          <SearchOffRoundedIcon sx={{ fontSize: 52, color: '#a7adbf', mb: 1 }} />
+          <Typography sx={{ fontWeight: 750, color: '#343a59' }}>ไม่พบคอนเสิร์ต “{query}”</Typography>
+          <Typography variant="body2" color="text.secondary">ลองค้นหาด้วยชื่อคอนเสิร์ตหรือสถานที่อื่น</Typography>
+        </Box>
+      ) : <Grid container spacing={4}>
+        {events.map((item) => (
           <Grid size={{ xs: 12, sm: 6, md: 3 }} key={item.id}>
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', transition: 'transform 0.3s ease', '&:hover': { transform: 'translateY(-6px)' } }}>
-              <Box component="img" src={item.image} alt={item.title} sx={{ width: '100%', height: '320px', objectFit: 'cover', borderRadius: '16px', boxShadow: '0 8px 20px rgba(0,0,0,0.15)', mb: 2 }} />
+              <Box sx={{ position: 'relative', width: '100%', mb: 2 }}>
+                <Box component="img" src={item.image} alt={item.title} sx={{ display: 'block', width: '100%', height: '320px', objectFit: 'cover', borderRadius: '16px', boxShadow: '0 8px 20px rgba(0,0,0,0.15)' }} />
+                {item.isNew && <Chip label="คอนเสิร์ตใหม่" size="small" sx={{ position: 'absolute', top: 12, left: 12, bgcolor: '#FF5C58', color: '#fff', fontWeight: 800 }} />}
+              </Box>
               <Typography sx={{ mb: 0.5, color: '#1a1a1a', fontWeight: 'bold', fontSize: '1.05rem' }}>{item.title}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{item.date}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2, color: '#555' }}>
@@ -34,7 +42,7 @@ export default function EventList({ title = 'ทุกงานแสดง' }: 
             </Box>
           </Grid>
         ))}
-      </Grid>
+      </Grid>}
     </Container>
   );
 }
