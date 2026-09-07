@@ -1,0 +1,1045 @@
+/* ==========================================================================
+   ConsertReport - Concert Summary Report System
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-dark-header: #0a0d24;
+  --bg-sidebar: #0e1233;
+  --bg-sidebar-active: #ff4b72;
+  --bg-main: #f1f5f9;
+  --bg-card: #ffffff;
+
+  --primary-coral: #ff4b72;
+  --primary-purple: #c084fc;
+  
+  --text-dark: #1e293b;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+  --text-white: #ffffff;
+
+  --border-light: #e2e8f0;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 8px 24px rgba(10, 13, 36, 0.08);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-dark);
+  min-height: 100vh;
+}
+
+.report-app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Layout when sidebar is provided externally (PromotionLayout) */
+.report-app-container-no-sidebar {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.report-main-panel-standalone {
+  flex: 1;
+  padding: 24px;
+  background: var(--bg-main, #f1f5f9);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+/* ==========================================================================
+   Header Component
+   ========================================================================== */
+.report-header {
+  background-color: #ffffff;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 3%;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-badge-box {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.brand-title {
+  color: #ffffff;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.btn-back-pill {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  color: #ffffff;
+  padding: 6px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 0.88rem;
+  font-weight: 700;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+}
+
+.btn-back-pill:hover {
+  transform: scale(1.04);
+}
+
+.page-heading-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-page-title {
+  color: #1e293b;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.total-badge-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  color: #1e293b;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.82rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.red-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #ef4444;
+  border-radius: 50%;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  width: 16px;
+  height: 16px;
+  color: #94a3b8;
+}
+
+.search-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius-pill);
+  padding: 7px 16px 7px 38px;
+  font-size: 0.88rem;
+  color: #1e293b;
+  width: 220px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--primary-coral);
+  box-shadow: 0 0 0 3px rgba(255, 75, 114, 0.15);
+}
+
+.notification-bell {
+  position: relative;
+  cursor: pointer;
+  color: #334155;
+  display: flex;
+  align-items: center;
+}
+
+.notification-bell svg {
+  width: 22px;
+  height: 22px;
+}
+
+.bell-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #ef4444;
+  border-radius: 50%;
+}
+
+.user-profile-avatar {
+  display: flex;
+  align-items: center;
+}
+
+.avatar-circle {
+  width: 36px;
+  height: 36px;
+  background: #fde047;
+  color: #1e293b;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-circle svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ==========================================================================
+   Main Wrapper & Grid
+   ========================================================================== */
+.report-main-wrapper {
+  width: 100%;
+  max-width: 100%;
+  padding: 0 24px;
+  margin: 24px 0 40px;
+  flex: 1;
+}
+
+.report-content-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  min-height: 720px;
+}
+
+/* ==========================================================================
+   Sidebar Component
+   ========================================================================== */
+.report-sidebar {
+  background-color: var(--bg-sidebar);
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px 0 16px;
+}
+
+.sidebar-scrollable {
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.sidebar-group {
+  margin-bottom: 18px;
+}
+
+.sidebar-group-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+
+}
+
+.sidebar-group-title.clickable {
+  cursor: pointer;
+}
+
+.sidebar-group-title.active-header {
+  color: var(--primary-coral);
+  font-weight: 700;
+}
+
+.sidebar-menu-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-menu-item a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.sidebar-menu-item a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.sidebar-menu-item.active-pill a {
+  background: var(--primary-coral);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.active-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #ffffff;
+  border-radius: 50%;
+}
+
+.sidebar-user-card {
+  background: rgba(255, 255, 255, 0.05);
+  margin: 16px 16px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-icon-circle {
+  width: 34px;
+  height: 34px;
+  background: #a855f7;
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-icon-circle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  color: #ffffff;
+}
+
+.user-role {
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+/* ==========================================================================
+   Main Panel & Concert Cards
+   ========================================================================== */
+.report-main-panel {
+  padding: 28px 32px;
+  background-color: #f8fafc;
+}
+
+.finished-concerts-list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.concert-card-item {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) minmax(250px, max-content);
+  gap: 24px;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.concert-card-item:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.concert-poster-wrapper {
+  width: 180px;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #090d16;
+}
+
+.concert-poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.concert-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.concert-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.concert-title span {
+  color: var(--primary-coral);
+}
+
+.info-line {
+  font-size: 0.9rem;
+  color: #475569;
+  display: flex;
+  gap: 8px;
+}
+
+.info-label {
+  color: #64748b;
+  min-width: 120px;
+}
+
+.info-val {
+  color: #1e293b;
+}
+
+.location-line {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.location-pin {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-coral);
+}
+
+.concert-status-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 100%;
+  text-align: right;
+}
+
+.status-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.status-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.status-badge-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-badge-text.checking {
+  background: #fef08a;
+  color: #854d0e;
+}
+
+.status-badge-text.completed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-timestamp {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.btn-detail-link {
+  color: #ef4444;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-top: 24px;
+  transition: color 0.15s;
+}
+
+.btn-detail-link:hover {
+  color: #dc2626;
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Concert Detail Report View (Page 2 & Page 3)
+   ========================================================================== */
+.concert-detail-report-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Sponsors Section */
+.sponsors-section-box {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sponsor-detail-card {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.sponsor-header-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.sponsor-header-name span {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.sponsor-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 180px 180px;
+  gap: 24px;
+  align-items: center;
+}
+
+.package-table-wrapper {
+  text-align: left;
+}
+
+.table-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #16a34a;
+  background: #dcfce7;
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.package-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.package-table th,
+.package-table td {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.package-table th {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #334155;
+}
+
+.sponsor-brand-box,
+.contract-file-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-title-label,
+.contract-title-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.brand-logo-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+.brand-svg-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.brand-logo-text {
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-top: 2px;
+  line-height: 1.1;
+}
+
+.pdf-document-card {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  width: 140px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pdf-document-card:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.pdf-icon-box svg {
+  width: 32px;
+  height: 32px;
+}
+
+.pdf-filename {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+/* ==========================================================================
+   Seating Layout & Summary Cards Section
+   ========================================================================== */
+.seating-report-box {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+}
+
+.seating-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 20px;
+}
+
+.seating-layout-container {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  margin-bottom: 24px;
+}
+
+.seating-stage-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stage-banner-bar {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 8px 60px;
+  border-radius: 6px;
+  margin-bottom: 24px;
+}
+
+.seats-grid-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+
+.seats-row {
+  display: flex;
+  gap: 14px;
+}
+
+.seat-block {
+  width: 60px;
+  height: 42px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.red-block {
+  background-color: #ef4444;
+}
+
+.green-block {
+  background-color: #22c55e;
+}
+
+.yellow-block {
+  background-color: #eab308;
+}
+
+.seating-legend-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 180px;
+}
+
+.legend-row-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.legend-color-pill {
+  padding: 6px 14px;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  width: 100px;
+  text-align: center;
+}
+
+.red-pill {
+  background-color: #ef4444;
+}
+
+.green-pill {
+  background-color: #22c55e;
+}
+
+.yellow-pill {
+  background-color: #eab308;
+}
+
+.legend-price-text {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Bottom Summary Cards Grid */
+.summary-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.summary-card {
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.card-ticket-green {
+  background-color: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+
+.card-sponsor-pink {
+  background-color: #fce7f3;
+  border: 1px solid #fbcfe8;
+}
+
+.summary-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+}
+
+.summary-rows-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-data-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.row-zone-name {
+  min-width: 70px;
+}
+
+.summary-card-divider {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border: none;
+  margin: 16px 0 12px;
+}
+
+.summary-card-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.summary-card-total strong {
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Footer Component
+   ========================================================================== */
+.report-footer {
+  background-color: var(--bg-dark-header);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 24px 5%;
+  text-align: center;
+  font-size: 0.88rem;
+  margin-top: auto;
+}
+
+.no-data-box {
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 16px;
+  text-align: center;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   Responsive Breakpoints for Concert Report System (/report)
+   ========================================================================== */
+
+/* Tablet & Medium Screens (< 1024px) */
+@media (max-width: 1023px) {
+  .report-main-wrapper {
+    width: 95%;
+    margin: 20px auto 32px;
+  }
+
+  .report-content-card {
+    grid-template-columns: 220px 1fr;
+  }
+
+  .report-header {
+    padding: 0 16px;
+  }
+
+  .search-input {
+    width: 170px;
+  }
+
+  .summary-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile & Small Screens (< 768px) */
+@media (max-width: 767px) {
+  .report-header {
+    height: auto;
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .header-left, .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .report-main-wrapper {
+    width: 98%;
+    margin: 12px auto 24px;
+  }
+
+  .report-content-card {
+    grid-template-columns: 1fr;
+    border-radius: var(--radius-md);
+  }
+
+  .report-sidebar {
+    padding: 12px 0;
+  }
+
+  .sidebar-scrollable {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: 4px 12px;
+  }
+
+  .sidebar-group {
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .sidebar-menu-list {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .report-main-panel {
+    padding: 16px 12px;
+  }
+
+  .concert-card-item {
+    grid-template-columns: 1fr;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .concert-poster-wrapper {
+    width: 100%;
+    max-width: 240px;
+    height: 240px;
+  }
+
+  .concert-info-content {
+    align-items: center;
+    text-align: center;
+  }
+
+  .info-label {
+    min-width: auto;
+  }
+
+  .concert-status-side {
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .sponsor-card-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .package-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .seating-layout-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .seating-stage-wrapper {
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  .summary-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
