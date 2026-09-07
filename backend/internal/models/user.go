@@ -8,20 +8,21 @@ import (
 
 // User - ผู้ใช้งานในระบบ
 type User struct {
-	UserID      string    `gorm:"primaryKey;type:varchar(50);not null" json:"user_id"`
-	FirstName   string    `gorm:"type:varchar(100);not null" json:"first_name"`
-	LastName    string    `gorm:"type:varchar(100);not null" json:"last_name"`
-	DateOfBirth time.Time `gorm:"type:date;not null" json:"date_of_birth"`
-	Gender      string    `gorm:"type:varchar(20);not null" json:"gender"`
-	PhoneNumber string    `gorm:"type:varchar(20);not null" json:"phone_number"`
-	Address     string    `gorm:"type:text" json:"address"`
-	Email       string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
-	UserType    string    `gorm:"type:varchar(50);not null" json:"user_type"`
-	Role        string    `gorm:"type:varchar(50);not null" json:"role"`
-	CompanyName string    `gorm:"type:varchar(255)" json:"company_name"`
-	EmployeeCode *string `gorm:"type:varchar(50);uniqueIndex" json:"employee_code,omitempty"`
-	Department string `gorm:"type:varchar(100)" json:"department"`
-	EmployeeInactive bool `gorm:"not null;default:false" json:"employee_inactive"`
+	UserID           string    `gorm:"primaryKey;type:varchar(50);not null" json:"user_id"`
+	FirstName        string    `gorm:"type:varchar(100);not null" json:"first_name"`
+	LastName         string    `gorm:"type:varchar(100);not null" json:"last_name"`
+	DateOfBirth      time.Time `gorm:"type:date;not null" json:"date_of_birth"`
+	Gender           string    `gorm:"type:varchar(20);not null" json:"gender"`
+	PhoneNumber      string    `gorm:"type:varchar(20);not null" json:"phone_number"`
+	Address          string    `gorm:"type:text" json:"address"`
+	Email            string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
+	PasswordHash     string    `gorm:"type:text;not null;default:''" json:"-"`
+	UserType         string    `gorm:"type:varchar(50);not null" json:"user_type"`
+	Role             string    `gorm:"type:varchar(50);not null" json:"role"`
+	CompanyName      string    `gorm:"type:varchar(255)" json:"company_name"`
+	EmployeeCode     *string   `gorm:"type:varchar(50);uniqueIndex" json:"employee_code,omitempty"`
+	Department       string    `gorm:"type:varchar(100)" json:"department"`
+	EmployeeInactive bool      `gorm:"not null;default:false" json:"employee_inactive"`
 
 	// Relations
 	Permissions        []Permission        `gorm:"foreignKey:UserID" json:"permissions,omitempty"`
@@ -47,7 +48,7 @@ type CusActivityLogs struct {
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
-	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
+	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
 	UserID      string    `gorm:"type:varchar(50);not null" json:"user_id"`
 }
 
@@ -64,7 +65,7 @@ type EmpActivityLogs struct {
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
-	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
+	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
 	UserID      *string   `gorm:"type:varchar(50)" json:"user_id"`
 }
 

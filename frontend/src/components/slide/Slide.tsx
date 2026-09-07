@@ -5,27 +5,28 @@ import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import { Sounds, Pulse, Flux, Starlight} from '@/assets/posterSlide'
+import { Link as RouterLink } from 'react-router-dom'
 
 const slidesData = [
     {
         image: Sounds,
-        // title: 'หัวข้อสไลด์ที่ 1',
-        // desc: 'รายละเอียดสไลด์ที่ 1',
+        eventId: '3',
+        title: 'Celestial Sounds',
     },
     {
         image: Pulse,
-        // title: 'หัวข้อสไลด์ที่ 2',
-        // desc: 'รายละเอียดสไลด์ที่ 2',
+        eventId: '2',
+        title: 'Neon Pulse',
     },
     {
         image: Flux,
-        // title: 'หัวข้อสไลด์ที่ 3',
-        // desc: 'รายละเอียดสไลด์ที่ 3',
+        eventId: '1',
+        title: 'Neon Flux Festival 2024',
     },
     {
         image: Starlight,
-        // title: 'หัวข้อสไลด์ที่ 3',
-        // desc: 'รายละเอียดสไลด์ที่ 3',
+        eventId: '4',
+        title: 'Starlight Festival',
     },
 ];
 
@@ -81,21 +82,30 @@ const MySlider = () => {
                 autoplay={{ delay: 5000, disableOnInteraction: false }}
                 loop={true}
             >
-                {slidesData.map((slide, index) => (
-                    <SwiperSlide key={index}>
+                {slidesData.map((slide) => (
+                    <SwiperSlide key={slide.eventId}>
                         <Box
+                            component={RouterLink}
+                            to={`/event/${slide.eventId}`}
+                            aria-label={`ดูรายละเอียด ${slide.title}`}
                             sx={{
                                 position: 'relative',
+                                display: 'flex',
                                 backgroundImage: `url("${slide.image}")`,
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
                                 backgroundColor: '#1a1a2e',
                                 minHeight: '450px',
-                                display: 'flex',
                                 flexDirection: 'column',
                                 justifyContent: 'center',
                                 alignItems: 'center',
                                 color: 'white',
+                                cursor: 'pointer',
+                                textDecoration: 'none',
+                                outline: 'none',
+                                '&:focus-visible': {
+                                    boxShadow: 'inset 0 0 0 4px #FF5C58',
+                                },
                                 '&::before': {
                                     content: '""',
                                     position: 'absolute',
@@ -106,19 +116,7 @@ const MySlider = () => {
                                     zIndex: 1,
                                 },
                             }}
-                        >
-                            {/* <Box sx={{ position: 'relative', zIndex: 2, textAlign: 'center', p: 4 }}>
-                                <Typography variant="h3" sx={{ fontWeight: 'bold' }} gutterBottom>
-                                    {slide.title}
-                                </Typography>
-                                <Typography variant="h6" sx={{ mb: 3, opacity: 0.9 }}>
-                                    {slide.desc}
-                                </Typography>
-                                <Button variant="contained" color="primary" size="large">
-                                    ซื้อบัตร
-                                </Button>
-                            </Box> */}
-                        </Box>
+                        />
                     </SwiperSlide>
                 ))}
             </Swiper>

@@ -30,8 +30,8 @@ type ArtistHistory struct {
 	EntityID    string    `gorm:"type:varchar(50);not null" json:"entity_id"`
 	Action      string    `gorm:"type:varchar(50);not null" json:"action"`
 	Description string    `gorm:"type:text;not null" json:"description"`
-	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
-	Artist      *Artist   `gorm:"foreignKey:ArtistID;references:ArtistID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"-"`
+	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	Artist      *Artist   `gorm:"references:ArtistID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"-"`
 }
 
 func (h *ArtistHistory) BeforeCreate(tx *gorm.DB) (err error) {

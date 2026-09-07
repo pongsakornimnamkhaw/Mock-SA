@@ -3,7 +3,9 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import Logo from '@/components/common/Logo';
 import { useNavigate, Link as RouterLink, useParams } from 'react-router-dom';
 import { pulse, flux, celestial, starlight } from '@/assets/Poster';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { customerPromotionApi } from '@/api/customerPromotionApi';
+import { formatThaiDate } from '@/utils/customerPromotion';
 
 // ข้อมูลคอนเสิร์ต (Mock)
 const eventsMap: Record<string, { title: string; image: string; eventDate: string }> = {
@@ -38,9 +40,27 @@ const steps = ['เลือกโซนบัตร', 'เลือกที่
 const ZoneSelectionPage = () => {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
-    const event = (id && eventsMap[id]) ? eventsMap[id] : eventsMap['2'];
+    const [event, setEvent] = useState(() => (id && eventsMap[id]) ? eventsMap[id] : eventsMap['2']);
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
     const [selectedZone, setSelectedZone] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!id || eventsMap[id]) {
+            if (id && eventsMap[id]) setEvent(eventsMap[id]);
+            return;
+        }
+        let active = true;
+        customerPromotionApi.getConcert(id).then(({ data }) => {
+            if (!active) return;
+            const date = data.end_date && data.end_date !== data.start_date
+                ? `${formatThaiDate(data.start_date)} – ${formatThaiDate(data.end_date)}`
+                : formatThaiDate(data.start_date);
+            setEvent({ title: data.concert_name, image: data.poster_data || pulse, eventDate: date });
+        }).catch(() => {
+            // Keep the fallback card; the booking flow is still a UI prototype.
+        });
+        return () => { active = false; };
+    }, [id]);
 
     const handleZoneClick = (zoneId: string) => {
         setSelectedZone(zoneId);

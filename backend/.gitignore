@@ -1,6 +1,9 @@
 .gocache/
 .gomodcache/
+.cache/
 
 # Local development binaries and runtime logs
 tmp/*.exe
 tmp/*.log
+server-latest.log
+server-latest.err.log
