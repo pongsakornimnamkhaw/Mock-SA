@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/mailer"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -27,7 +28,9 @@ const (
 )
 
 type customerAccountHandler struct {
-	db *gorm.DB
+	db      *gorm.DB
+	mailer  mailer.Mailer
+	baseURL string
 }
 
 type customerAccountDTO struct {
@@ -73,11 +76,18 @@ type customerPasswordInput struct {
 }
 
 func RegisterCustomerAccountRoutes(app *fiber.App, db *gorm.DB) {
-	h := &customerAccountHandler{db: db}
+	registerCustomerAccountRoutes(app, db, mailer.FromEnv(), appBaseURL())
+}
+
+// registerCustomerAccountRoutes แยกออกมาเพื่อให้เทสต์ฉีด mailer ปลอมเข้ามาได้
+func registerCustomerAccountRoutes(app *fiber.App, db *gorm.DB, sender mailer.Mailer, baseURL string) {
+	h := &customerAccountHandler{db: db, mailer: sender, baseURL: baseURL}
 	group := app.Group("/api/customer")
 	group.Post("/auth/register", h.register)
 	group.Post("/auth/login", h.login)
 	group.Post("/auth/logout", h.logout)
+	group.Post("/auth/forgot-password", h.forgotPassword)
+	group.Post("/auth/reset-password", h.resetPassword)
 	group.Get("/promotions", h.listCustomerPromotions)
 	group.Get("/promotions/redeem", h.redeemCustomerPromotion)
 	group.Get("/promotions/:id", h.getCustomerPromotion)

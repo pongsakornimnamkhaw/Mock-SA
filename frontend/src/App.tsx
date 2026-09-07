@@ -5,6 +5,7 @@ import ConsertReportPage from './ConsertReportPage'
 // B6728786 - Frontend (Ticket Booking & Auth Guards)
 import LoginPage from './pages/Login_page/Login'
 import ForgotPasswordPage from './pages/Login_page/ForgotPassword'
+import ResetPasswordPage from './pages/Login_page/ResetPassword'
 import RegisterPage from './pages/Customer/Register'
 import EmployeeLoginPage from './pages/Employee/Login'
 import CustomerRouteGuard from './components/auth/CustomerRouteGuard'
@@ -76,6 +77,7 @@ function App() {
       <Route path="/employee/login" element={<EmployeeLoginPage />} />
       <Route path="/staff/login" element={<EmployeeLoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/home" element={<HomePage />} />
       <Route path="/events" element={<EventsPage />} />
