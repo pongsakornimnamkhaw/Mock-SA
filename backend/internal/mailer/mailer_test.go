@@ -1,6 +1,8 @@
 package mailer
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -87,6 +89,46 @@ func TestBuildMessageEncodesThaiSubject(t *testing.T) {
 func TestLogMailerSendSucceeds(t *testing.T) {
 	if err := (LogMailer{}).Send("user@example.test", "หัวข้อ", "เนื้อความ"); err != nil {
 		t.Fatalf("LogMailer ต้องไม่ error: %v", err)
+	}
+}
+
+func TestLogMailerSendWritesLastMailFile(t *testing.T) {
+	original := lastMailFile
+	lastMailFile = filepath.Join(t.TempDir(), "last-mail.txt")
+	defer func() { lastMailFile = original }()
+
+	if err := (LogMailer{}).Send("user@example.test", "หัวข้อทดสอบ", "เนื้อความทดสอบ"); err != nil {
+		t.Fatalf("Send ต้องไม่ error: %v", err)
+	}
+
+	content, err := os.ReadFile(lastMailFile)
+	if err != nil {
+		t.Fatalf("ไม่พบไฟล์สรุปอีเมลล่าสุด: %v", err)
+	}
+	for _, want := range []string{"user@example.test", "หัวข้อทดสอบ", "เนื้อความทดสอบ"} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("ไฟล์ไม่มีข้อมูลที่คาด %q ในเนื้อหา:\n%s", want, content)
+		}
+	}
+}
+
+func TestLogMailerSendOverwritesPreviousMailFile(t *testing.T) {
+	original := lastMailFile
+	lastMailFile = filepath.Join(t.TempDir(), "last-mail.txt")
+	defer func() { lastMailFile = original }()
+
+	_ = (LogMailer{}).Send("first@example.test", "หัวข้อแรก", "เนื้อความแรก")
+	_ = (LogMailer{}).Send("second@example.test", "หัวข้อสอง", "เนื้อความสอง")
+
+	content, err := os.ReadFile(lastMailFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), "first@example.test") {
+		t.Fatal("ไฟล์ควรมีแค่อีเมลล่าสุด ไม่ใช่สะสมของเก่าไว้")
+	}
+	if !strings.Contains(string(content), "second@example.test") {
+		t.Fatalf("ไฟล์ต้องมีอีเมลล่าสุด: %s", content)
 	}
 }
 
