@@ -1,17 +1,34 @@
 import { useState } from 'react'
-import { Box, Button, TextField } from '@mui/material' 
+import { Alert, Box, Button, CircularProgress, TextField } from '@mui/material'
 import EmailIcon from '@mui/icons-material/Email'
+import { customerAccountApi } from '@/api/customerAccountApi'
 
 const ForgotPasswordForm = () => {
     const [email, setEmail] = useState('')
-    const handleSumit = (e: React.FormEvent) => {
+    const [submitting, setSubmitting] = useState(false)
+    const [errorMessage, setErrorMessage] = useState('')
+    const [sent, setSent] = useState(false)
+
+    const canSubmit = email.trim() !== '' && !submitting
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        console.log('Reset Password:', email)
-    };
+        if (!canSubmit) return
+        setSubmitting(true)
+        setErrorMessage('')
+        try {
+            await customerAccountApi.forgotPassword(email)
+            setSent(true)
+        } catch (reason) {
+            setErrorMessage(reason instanceof Error ? reason.message : 'ไม่สามารถส่งลิงก์รีเซ็ตรหัสผ่านได้')
+        } finally {
+            setSubmitting(false)
+        }
+    }
 
     return (
-        <Box component="form" onSubmit={handleSumit} sx={{ width: '100%' }}>
-            <Box 
+        <Box component="form" onSubmit={handleSubmit} noValidate sx={{ width: '100%' }}>
+            <Box
                 sx={{
                     display: 'flex',
                     alignItems: 'center',
@@ -23,22 +40,37 @@ const ForgotPasswordForm = () => {
                 <TextField
                     fullWidth
                     label="อีเมล"
+                    type="email"
                     value={email}
+                    disabled={submitting}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                    sx={{ 
+                    sx={{
                             '& .MuiOutlinedInput-root': {
-                                bgcolor: '#f5f5f5',   
-                                borderRadius: '15px', 
+                                bgcolor: '#f5f5f5',
+                                borderRadius: '15px',
                             },
                         }}
                 />
             </Box>
 
-            <Button variant="contained" type="submit"  
-                sx={{ 
-                    bgcolor: '#FF5A57', 
-                    borderRadius: '15px', 
-                    fontSize: '18px', 
+            {/* ข้อความยืนยันต้องเป็นกลาง ไม่บอกว่าอีเมลนี้มีบัญชีอยู่จริงหรือไม่ */}
+            {sent && (
+                <Alert severity="success" sx={{ mb: 2, borderRadius: '15px' }}>
+                    ถ้ามีบัญชีที่ใช้อีเมลนี้ เราส่งลิงก์รีเซ็ตรหัสผ่านไปให้แล้ว กรุณาตรวจสอบกล่องจดหมาย (ลิงก์ใช้ได้ 30 นาที)
+                </Alert>
+            )}
+
+            {errorMessage !== '' && (
+                <Alert severity="error" sx={{ mb: 2, borderRadius: '15px' }}>
+                    {errorMessage}
+                </Alert>
+            )}
+
+            <Button variant="contained" type="submit" disabled={!canSubmit}
+                sx={{
+                    bgcolor: '#FF5A57',
+                    borderRadius: '15px',
+                    fontSize: '18px',
                     py: 1.5,
                     width: '80%',
                     display: 'flex',
@@ -48,7 +80,7 @@ const ForgotPasswordForm = () => {
                     '&:hover': { bgcolor: '#050C38' }
                 }}
             >
-                ยืนยันอีเมล
+                {submitting ? <CircularProgress size={24} sx={{ color: '#ffffff' }} /> : 'ยืนยันอีเมล'}
             </Button>
         </Box>
     );
