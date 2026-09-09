@@ -202,3 +202,34 @@ func TestCustomerPasswordResetRejectsExpiredToken(t *testing.T) {
 	customerTestRequest(t, app, http.MethodPost, "/api/customer/auth/login",
 		map[string]any{"email": email, "password": "OldPass123!"}, nil, http.StatusOK)
 }
+
+func TestNormalizeCustomerPhoneIgnoresSpacesAndDashes(t *testing.T) {
+	if got := normalizeCustomerPhone(" 081-234-5678 "); got != "0812345678" {
+		t.Fatalf("got %q, want %q", got, "0812345678")
+	}
+}
+
+func TestCustomerPhoneVerifiedPasswordRecoveryChangesPassword(t *testing.T) {
+	db := managementTestDB(t)
+	app := fiber.New()
+	registerCustomerAccountRoutes(app, db, &captureMailer{}, "http://localhost:5173")
+
+	email := "phone.recovery@example.test"
+	phone := "0812345678"
+	oldPassword := "OldPass123!"
+	newPassword := "BrandNewPass456!"
+	customerTestRequest(t, app, http.MethodPost, "/api/customer/auth/register", map[string]any{
+		"first_name": "สมหญิง", "last_name": "ทดสอบ", "date_of_birth": "2000-01-01",
+		"gender": "หญิง", "phone": phone, "address": "กรุงเทพมหานคร",
+		"email": email, "password": oldPassword,
+	}, nil, http.StatusCreated)
+
+	customerTestRequest(t, app, http.MethodPost, "/api/customer/auth/password-recovery", map[string]any{
+		"email": email, "phone": phone, "new_password": newPassword,
+	}, nil, http.StatusNoContent)
+
+	customerTestRequest(t, app, http.MethodPost, "/api/customer/auth/login",
+		map[string]any{"email": email, "password": oldPassword}, nil, http.StatusUnauthorized)
+	customerTestRequest(t, app, http.MethodPost, "/api/customer/auth/login",
+		map[string]any{"email": email, "password": newPassword}, nil, http.StatusOK)
+}

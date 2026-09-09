@@ -88,6 +88,7 @@ func registerCustomerAccountRoutes(app *fiber.App, db *gorm.DB, sender mailer.Ma
 	group.Post("/auth/logout", h.logout)
 	group.Post("/auth/forgot-password", h.forgotPassword)
 	group.Post("/auth/reset-password", h.resetPassword)
+	group.Post("/auth/password-recovery", h.recoverPasswordWithPhone)
 	group.Get("/promotions", h.listCustomerPromotions)
 	group.Get("/promotions/redeem", h.redeemCustomerPromotion)
 	group.Get("/promotions/:id", h.getCustomerPromotion)
