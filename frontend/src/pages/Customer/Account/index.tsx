@@ -24,6 +24,8 @@ import {
   getBookingsSnapshot, subscribeBookings,
 } from '@/utils/bookingStore';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
+import TicketStub from '@/components/tickets/TicketStub';
+import { ticketThemeForConcertId } from '@/utils/posterPalette';
 
 type AccountPageMode = 'tickets' | 'history' | 'profile' | 'password';
 
@@ -66,7 +68,7 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
   const [reuploadPreview, setReuploadPreview] = useState('');
 
   // Preview enlarged QR ticket dialog
-  const [previewQrTicket, setPreviewQrTicket] = useState<{ code: string; qrCodeUrl: string; seatLabel: string; concertTitle: string } | null>(null);
+  const [previewQrTicket, setPreviewQrTicket] = useState<{ code: string; qrCodeUrl: string; seatLabel: string; concertTitle: string; concertId: string } | null>(null);
 
   useEffect(() => {
     return subscribeBookings(() => {
@@ -281,50 +283,26 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
                               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#171d3b', mb: 1.5 }}>
                                 ตั๋วเข้าชมคอนเสิร์ต ({ticketsToRender.length} ใบ):
                               </Typography>
-                              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(230px, 1fr))' }, gap: 2 }}>
+                              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fill, minmax(340px, 1fr))' }, gap: 2.5 }}>
                                 {ticketsToRender.map((ticket) => (
-                                  <Paper
+                                  <TicketStub
                                     key={ticket.code}
-                                    elevation={0}
-                                    onClick={() => setPreviewQrTicket({
+                                    concertId={booking.concertId}
+                                    concertTitle={booking.concertTitle}
+                                    eventDate={formatDate(booking.eventDate)}
+                                    location={booking.location || 'ฮอลล์จัดแสดง'}
+                                    zoneLabel={`โซน ${booking.zoneId} (${booking.tierName})`}
+                                    code={ticket.code}
+                                    seatLabel={ticket.seatLabel}
+                                    qrCodeUrl={ticket.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticket.code)}`}
+                                    onOpenQr={() => setPreviewQrTicket({
                                       code: ticket.code,
                                       qrCodeUrl: ticket.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticket.code)}`,
                                       seatLabel: ticket.seatLabel,
                                       concertTitle: booking.concertTitle,
+                                      concertId: booking.concertId,
                                     })}
-                                    sx={{
-                                      p: 2,
-                                      bgcolor: '#fbfcfe',
-                                      border: '1.5px dashed #90caf9',
-                                      borderRadius: 2.5,
-                                      textAlign: 'center',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.2s ease',
-                                      '&:hover': {
-                                        transform: 'translateY(-3px)',
-                                        boxShadow: '0 6px 16px rgba(17, 54, 107, 0.12)',
-                                        borderColor: '#11366b',
-                                        bgcolor: '#ffffff',
-                                      },
-                                    }}
-                                  >
-                                    <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.8 }}>
-                                      <Chip label="พร้อมใช้งาน (Valid)" size="small" sx={{ bgcolor: '#e8f5e9', color: '#2e7d32', fontWeight: 700, fontSize: '0.72rem', height: 22 }} />
-                                    </Box>
-                                    <Box
-                                      component="img"
-                                      src={ticket.qrCodeUrl}
-                                      alt="Ticket QR Code"
-                                      sx={{ width: 140, height: 140, mx: 'auto', my: 0.8, p: 1, bgcolor: '#fff', borderRadius: 2, border: '1px solid #e0e3ec' }}
-                                    />
-                                    <Typography variant="body2" sx={{ fontWeight: 800, color: '#11366b', letterSpacing: '0.5px' }}>{ticket.code}</Typography>
-                                    <Typography variant="caption" sx={{ color: '#374151', fontWeight: 600, display: 'block', mt: 0.3 }}>
-                                      ที่นั่ง: <strong>{ticket.seatLabel}</strong>
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ color: '#1976d2', fontSize: '0.72rem', mt: 0.8, display: 'block', fontWeight: 500 }}>
-                                      🔍 คลิกที่รูปเพื่อขยาย QR Code สำหรับสแกน
-                                    </Typography>
-                                  </Paper>
+                                  />
                                 ))}
                               </Box>
                             </Box>
@@ -494,45 +472,46 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
         fullWidth
         slotProps={{ paper: { sx: { borderRadius: 4, p: 1 } } }}
       >
-        {previewQrTicket && (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' }}>
-              OCTAVIA E-TICKET
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: '#11366b', mt: 0.5, mb: 0.5 }}>
-              {previewQrTicket.concertTitle}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#475569', mb: 2 }}>
-              ที่นั่ง: <strong>{previewQrTicket.seatLabel}</strong> · รหัสตั๋ว: <strong>{previewQrTicket.code}</strong>
-            </Typography>
-            <Box
-              component="img"
-              src={previewQrTicket.qrCodeUrl}
-              alt="Enlarged QR Code"
-              sx={{
-                width: 240,
-                height: 240,
-                mx: 'auto',
-                p: 2,
-                bgcolor: '#fff',
-                borderRadius: 3,
-                border: '2px solid #cbd5e1',
-                boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
-              }}
-            />
-            <Alert severity="success" sx={{ mt: 2.5, textAlign: 'left', borderRadius: 2 }}>
-              แสดง QR Code นี้แก่เจ้าหน้าที่ ณ ประตูทางเข้างาน (Gate Check-In) เพื่อสแกนเข้าชม
-            </Alert>
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={() => setPreviewQrTicket(null)}
-              sx={{ mt: 2.5, bgcolor: '#050C38', py: 1.2, borderRadius: 2, textTransform: 'none', fontWeight: 700, fontSize: '1rem' }}
-            >
-              ปิดหน้าต่าง
-            </Button>
-          </Box>
-        )}
+        {previewQrTicket && (() => {
+          const ticketTheme = ticketThemeForConcertId(previewQrTicket.concertId);
+          return (
+            <Box sx={{ p: 3, textAlign: 'center', bgcolor: ticketTheme.base, color: '#F1F5F9', borderRadius: 3 }}>
+              <Typography variant="caption" sx={{ color: ticketTheme.accent, fontWeight: 800, letterSpacing: '2px' }}>
+                OCTAVIA E-TICKET
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, mb: 0.5 }}>
+                {previewQrTicket.concertTitle}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(241,245,249,0.72)', mb: 2 }}>
+                ที่นั่ง: <strong>{previewQrTicket.seatLabel}</strong> · รหัสตั๋ว: <strong>{previewQrTicket.code}</strong>
+              </Typography>
+              <Box
+                component="img"
+                src={previewQrTicket.qrCodeUrl}
+                alt="Enlarged QR Code"
+                sx={{
+                  width: 240, height: 240, mx: 'auto', p: 2, bgcolor: '#fff', borderRadius: 3,
+                  border: `2px solid ${ticketTheme.accent}`, boxShadow: `0 8px 30px ${ticketTheme.accent}44`,
+                }}
+              />
+              <Alert severity="success" sx={{ mt: 2.5, textAlign: 'left', borderRadius: 2 }}>
+                แสดง QR Code นี้แก่เจ้าหน้าที่ ณ ประตูทางเข้างาน (Gate Check-In) เพื่อสแกนเข้าชม
+              </Alert>
+              <Button
+                fullWidth
+                variant="contained"
+                onClick={() => setPreviewQrTicket(null)}
+                sx={{
+                  mt: 2.5, bgcolor: ticketTheme.accent, color: '#141024', py: 1.2, borderRadius: 2,
+                  textTransform: 'none', fontWeight: 800, fontSize: '1rem',
+                  '&:hover': { bgcolor: ticketTheme.accent, filter: 'brightness(0.92)' },
+                }}
+              >
+                ปิดหน้าต่าง
+              </Button>
+            </Box>
+          );
+        })()}
       </Dialog>
     </Box>
   );
