@@ -4,12 +4,19 @@ import SearchOffRoundedIcon from '@mui/icons-material/SearchOffRounded';
 import { Link as RouterLink } from 'react-router-dom';
 import { useCustomerConcerts } from '@/hooks/useCustomerConcerts';
 
-export default function EventList({ title = 'ทุกงานแสดง', query = '' }: { title?: string; query?: string }) {
+export interface ComingSoonPoster {
+  id: string;
+  image: string;
+  title: string;
+}
+
+export default function EventList({ title = 'ทุกงานแสดง', query = '', comingSoon = [] }: { title?: string; query?: string; comingSoon?: ComingSoonPoster[] }) {
   const { concerts, loading, error } = useCustomerConcerts();
   const normalizedQuery = query.trim().toLocaleLowerCase('th-TH');
   const events = normalizedQuery
     ? concerts.filter((event) => `${event.title} ${event.location}`.toLocaleLowerCase('th-TH').includes(normalizedQuery))
     : concerts;
+  const comingSoonPosters = normalizedQuery ? [] : comingSoon;
 
   return (
     <Container maxWidth="xl" sx={{ py: 5, px: { xs: 2, md: 6 } }}>
@@ -22,7 +29,7 @@ export default function EventList({ title = 'ทุกงานแสดง', qu
         </Box>
       ) : error !== '' ? (
         <Alert severity="error" sx={{ borderRadius: 3 }}>{error}</Alert>
-      ) : events.length === 0 ? (
+      ) : events.length === 0 && comingSoonPosters.length === 0 ? (
         <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#f8f9fc', borderRadius: 4 }}>
           <SearchOffRoundedIcon sx={{ fontSize: 52, color: '#a7adbf', mb: 1 }} />
           {normalizedQuery ? (
@@ -55,6 +62,19 @@ export default function EventList({ title = 'ทุกงานแสดง', qu
                 sx={{ bgcolor: '#FF5C58', color: '#fff', borderRadius: '25px', px: 4, py: 0.8, fontWeight: 'bold', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(255,92,88,0.4)', '&:hover': { bgcolor: '#e04f4a' } }}>
                 ดูรายละเอียด
               </Button>
+            </Box>
+          </Grid>
+        ))}
+        {comingSoonPosters.map((item) => (
+          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={item.id}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <Box sx={{ position: 'relative', width: '100%', mb: 2 }}>
+                <Box component="img" src={item.image} alt={item.title} sx={{ display: 'block', width: '100%', height: '320px', objectFit: 'cover', borderRadius: '16px', boxShadow: '0 8px 20px rgba(0,0,0,0.15)' }} />
+                <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,0,0,0.55)', borderRadius: '16px', color: '#fff', fontWeight: 700, fontSize: '1rem', letterSpacing: 1, textTransform: 'uppercase' }}>
+                  Coming Soon
+                </Box>
+              </Box>
+              <Typography sx={{ mb: 0.5, color: '#1a1a1a', fontWeight: 'bold', fontSize: '1.05rem' }}>{item.title}</Typography>
             </Box>
           </Grid>
         ))}
