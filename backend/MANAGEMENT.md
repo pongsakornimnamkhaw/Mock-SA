@@ -19,6 +19,8 @@ The backend uses its existing `.env` PostgreSQL connection (`DB_HOST`, `DB_PORT`
 | `/api/employees/:id` | GET, PUT, DELETE | Read/update staff; deactivate without deleting the user/history |
 | `/api/activity-logs?type=staff` | GET | Existing employee activity logs |
 | `/api/activity-logs?type=user` | GET | Existing customer activity logs |
+| `/api/activity-logs?type=staff&scope=account` | GET | Employee account activity only |
+| `/api/activity-logs?type=user&scope=account` | GET | Customer account activity only |
 
 Mutations and their audit records share a transaction. Promotion edits require a new approval. Superseded pending requests are retained as rejected with an automatic cancellation explanation; decided requests remain unchanged. Row locks guard simultaneous decisions. Promo codes are case-insensitive and remain reserved after archiving. Unique employee codes and emails are validated. Customer records cannot be modified through employee endpoints.
 
@@ -47,13 +49,13 @@ different scopes, 3 read-only), 3 fictional customers, 3 reference zones,
 27 simulated redemptions, 26 staff logs and 30 customer logs. All demo IDs start
 with `DEMO_MGMT_V1_`, promo/employee codes start with `TEST-MGMT-`, and names or
 descriptions include `ทดสอบ`. Emails use the reserved `.test` domain and phone
-numbers are dummy values. No login credentials or real authorization are added.
+numbers are dummy values. No login credentials or account-activity examples are added.
 
 Dates are relative to the first run's Bangkok date. Revenue, discounts and quota
 usage match the simulated redemption rows; there are **no actual bookings,
 payments, outbound messages or ticket/seat changes**. Existing concerts are only
 referenced, never created or changed. Reference zones and customer identities
-support the promotion forms and customer-history tab; no other page code changes.
+support the promotion forms and promotion usage history; no other page code changes.
 
 All inserts share a transaction and a seed lock. An existing completion marker
 causes subsequent runs to skip **all** writes, preserving edits, approval decisions
@@ -67,6 +69,9 @@ Refresh `/promotions`, `/approvals`, `/history` or `/employees` after insertion.
 Use `TEST-MGMT-WAIT25`, `TEST-MGMT-WAIT300` or `TEST-MGMT-WAIT5` to try decisions;
 use a rejected promotion to try edit/resubmission, and active/expired promotions
 to inspect details, dates, quotas and redemption history.
+
+The `/history` account view is populated by real registration, login, profile/password,
+and employee-account management actions rather than this promotion demo dataset.
 
 Verify the seed's relationships, rollback, repeat-run safety and preservation of
 edits/deletions in a disposable PostgreSQL schema (public data is not touched):

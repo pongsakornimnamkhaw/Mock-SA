@@ -56,6 +56,77 @@ func TestManagementEmployeeValidation(t *testing.T) {
 	}
 }
 
+func TestAccountActivityLabel(t *testing.T) {
+	cases := []struct {
+		name     string
+		kind     string
+		action   string
+		want     string
+		included bool
+	}{
+		{name: "staff login", kind: "staff", action: "เข้าสู่ระบบ", want: "เข้าสู่ระบบ", included: true},
+		{name: "staff account creation", kind: "staff", action: "สร้างบัญชี", want: "สร้างบัญชี", included: true},
+		{name: "staff permission change", kind: "staff", action: "เปลี่ยนสิทธิ์", want: "เปลี่ยนสิทธิ์", included: true},
+		{name: "staff logout is excluded", kind: "staff", action: "ออกจากระบบ", included: false},
+		{name: "staff promotion change is excluded", kind: "staff", action: "CREATE_PROMOTION", included: false},
+		{name: "customer registration uses the shared label", kind: "user", action: "สมัครสมาชิก", want: "สร้างบัญชี", included: true},
+		{name: "customer profile update uses the shared label", kind: "user", action: "แก้ไขโปรไฟล์", want: "แก้ไขบัญชี", included: true},
+		{name: "customer password reset", kind: "user", action: "รีเซ็ตรหัสผ่าน", want: "รีเซ็ตรหัสผ่าน", included: true},
+		{name: "customer logout is excluded", kind: "user", action: "ออกจากระบบ", included: false},
+		{name: "customer booking is excluded", kind: "user", action: "จองบัตร", included: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, included := accountActivityLabel(tc.kind, tc.action)
+			if got != tc.want || included != tc.included {
+				t.Fatalf("accountActivityLabel(%q, %q) = %q, %v; want %q, %v", tc.kind, tc.action, got, included, tc.want, tc.included)
+			}
+		})
+	}
+}
+
+func TestThailandWallTime(t *testing.T) {
+	databaseWallTime := time.Date(2026, time.September, 10, 1, 18, 13, 0, time.UTC)
+
+	got := thailandWallTime(databaseWallTime).Format(time.RFC3339)
+	if got != "2026-09-10T01:18:13+07:00" {
+		t.Fatalf("thailandWallTime() = %q; want Thailand wall-clock time with +07:00 offset", got)
+	}
+}
+
+func TestEmployeeAccountActions(t *testing.T) {
+	previous := employeeDTO{
+		FirstName: "สมชาย", LastName: "ทดสอบ", EmployeeCode: "EMP-001", Department: "ฝ่ายขาย",
+		Email: "staff@example.com", Phone: "0812345678", Permission: "view_only",
+	}
+
+	cases := []struct {
+		name     string
+		creating bool
+		change   func(*employeeDTO)
+		want     []string
+	}{
+		{name: "new employee", creating: true, want: []string{"สร้างบัญชี"}},
+		{name: "profile only", change: func(e *employeeDTO) { e.Email = "new@example.com" }, want: []string{"แก้ไขบัญชี"}},
+		{name: "permission only", change: func(e *employeeDTO) { e.Permission = "admin" }, want: []string{"เปลี่ยนสิทธิ์"}},
+		{name: "profile and permission", change: func(e *employeeDTO) { e.Phone = "0899999999"; e.Permission = "admin" }, want: []string{"แก้ไขบัญชี", "เปลี่ยนสิทธิ์"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := previous
+			if tc.change != nil {
+				tc.change(&input)
+			}
+			got := employeeAccountActions(previous, input, tc.creating)
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("employeeAccountActions() = %v; want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestManagementBannerValidation(t *testing.T) {
 	var buffer bytes.Buffer
 	if err := png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
@@ -276,13 +347,36 @@ func TestManagementPostgres(t *testing.T) {
 	if retained != 1 {
 		t.Fatal("employee history reference lost")
 	}
-	logs := managementRequest(t, app, "GET", "/api/activity-logs?type=staff", nil, 200)["data"].([]interface{})
-	if len(logs) < 8 {
-		t.Fatalf("missing audit events: %d", len(logs))
+	allStaffLogs := managementRequest(t, app, "GET", "/api/activity-logs?type=staff", nil, 200)["data"].([]interface{})
+	foundPromotionLog := false
+	for _, raw := range allStaffLogs {
+		if strings.Contains(raw.(map[string]interface{})["action_code"].(string), "PROMOTION") {
+			foundPromotionLog = true
+			break
+		}
 	}
+	if !foundPromotionLog {
+		t.Fatal("default staff activity contract lost promotion history")
+	}
+	logs := managementRequest(t, app, "GET", "/api/activity-logs?type=staff&scope=account", nil, 200)["data"].([]interface{})
+	if len(logs) != 3 {
+		t.Fatalf("account history returned %d events; want 3 account-only events", len(logs))
+	}
+	wantActivities := map[string]bool{"สร้างบัญชี": false, "เปลี่ยนสิทธิ์": false, "ปิดใช้งานบัญชี": false}
 	for _, raw := range logs {
-		if raw.(map[string]interface{})["user_name"] != unidentifiedActor {
-			t.Fatal("fabricated audit actor")
+		row := raw.(map[string]interface{})
+		activity := row["activity_type"].(string)
+		if _, ok := wantActivities[activity]; !ok {
+			t.Fatalf("non-account activity leaked into account history: %q", activity)
+		}
+		wantActivities[activity] = true
+		if row["user_name"] != "ทดสอบ สิทธิ์" || row["user_code"] != "TEST-001" {
+			t.Fatalf("account history did not resolve the target employee: %#v", row)
+		}
+	}
+	for activity, found := range wantActivities {
+		if !found {
+			t.Fatalf("missing account activity %q", activity)
 		}
 	}
 
