@@ -65,5 +65,5 @@ export const managementApi = {
   getEmployee: (id: string) => request<Employee>(`/employees/${encoded(id)}`),
   saveEmployee: (payload: Omit<Employee, 'employee_id'>, id?: string) => request<Employee>(id ? `/employees/${encoded(id)}` : '/employees', id ? 'PUT' : 'POST', payload),
   deleteEmployee: (id: string) => request<void>(`/employees/${encoded(id)}`, 'DELETE'),
-  activityLogs: (type: 'staff' | 'user') => request<{ data: (ActivityLog & { target_id?: string })[] }>(`/activity-logs?type=${type}`),
+  activityLogs: (type: 'staff' | 'user', scope?: 'account') => request<{ data: (ActivityLog & { target_id?: string })[] }>(`/activity-logs?type=${type}${scope ? `&scope=${scope}` : ''}`),
 };
