@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -31,9 +32,10 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:3000",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
-		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowOrigins:     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:3000",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowCredentials: true,
 	}))
 
 	// Routes
@@ -43,12 +45,7 @@ func main() {
 			"status":  "success",
 		})
 	})
-	handlers.RegisterVenueSeatRoutes(app, config.DB)
-	handlers.RegisterRegistrationRoutes(app, config.DB)
-	handlers.RegisterConcertRoutes(app, config.DB)
-	handlers.RegisterArtistRoutes(app, config.DB)
-	handlers.RegisterManagementRoutes(app, config.DB)
-	handlers.RegisterReportRoutes(app, config.DB)
+	registerRoutes(app, config.DB)
 
 	// Start Server
 	port := os.Getenv("PORT")
@@ -58,4 +55,18 @@ func main() {
 
 	log.Printf("Server is starting on port %s", port)
 	log.Fatal(app.Listen(":" + port))
+}
+
+func registerRoutes(app *fiber.App, db *gorm.DB) {
+	handlers.RegisterVenueSeatRoutes(app, db)
+	handlers.RegisterRegistrationRoutes(app, db)
+	handlers.RegisterConcertRoutes(app, db)
+	handlers.RegisterArtistRoutes(app, db)
+	handlers.RegisterManagementRoutes(app, db)
+	handlers.RegisterReportRoutes(app, db)
+	registerCustomerRoutes(app, db)
+}
+
+func registerCustomerRoutes(app *fiber.App, db *gorm.DB) {
+	handlers.RegisterCustomerAccountRoutes(app, db)
 }

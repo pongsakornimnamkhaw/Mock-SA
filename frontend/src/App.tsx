@@ -8,6 +8,8 @@ import ForgotPasswordPage from './pages/Login_page/ForgotPassword'
 import RegisterPage from './pages/Customer/Register'
 import HomePage from './pages/Customer/Home'
 import EventsPage from './pages/Customer/Events'
+import CustomerPromotionsPage from './pages/Customer/Promotions'
+import CustomerPromotionDetailPage from './pages/Customer/PromotionDetail'
 import IntroPage from './pages/Customer/intro'
 import EventDetailPage from './pages/Customer/EventDetail'
 import ZoneSelectionPage from './pages/Customer/ZoneSelection'
@@ -70,6 +72,8 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/home" element={<HomePage />} />
       <Route path="/events" element={<EventsPage />} />
+      <Route path="/offers" element={<CustomerPromotionsPage />} />
+      <Route path="/offers/:id" element={<CustomerPromotionDetailPage />} />
       <Route path="/event-detail" element={<EventDetailPage />} />
       <Route path="/event/:id" element={<EventDetailPage />} />
       <Route path="/event/:id/zones" element={<ZoneSelectionPage />} />
