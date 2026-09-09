@@ -32,6 +32,16 @@ type customerResetPasswordInput struct {
 	NewPassword string `json:"new_password"`
 }
 
+type customerPhonePasswordRecoveryInput struct {
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+	NewPassword string `json:"new_password"`
+}
+
+func normalizeCustomerPhone(value string) string {
+	return strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(strings.TrimSpace(value))
+}
+
 // validateNewCustomerPassword ใช้กฎเดียวกับการเปลี่ยนรหัสผ่านในหน้าโปรไฟล์
 func validateNewCustomerPassword(password string) error {
 	if len(password) < 8 {
@@ -147,6 +157,47 @@ func (h *customerAccountHandler) resetPassword(c *fiber.Ctx) error {
 		return tx.Create(&models.CusActivityLogs{UserID: record.UserID, ActionType: "รีเซ็ตรหัสผ่าน", Description: "ลูกค้ารีเซ็ตรหัสผ่านผ่านลิงก์ในอีเมล", TargetID: record.UserID}).Error
 	})
 	if err != nil {
+		return customerError(c, fiber.StatusInternalServerError, "ไม่สามารถตั้งรหัสผ่านใหม่ได้")
+	}
+	clearCustomerSessionCookie(c)
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *customerAccountHandler) recoverPasswordWithPhone(c *fiber.Ctx) error {
+	var input customerPhonePasswordRecoveryInput
+	if err := c.BodyParser(&input); err != nil {
+		return customerError(c, fiber.StatusBadRequest, "ข้อมูลกู้รหัสผ่านไม่ถูกต้อง")
+	}
+	email, err := normalizeCustomerEmail(input.Email)
+	if err != nil {
+		return customerError(c, fiber.StatusBadRequest, "อีเมลหรือเบอร์โทรศัพท์ไม่ถูกต้อง")
+	}
+	phone := normalizeCustomerPhone(input.Phone)
+	if phone == "" {
+		return customerError(c, fiber.StatusBadRequest, "อีเมลหรือเบอร์โทรศัพท์ไม่ถูกต้อง")
+	}
+	if err := validateNewCustomerPassword(input.NewPassword); err != nil {
+		return customerError(c, fiber.StatusBadRequest, err.Error())
+	}
+
+	var user models.User
+	if err := h.db.Where("LOWER(email) = ? AND LOWER(user_type) IN ?", email, []string{"customer", "user", "ลูกค้า"}).First(&user).Error; err != nil || normalizeCustomerPhone(user.PhoneNumber) != phone {
+		return customerError(c, fiber.StatusBadRequest, "อีเมลหรือเบอร์โทรศัพท์ไม่ถูกต้อง")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return customerError(c, fiber.StatusInternalServerError, "ไม่สามารถตั้งรหัสผ่านใหม่ได้")
+	}
+	if err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.User{}).Where("user_id = ?", user.UserID).Update("password_hash", string(hash)).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ? AND action_type IN ?", user.UserID, []string{customerPasswordResetAction, customerSessionAction}).Delete(&models.CusActivityLogs{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&models.CusActivityLogs{UserID: user.UserID, ActionType: "รีเซ็ตรหัสผ่าน", Description: "ลูกค้ายืนยันตัวตนด้วยเบอร์โทรศัพท์และตั้งรหัสผ่านใหม่", TargetID: user.UserID}).Error
+	}); err != nil {
 		return customerError(c, fiber.StatusInternalServerError, "ไม่สามารถตั้งรหัสผ่านใหม่ได้")
 	}
 	clearCustomerSessionCookie(c)
