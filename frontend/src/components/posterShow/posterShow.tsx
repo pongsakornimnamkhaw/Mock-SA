@@ -1,25 +1,41 @@
-import { Box, Typography, Button, Chip, Container, Grid } from '@mui/material';
+import { Alert, Box, Typography, Button, Chip, CircularProgress, Container, Grid } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import SearchOffRoundedIcon from '@mui/icons-material/SearchOffRounded';
 import { Link as RouterLink } from 'react-router-dom';
-import { customerEvents } from '@/data/customerEvents';
+import { useCustomerConcerts } from '@/hooks/useCustomerConcerts';
 
 export default function EventList({ title = 'ทุกงานแสดง', query = '' }: { title?: string; query?: string }) {
+  const { concerts, loading, error } = useCustomerConcerts();
   const normalizedQuery = query.trim().toLocaleLowerCase('th-TH');
   const events = normalizedQuery
-    ? customerEvents.filter((event) => `${event.title} ${event.location}`.toLocaleLowerCase('th-TH').includes(normalizedQuery))
-    : customerEvents;
+    ? concerts.filter((event) => `${event.title} ${event.location}`.toLocaleLowerCase('th-TH').includes(normalizedQuery))
+    : concerts;
 
   return (
     <Container maxWidth="xl" sx={{ py: 5, px: { xs: 2, md: 6 } }}>
       <Typography variant="h5" sx={{ mb: 4, color: '#1a1a1a', fontWeight: 'bold' }}>
         {title}
       </Typography>
-      {events.length === 0 ? (
+      {loading ? (
+        <Box sx={{ py: 10, display: 'grid', placeItems: 'center' }}>
+          <CircularProgress sx={{ color: '#FF5C58' }} />
+        </Box>
+      ) : error !== '' ? (
+        <Alert severity="error" sx={{ borderRadius: 3 }}>{error}</Alert>
+      ) : events.length === 0 ? (
         <Box sx={{ py: 8, textAlign: 'center', bgcolor: '#f8f9fc', borderRadius: 4 }}>
           <SearchOffRoundedIcon sx={{ fontSize: 52, color: '#a7adbf', mb: 1 }} />
-          <Typography sx={{ fontWeight: 750, color: '#343a59' }}>ไม่พบคอนเสิร์ต “{query}”</Typography>
-          <Typography variant="body2" color="text.secondary">ลองค้นหาด้วยชื่อคอนเสิร์ตหรือสถานที่อื่น</Typography>
+          {normalizedQuery ? (
+            <>
+              <Typography sx={{ fontWeight: 750, color: '#343a59' }}>ไม่พบคอนเสิร์ต “{query}”</Typography>
+              <Typography variant="body2" color="text.secondary">ลองค้นหาด้วยชื่อคอนเสิร์ตหรือสถานที่อื่น</Typography>
+            </>
+          ) : (
+            <>
+              <Typography sx={{ fontWeight: 750, color: '#343a59' }}>ยังไม่มีคอนเสิร์ตที่เปิดจำหน่าย</Typography>
+              <Typography variant="body2" color="text.secondary">กลับมาดูใหม่อีกครั้งเร็วๆ นี้</Typography>
+            </>
+          )}
         </Box>
       ) : <Grid container spacing={4}>
         {events.map((item) => (

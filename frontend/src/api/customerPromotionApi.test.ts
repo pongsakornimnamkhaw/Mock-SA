@@ -54,3 +54,25 @@ describe('customerPromotionApi.redeem', () => {
         await expect(customerPromotionApi.redeem(params)).rejects.toThrow('ไม่พบรหัสโปรโมชั่นนี้');
     });
 });
+
+describe('customerPromotionApi.listConcerts', () => {
+    it('requests the customer concert list endpoint', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+            jsonResponse(200, { data: [{ concert_id: 'CC0001', concert_name: 'Riverside Sound Festival' }] }),
+        );
+
+        const result = await customerPromotionApi.listConcerts();
+
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].concert_id).toBe('CC0001');
+        expect(String(fetchMock.mock.calls[0][0])).toBe('/api/customer/concerts');
+    });
+
+    it('surfaces a server failure as an Error', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+            jsonResponse(500, { error: 'ไม่สามารถโหลดคอนเสิร์ตได้' }),
+        );
+
+        await expect(customerPromotionApi.listConcerts()).rejects.toThrow('ไม่สามารถโหลดคอนเสิร์ตได้');
+    });
+});

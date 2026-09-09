@@ -52,6 +52,7 @@ export const customerPromotionApi = {
   },
   get: (id: string) => request<{ data: CustomerPromotion }>(`/promotions/${encodeURIComponent(id)}`),
   getConcert: (id: string) => request<{ data: CustomerPromotionConcert }>(`/concerts/${encodeURIComponent(id)}`),
+  listConcerts: () => request<{ data: CustomerPromotionConcert[] }>('/concerts'),
   redeem: (params: RedeemPromotionParams) => {
     const query = new URLSearchParams({
       code: params.code,
