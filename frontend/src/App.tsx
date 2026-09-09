@@ -5,7 +5,9 @@ import ConsertReportPage from './ConsertReportPage'
 // B6728786 - Frontend (Ticket Booking)
 import LoginPage from './pages/Login_page/Login'
 import ForgotPasswordPage from './pages/Login_page/ForgotPassword'
+import ResetPasswordPage from './pages/Login_page/ResetPassword'
 import RegisterPage from './pages/Customer/Register'
+import EmployeeLoginPage from './pages/Employee/Login'
 import HomePage from './pages/Customer/Home'
 import EventsPage from './pages/Customer/Events'
 import CustomerPromotionsPage from './pages/Customer/Promotions'
@@ -68,7 +70,10 @@ function App() {
       {/* B6728786 - Ticket Booking Routes */}
       <Route path="/" element={<IntroPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/employee/login" element={<EmployeeLoginPage />} />
+      <Route path="/staff/login" element={<EmployeeLoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/home" element={<HomePage />} />
       <Route path="/events" element={<EventsPage />} />

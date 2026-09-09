@@ -121,6 +121,26 @@ func validateEmployee(e *employeeDTO) error {
 	return nil
 }
 
+func employeeAccountActions(previous, input employeeDTO, creating bool) []string {
+	if creating {
+		return []string{"สร้างบัญชี"}
+	}
+	actions := make([]string, 0, 2)
+	profileChanged := previous.FirstName != input.FirstName ||
+		previous.LastName != input.LastName ||
+		previous.EmployeeCode != input.EmployeeCode ||
+		previous.Department != input.Department ||
+		previous.Email != input.Email ||
+		previous.Phone != input.Phone
+	if profileChanged {
+		actions = append(actions, "แก้ไขบัญชี")
+	}
+	if previous.Permission != input.Permission || previous.EditScope != input.EditScope {
+		actions = append(actions, "เปลี่ยนสิทธิ์")
+	}
+	return actions
+}
+
 func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 	var input employeeDTO
 	if err := c.BodyParser(&input); err != nil {
@@ -133,16 +153,17 @@ func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 	var result employeeDTO
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var u models.User
-		action := "สร้าง"
+		var previous employeeDTO
 		if id != "" {
-			if err := employeeQuery(tx).Clauses(clause.Locking{Strength: "UPDATE"}).First(&u, "user_id = ?", id).Error; err != nil {
+			if err := employeeQuery(tx).Preload("Permissions").Clauses(clause.Locking{Strength: "UPDATE"}).First(&u, "user_id = ?", id).Error; err != nil {
 				return err
 			}
-			action = "อัปเดต"
+			previous = employeeView(u)
 		} else {
 			u.UserID = "US" + uuid.NewString()
 			u.UserType = "employee"
 		}
+		actions := employeeAccountActions(previous, input, id == "")
 		// Case-insensitive uniqueness also covers existing mixed-case addresses.
 		// The lock serializes this module's writers; DB unique indexes remain the last guard.
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", "employee-email:"+input.Email).Error; err != nil {
@@ -183,8 +204,16 @@ func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 		if err := tx.Create(&p).Error; err != nil {
 			return err
 		}
-		if err := auditManagement(tx, action, u.UserID, action+"พนักงาน "+input.EmployeeCode+" สิทธิ์ "+input.Permission+" ขอบเขต "+scope); err != nil {
-			return err
+		for _, action := range actions {
+			detail := "สร้างบัญชีพนักงาน " + input.EmployeeCode + " สิทธิ์ " + input.Permission
+			if action == "แก้ไขบัญชี" {
+				detail = "แก้ไขข้อมูลบัญชีพนักงาน " + input.EmployeeCode
+			} else if action == "เปลี่ยนสิทธิ์" {
+				detail = "เปลี่ยนสิทธิ์พนักงาน " + input.EmployeeCode + " เป็น " + input.Permission + " ขอบเขต " + scope
+			}
+			if err := auditManagement(tx, action, u.UserID, detail); err != nil {
+				return err
+			}
 		}
 		u.Permissions = []models.Permission{p}
 		result = employeeView(u)
@@ -208,7 +237,7 @@ func (h *managementHandler) deleteEmployee(c *fiber.Ctx) error {
 		if err := tx.Model(&u).Update("employee_inactive", true).Error; err != nil {
 			return err
 		}
-		return auditManagement(tx, "ลบ", u.UserID, "ปิดใช้งานพนักงาน "+u.FirstName+" "+u.LastName+" โดยเก็บข้อมูลอ้างอิงและประวัติไว้")
+		return auditManagement(tx, "ปิดใช้งานบัญชี", u.UserID, "ปิดใช้งานบัญชีพนักงาน "+u.FirstName+" "+u.LastName+" โดยเก็บข้อมูลอ้างอิงและประวัติไว้")
 	})
 	if err != nil {
 		return managementError(c, err)

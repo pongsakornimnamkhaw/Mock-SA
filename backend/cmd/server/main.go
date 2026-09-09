@@ -65,6 +65,7 @@ func registerRoutes(app *fiber.App, db *gorm.DB) {
 	handlers.RegisterManagementRoutes(app, db)
 	handlers.RegisterReportRoutes(app, db)
 	registerCustomerRoutes(app, db)
+	handlers.RegisterEmployeeAuthRoutes(app, db)
 }
 
 func registerCustomerRoutes(app *fiber.App, db *gorm.DB) {
