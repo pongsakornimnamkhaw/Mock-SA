@@ -1,0 +1,10 @@
+./artist.go
+./base.go
+./concert.go
+./migrate.go
+./performance.go
+./promotion.go
+./ticket.go
+./user.go
+./venue.go
+./work.go
