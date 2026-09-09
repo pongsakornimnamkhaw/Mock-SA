@@ -7,6 +7,12 @@ export function formatThaiDate(value: string) {
   return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 }
 
+/** ช่วงวันจัดงาน ถ้าจบวันเดียวกับที่เริ่ม (หรือไม่มีวันจบ) แสดงวันเดียว */
+export function formatThaiDateRange(startDate: string, endDate: string) {
+  if (!endDate || endDate === startDate) return formatThaiDate(startDate);
+  return `${formatThaiDate(startDate)} – ${formatThaiDate(endDate)}`;
+}
+
 export function discountLabel(promotion: CustomerPromotion) {
   const { type, value } = promotion.discount;
   return type === 'percent' ? `ลด ${value.toLocaleString()}%` : `ลด ${value.toLocaleString()} บาท`;

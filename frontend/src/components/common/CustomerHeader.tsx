@@ -10,7 +10,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import Logo from '@/components/common/Logo';
 import CustomerConcertNotifications from '@/components/common/CustomerConcertNotifications';
-import { customerEvents } from '@/data/customerEvents';
+import { useCustomerConcerts } from '@/hooks/useCustomerConcerts';
 import { clearCustomerSession, CUSTOMER_SESSION_EVENT, getCustomerSession, saveCustomerSession } from '@/utils/customerSession';
 import { customerAccountApi, CustomerApiError } from '@/api/customerAccountApi';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
@@ -37,11 +37,12 @@ export default function CustomerHeader() {
   const [profileAnchor, setProfileAnchor] = useState<HTMLElement | null>(null);
   const [session, setSession] = useState(getCustomerSession);
   const [query, setQuery] = useState(() => new URLSearchParams(location.search).get('q') || '');
+  const { concerts } = useCustomerConcerts();
   const matches = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('th-TH');
-    if (!normalized) return customerEvents;
-    return customerEvents.filter((event) => `${event.title} ${event.location}`.toLocaleLowerCase('th-TH').includes(normalized));
-  }, [query]);
+    if (!normalized) return concerts;
+    return concerts.filter((event) => `${event.title} ${event.location}`.toLocaleLowerCase('th-TH').includes(normalized));
+  }, [concerts, query]);
 
   useEffect(() => {
     const syncSession = () => setSession(getCustomerSession());

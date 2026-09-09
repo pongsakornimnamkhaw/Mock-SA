@@ -91,6 +91,7 @@ func registerCustomerAccountRoutes(app *fiber.App, db *gorm.DB, sender mailer.Ma
 	group.Get("/promotions", h.listCustomerPromotions)
 	group.Get("/promotions/redeem", h.redeemCustomerPromotion)
 	group.Get("/promotions/:id", h.getCustomerPromotion)
+	group.Get("/concerts", h.listCustomerConcerts)
 	group.Get("/concerts/:id", h.getCustomerConcert)
 	group.Get("/account", h.requireCustomer, h.getAccount)
 	group.Patch("/account/profile", h.requireCustomer, h.updateProfile)
