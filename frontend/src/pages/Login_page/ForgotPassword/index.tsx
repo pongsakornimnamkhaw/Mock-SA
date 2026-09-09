@@ -28,7 +28,7 @@ const ForgotPasswordPage = () => {
                     </Typography>
                         
                     <Typography sx={{ fontSize: '18px', textAlign: 'center', color: '#000000' }}>
-                        กรอกอีเมลเพื่อรีเซ็ตรหัสผ่าน
+                        ยืนยันอีเมลและเบอร์โทรศัพท์ก่อนตั้งรหัสผ่านใหม่
                     </Typography>
 
                     <ForgotPasswordForm />

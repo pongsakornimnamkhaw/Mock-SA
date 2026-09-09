@@ -192,6 +192,10 @@ export const customerAccountApi = {
     method: 'POST', body: JSON.stringify({ token, new_password: newPassword }),
   }),
 
+  recoverPassword: (email: string, phone: string, newPassword: string) => request<void>('/auth/password-recovery', {
+    method: 'POST', body: JSON.stringify({ email, phone, new_password: newPassword }),
+  }),
+
   async getTickets(): Promise<CustomerTicket[]> {
     const rows = await request<TicketWire[]>('/account/tickets');
     return rows.map((row) => ({

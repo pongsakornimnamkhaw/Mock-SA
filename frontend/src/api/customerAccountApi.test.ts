@@ -59,3 +59,19 @@ describe('customerAccountApi.resetPassword', () => {
             .rejects.toBeInstanceOf(CustomerApiError);
     });
 });
+
+describe('customerAccountApi.recoverPassword', () => {
+    it('posts the verified email, phone number, and new password', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(noContent());
+
+        await expect(customerAccountApi.recoverPassword('user@example.test', '0812345678', 'BrandNewPass456!'))
+            .resolves.toBeUndefined();
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(String(url)).toBe('/api/customer/auth/password-recovery');
+        expect(init?.method).toBe('POST');
+        expect(JSON.parse(String(init?.body))).toEqual({
+            email: 'user@example.test', phone: '0812345678', new_password: 'BrandNewPass456!',
+        });
+    });
+});
