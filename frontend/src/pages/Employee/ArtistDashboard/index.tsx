@@ -4,7 +4,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { Link } from 'react-router-dom';
 import NotificationBell from '@/components/Notification/NotificationBell';
-import { flux, pulse, celestial } from '@/assets/Poster';
+import { flux, pulse, celestial } from '@/assets/poster';
 import { artistApi } from '@/api/artistApi';
 
 const ArtistDashboardPage: React.FC = () => {

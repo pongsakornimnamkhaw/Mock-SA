@@ -48,7 +48,7 @@ type CusActivityLogs struct {
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
-	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
 	UserID      string    `gorm:"type:varchar(50);not null" json:"user_id"`
 }
 
@@ -65,7 +65,7 @@ type EmpActivityLogs struct {
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
-	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
 	UserID      *string   `gorm:"type:varchar(50)" json:"user_id"`
 }
 

@@ -164,9 +164,9 @@ func seed(db *gorm.DB, now time.Time) (bool, error) {
 			}
 		}
 		zones := []models.Zone{
-			{ZoneID: prefix + "ZONE_VIP", ZoneType: "VIP [ทดสอบ]", Capacity: 100},
-			{ZoneID: prefix + "ZONE_A", ZoneType: "โซน A [ทดสอบ]", Capacity: 300},
-			{ZoneID: prefix + "ZONE_STANDING", ZoneType: "ยืน [ทดสอบ]", Capacity: 500},
+			{ZoneID: prefix + "ZONE_VIP", ConcertID: concerts[0].ConcertID, ZoneType: "VIP [ทดสอบ]", Capacity: 100},
+			{ZoneID: prefix + "ZONE_A", ConcertID: concerts[0].ConcertID, ZoneType: "โซน A [ทดสอบ]", Capacity: 300},
+			{ZoneID: prefix + "ZONE_STANDING", ConcertID: concerts[0].ConcertID, ZoneType: "ยืน [ทดสอบ]", Capacity: 500},
 		}
 		for i := range zones {
 			if err := create(tx, &zones[i]); err != nil {

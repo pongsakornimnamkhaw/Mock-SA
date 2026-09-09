@@ -29,11 +29,11 @@ export const saveConcertPlan = async concert => {
   }
 }
 
-export const saveConcertLayout = async (concertId, zones, layoutObjects) => {
+export const saveConcertLayout = async (concertId, zones, layoutObjects, ticketLayoutObjects = []) => {
   try {
     return await request(`/concerts/${encodeURIComponent(concertId)}/layout`, {
       method: 'PUT',
-      body: JSON.stringify({ zones, layoutObjects }),
+      body: JSON.stringify({ zones, layoutObjects, ticketLayoutObjects }),
     })
   } catch {
     return null

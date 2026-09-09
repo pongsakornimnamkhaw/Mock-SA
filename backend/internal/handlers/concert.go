@@ -489,21 +489,20 @@ func (h *ConcertHandler) deleteConcert(c *fiber.Ctx) error {
 			}
 		}
 
-		var venueZoneIDs []string
-		if err := tx.Model(&models.VenueSeatZone{}).Where("concert_id = ?", id).Pluck("zone_id", &venueZoneIDs).Error; err != nil {
-			return err
-		}
-		if len(venueZoneIDs) > 0 {
-			if err := tx.Where("zone_id IN ?", venueZoneIDs).Delete(&models.VenueSeat{}).Error; err != nil {
-				return err
-			}
-		}
-
 		var seatIDs []string
 		if err := tx.Model(&models.Seat{}).Where("concert_id = ?", id).Pluck("seat_id", &seatIDs).Error; err != nil {
 			return err
 		}
 		if len(seatIDs) > 0 {
+			var ticketIDs []string
+			if err := tx.Model(&models.Ticket{}).Where("seat_id IN ?", seatIDs).Pluck("ticket_id", &ticketIDs).Error; err != nil {
+				return err
+			}
+			if len(ticketIDs) > 0 {
+				if err := tx.Where("ticket_id IN ?", ticketIDs).Delete(&models.GateCheckIn{}).Error; err != nil {
+					return err
+				}
+			}
 			if err := tx.Where("seat_id IN ?", seatIDs).Delete(&models.Ticket{}).Error; err != nil {
 				return err
 			}
@@ -519,7 +518,7 @@ func (h *ConcertHandler) deleteConcert(c *fiber.Ctx) error {
 		if len(promotionIDs) > 0 {
 			for _, model := range []any{
 				&models.PromotionApproval{}, &models.PromoCondition{}, &models.DiscountInfo{},
-				&models.Quota{}, &models.TicketCategory{},
+				&models.Quota{},
 			} {
 				if err := tx.Where("promotion_id IN ?", promotionIDs).Delete(model).Error; err != nil {
 					return err
@@ -537,8 +536,7 @@ func (h *ConcertHandler) deleteConcert(c *fiber.Ctx) error {
 			&models.PerformanceSchedule{}, &models.ArtistRequirement{},
 			&models.ConcertArtist{}, &models.ConcertDocument{}, &models.Task{},
 			&models.WorkPlan{}, &models.SponsorshipRequest{}, &models.SummaryReport{},
-			&models.VenueSeatRound{}, &models.VenueSeatZone{}, &models.VenueLayoutObject{},
-			&models.VenueSeatPlan{}, &models.VenueSeatPublication{},
+			&models.Publication{}, &models.LayoutObject{}, &models.Zone{},
 		} {
 			if err := deleteByConcert(model); err != nil {
 				return err

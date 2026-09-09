@@ -32,8 +32,6 @@ import PeopleIcon from '@mui/icons-material/People';
 import HistoryIcon from '@mui/icons-material/History';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import ClearIcon from '@mui/icons-material/Clear';
-import DeleteIcon from '@mui/icons-material/Delete';
-import Snackbar from '@mui/material/Snackbar';
 
 import { managementApi } from '../../../../api/managementApi';
 import type { Promotion, TabStatus, EditHistoryEntry, ActivityLog } from '../../../../types/promotion';
@@ -41,7 +39,6 @@ import StatusBadge from '../../../../components/ui/StatusBadge';
 import Pagination from '../../../../components/ui/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { promotionFontSizes, promotionPageSx, promotionTitleSx } from '../typography';
-import ConfirmDeleteDialog from '../../../../components/common/ConfirmDeleteDialog';
 
 const PAGE_SIZE = 3;
 
@@ -65,9 +62,6 @@ export default function PromotionListPage(_props: Props) {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState('');
   const [historyRetry, setHistoryRetry] = useState(0);
-  const [deleteTarget, setDeleteTarget] = useState<Promotion | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteNotice, setDeleteNotice] = useState<{ severity: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -140,25 +134,6 @@ export default function PromotionListPage(_props: Props) {
   const handleAction = (action: 'edit' | 'view', promo: Promotion) => {
     if (action === 'view') navigate(`/promotions/${promo.promotion_id}`);
     else navigate(`/promotions/${promo.promotion_id}/edit`);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget || deleting) return;
-    const promotionName = deleteTarget.promotion_name;
-    setDeleting(true);
-    setDeleteNotice(null);
-    try {
-      await managementApi.deletePromotion(deleteTarget.promotion_id);
-      setDeleteTarget(null);
-      setDeleteNotice({ severity: 'success', message: `ลบโปรโมชั่น “${promotionName}” เรียบร้อยแล้ว` });
-      setRetry((value) => value + 1);
-      setHistoryRetry((value) => value + 1);
-    } catch (err) {
-      setDeleteTarget(null);
-      setDeleteNotice({ severity: 'error', message: err instanceof Error ? err.message : 'ลบโปรโมชั่นไม่สำเร็จ' });
-    } finally {
-      setDeleting(false);
-    }
   };
 
   const formatRevenue = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}K` : String(n);
@@ -347,16 +322,6 @@ export default function PromotionListPage(_props: Props) {
                         >
                           <VisibilityIcon sx={{ fontSize: 18 }} />
                         </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => setDeleteTarget(promo)}
-                          disabled={deleting}
-                          sx={{ color: '#64748b', '&:hover': { color: '#dc2626', bgcolor: '#fef2f2' } }}
-                          title="ลบโปรโมชั่น"
-                          aria-label={`ลบโปรโมชั่น ${promo.promotion_name}`}
-                        >
-                          <DeleteIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -422,24 +387,6 @@ export default function PromotionListPage(_props: Props) {
           )}
         </CardContent>
       </Card>
-
-      <ConfirmDeleteDialog
-        open={Boolean(deleteTarget)}
-        onCancel={() => { if (!deleting) setDeleteTarget(null); }}
-        onConfirm={handleConfirmDelete}
-        loading={deleting}
-        message={deleteTarget ? `ยืนยันว่าจะลบโปรโมชั่น “${deleteTarget.promotion_name}” จริงหรือไม่?` : undefined}
-      />
-      <Snackbar
-        open={Boolean(deleteNotice)}
-        autoHideDuration={5000}
-        onClose={() => setDeleteNotice(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={deleteNotice?.severity ?? 'success'} variant="filled" onClose={() => setDeleteNotice(null)} sx={{ width: '100%' }}>
-          {deleteNotice?.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

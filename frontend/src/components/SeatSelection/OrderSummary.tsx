@@ -2,7 +2,6 @@ import { Box, Typography, Button, Paper, LinearProgress } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
 import type { EventData, ZoneInfo, SeatData } from '@/components/SeatSelection/types';
 import { formatTime, LOCK_DURATION } from '@/components/SeatSelection/constants';
-import PromotionPicker, { type PromotionPickerProps } from '@/components/SeatSelection/PromotionPicker';
 
 interface OrderSummaryProps {
     event: EventData;
@@ -13,9 +12,6 @@ interface OrderSummaryProps {
     isLocked: boolean;
     timeLeft: number;
     totalPrice: number;
-    finalPrice: number;
-    discountAmount: number;
-    promotion: PromotionPickerProps;
     handleLockSeats: () => void;
     handlePayment: () => void;
     handleCancelLock: () => void;
@@ -24,7 +20,6 @@ interface OrderSummaryProps {
 
 const OrderSummary = ({
     event, zone, zoneInfo, activeSeats, selectedSeats, isLocked, timeLeft, totalPrice,
-    finalPrice, discountAmount, promotion,
     handleLockSeats, handlePayment, handleCancelLock, onBack
 }: OrderSummaryProps) => {
     const timerProgress = (timeLeft / LOCK_DURATION) * 100;
@@ -119,27 +114,13 @@ const OrderSummary = ({
                 )}
             </Box>
 
-            <PromotionPicker {...promotion} />
-
             <Box sx={{ borderTop: '1px solid #eee', pt: 2, mb: 3 }}>
-                {discountAmount > 0 && (
-                    <>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                            <Typography sx={{ color: '#666', fontSize: '0.85rem' }}>ราคาก่อนส่วนลด</Typography>
-                            <Typography sx={{ color: '#666', fontSize: '0.85rem' }}>{totalPrice.toLocaleString()} บาท</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                            <Typography sx={{ color: '#2e7d32', fontSize: '0.85rem', fontWeight: 'bold' }}>ส่วนลด</Typography>
-                            <Typography sx={{ color: '#2e7d32', fontSize: '0.85rem', fontWeight: 'bold' }}>−{discountAmount.toLocaleString()} บาท</Typography>
-                        </Box>
-                    </>
-                )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#1a1a1a' }}>
-                        ยอดชำระ
+                        ราคารวม
                     </Typography>
                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.3rem', color: '#E53935' }}>
-                        {finalPrice.toLocaleString()} บาท
+                        {totalPrice.toLocaleString()} บาท
                     </Typography>
                 </Box>
             </Box>

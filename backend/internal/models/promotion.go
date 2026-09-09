@@ -8,17 +8,17 @@ import (
 
 // Promotion - โปรโมชั่น
 type Promotion struct {
-	PromotionID    string    `gorm:"primaryKey;type:varchar(50);not null" json:"promotion_id"`
-	PromotionName  string    `gorm:"type:varchar(255);not null" json:"promotion_name"`
-	Description    string    `gorm:"type:text;not null" json:"description"`
-	BannerImageUrl []byte    `gorm:"type:bytea;not null" json:"banner_image_url,omitempty"`
-	Status         string    `gorm:"type:varchar(50);not null" json:"status"`
-	ZoneType       string    `gorm:"type:varchar(100);not null" json:"zone_type"`
-	CreatedAt      time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
-	UpdatedAt      time.Time `gorm:"type:timestamp without time zone;autoUpdateTime" json:"updated_at"`
+	PromotionID    string         `gorm:"primaryKey;type:varchar(50);not null" json:"promotion_id"`
+	PromotionName  string         `gorm:"type:varchar(255);not null" json:"promotion_name"`
+	Description    string         `gorm:"type:text;not null" json:"description"`
+	BannerImageUrl []byte         `gorm:"type:bytea;not null" json:"banner_image_url,omitempty"`
+	Status         string         `gorm:"type:varchar(50);not null" json:"status"`
+	ZoneType       string         `gorm:"type:varchar(100);not null" json:"zone_type"`
+	CreatedAt      time.Time      `gorm:"autoCreateTime;not null" json:"created_at"`
+	UpdatedAt      time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
-	TotalRevenue   float64   `gorm:"type:double precision;not null" json:"total_revenue"`
-	ConcertID      string    `gorm:"type:varchar(50);not null" json:"concert_id"`
+	TotalRevenue   float64        `gorm:"type:double precision;not null" json:"total_revenue"`
+	ConcertID      string         `gorm:"type:varchar(50);not null" json:"concert_id"`
 
 	// Relations
 	PromotionApprovals []PromotionApproval `gorm:"foreignKey:PromotionID" json:"promotion_approvals,omitempty"`
@@ -39,15 +39,15 @@ func (p *Promotion) BeforeCreate(tx *gorm.DB) (err error) {
 
 // PromotionApproval - การอนุมัติโปรโมชั่น
 type PromotionApproval struct {
-	ApprovalID     string    `gorm:"primaryKey;type:varchar(50);not null" json:"approval_id"`
-	RequestedBy    string    `gorm:"type:varchar(100);not null" json:"requested_by"`
-	RequestedAt    time.Time `gorm:"type:timestamp;not null" json:"requested_at"`
-	ApprovedBy     string    `gorm:"type:varchar(100);not null" json:"approved_by"`
+	ApprovalID     string     `gorm:"primaryKey;type:varchar(50);not null" json:"approval_id"`
+	RequestedBy    string     `gorm:"type:varchar(100);not null" json:"requested_by"`
+	RequestedAt    time.Time  `gorm:"type:timestamp;not null" json:"requested_at"`
+	ApprovedBy     string     `gorm:"type:varchar(100);not null" json:"approved_by"`
 	ApprovedAt     *time.Time `gorm:"type:timestamp" json:"approved_at"`
-	StatusApproved string    `gorm:"type:varchar(50);not null" json:"status_approved"`
-	Remark         string    `gorm:"type:text;not null" json:"remark"`
-	UserID         *string   `gorm:"type:varchar(50)" json:"user_id"`
-	PromotionID    string    `gorm:"type:varchar(50);not null" json:"promotion_id"`
+	StatusApproved string     `gorm:"type:varchar(50);not null" json:"status_approved"`
+	Remark         string     `gorm:"type:text;not null" json:"remark"`
+	UserID         *string    `gorm:"type:varchar(50)" json:"user_id"`
+	PromotionID    string     `gorm:"type:varchar(50);not null" json:"promotion_id"`
 }
 
 func (a *PromotionApproval) BeforeCreate(tx *gorm.DB) (err error) {
@@ -109,13 +109,13 @@ func (q *Quota) BeforeCreate(tx *gorm.DB) (err error) {
 
 // PromotionUsageLog is populated by the booking/redemption workflow, not by page views.
 type PromotionUsageLog struct {
-	UsageLogID string `gorm:"primaryKey;type:varchar(50)" json:"usage_log_id"`
-	UsedAt time.Time `gorm:"type:timestamp without time zone;autoCreateTime" json:"used_at"`
-	UserName string `json:"user_name"`
-	UserID string `json:"user_id"`
-	OrderID string `json:"order_id"`
-	PurchasedZone string `json:"purchased_zone"`
-	FinalAmount float64 `json:"final_amount"`
-	DiscountAmount float64 `json:"discount_amount"`
-	PromotionID string `gorm:"type:varchar(50);not null;index" json:"promotion_id"`
+	UsageLogID     string    `gorm:"primaryKey;type:varchar(50)" json:"usage_log_id"`
+	UsedAt         time.Time `gorm:"autoCreateTime" json:"used_at"`
+	UserName       string    `json:"user_name"`
+	UserID         string    `json:"user_id"`
+	OrderID        string    `json:"order_id"`
+	PurchasedZone  string    `json:"purchased_zone"`
+	FinalAmount    float64   `json:"final_amount"`
+	DiscountAmount float64   `json:"discount_amount"`
+	PromotionID    string    `gorm:"type:varchar(50);not null;index" json:"promotion_id"`
 }

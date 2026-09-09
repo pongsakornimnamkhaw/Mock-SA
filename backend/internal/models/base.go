@@ -8,8 +8,8 @@ import (
 
 // BaseModel เป็น base struct สำหรับทุก model
 type BaseModel struct {
-	CreatedAt time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"type:timestamp without time zone;autoUpdateTime;not null" json:"updated_at"`
+	CreatedAt time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime;not null" json:"updated_at"`
 }
 
 // GenerateID สร้าง ID รูปแบบ: 2 ตัวอักษร + ตัวเลข 6 หลัก

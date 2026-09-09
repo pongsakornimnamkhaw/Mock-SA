@@ -13,7 +13,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
-import { flux } from '@/assets/Poster';
+import { flux } from '@/assets/poster';
 
 const SearchConcertPage = () => {
   return (

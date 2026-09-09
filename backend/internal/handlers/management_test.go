@@ -177,7 +177,7 @@ func TestManagementPostgres(t *testing.T) {
 	if err := db.Create(&concert).Error; err != nil {
 		t.Fatal(err)
 	}
-	zone := models.Zone{ZoneID: "ZONE_TEST", ZoneType: "VIP", Capacity: 100}
+	zone := models.Zone{ZoneID: "ZONE_TEST", ConcertID: concert.ConcertID, ZoneType: "VIP", Capacity: 100}
 	if err := db.Create(&zone).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ func TestManagementBrowserFixture(t *testing.T) {
 	if err := db.Create(&concert).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.Zone{ZoneID: "BROWSER_ZONE", ZoneType: "VIP", Capacity: 100}).Error; err != nil {
+	if err := db.Create(&models.Zone{ZoneID: "BROWSER_ZONE", ConcertID: concert.ConcertID, ZoneType: "VIP", Capacity: 100}).Error; err != nil {
 		t.Fatal(err)
 	}
 	app := fiber.New(fiber.Config{BodyLimit: 20 * 1024 * 1024, DisableStartupMessage: true})

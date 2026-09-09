@@ -80,7 +80,7 @@ func TestSeedManagementPostgres(t *testing.T) {
 	// Compare the stored value, after PostgreSQL's microsecond timestamp rounding.
 	must(db.First(&concert, "concert_id = ?", concert.ConcertID).Error)
 	// Force a collision AFTER user inserts: the entire transaction must roll back.
-	zone := models.Zone{ZoneID: prefix + "ZONE_VIP", ZoneType: "Existing zone", Capacity: 10}
+	zone := models.Zone{ZoneID: prefix + "ZONE_VIP", ConcertID: concert.ConcertID, ZoneType: "Existing zone", Capacity: 10}
 	must(create(db, &zone))
 	if created, err := seed(db, now); err == nil || created {
 		t.Fatal("seed must fail atomically on an existing ID, not upsert it")

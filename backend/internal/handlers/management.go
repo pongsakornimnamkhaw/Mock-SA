@@ -83,12 +83,8 @@ func (h *managementHandler) listActivityLogs(c *fiber.Ctx) error {
 		TargetID     string    `json:"target_id"`
 	}
 	rows := []row{}
-	query := h.db.Table(table+" AS l").Select("l."+id+" AS log_id, l.created_at AS date, COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), ?) AS user_name, COALESCE(u.employee_code, u.user_id, '—') AS user_code, l.action_type AS activity_type, l.description AS detail, l.target_id", unidentifiedActor).
-		Joins("LEFT JOIN users u ON u.user_id = l.user_id")
-	if kind == "user" {
-		query = query.Where("l.action_type <> ?", customerSessionAction)
-	}
-	err := query.Order("l.created_at DESC, l." + id + " DESC").Scan(&rows).Error
+	err := h.db.Table(table+" AS l").Select("l."+id+" AS log_id, l.created_at AS date, COALESCE(NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), ?) AS user_name, COALESCE(u.employee_code, u.user_id, '—') AS user_code, l.action_type AS activity_type, l.description AS detail, l.target_id", unidentifiedActor).
+		Joins("LEFT JOIN users u ON u.user_id = l.user_id").Order("l.created_at DESC, l." + id + " DESC").Scan(&rows).Error
 	if err != nil {
 		return managementError(c, err)
 	}

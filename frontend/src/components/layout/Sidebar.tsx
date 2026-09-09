@@ -1,5 +1,5 @@
 // src/components/layout/Sidebar.tsx
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import List from '@mui/material/List';
@@ -9,16 +9,12 @@ import ListItemText from '@mui/material/ListItemText';
 import Avatar from '@mui/material/Avatar';
 import Divider from '@mui/material/Divider';
 import Collapse from '@mui/material/Collapse';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
 import { styled } from '@mui/material/styles';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import PersonIcon from '@mui/icons-material/Person';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import LogoutIcon from '@mui/icons-material/Logout';
 import logoImage from '../../assets/octavia-logo.png';
-import { getEmployeeSession, clearEmployeeSession, EMPLOYEE_SESSION_EVENT } from '@/utils/employeeSession';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -110,23 +106,6 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
-
-  const [employee, setEmployee] = useState(getEmployeeSession);
-
-  useEffect(() => {
-    const sync = () => setEmployee(getEmployeeSession());
-    window.addEventListener('storage', sync);
-    window.addEventListener(EMPLOYEE_SESSION_EVENT, sync);
-    return () => {
-      window.removeEventListener('storage', sync);
-      window.removeEventListener(EMPLOYEE_SESSION_EVENT, sync);
-    };
-  }, []);
-
-  const handleSignOut = () => {
-    clearEmployeeSession();
-    navigate('/employee/login', { replace: true });
-  };
 
   // Expandable state
   const [concertOpen, setConcertOpen] = useState(false);
@@ -295,17 +274,6 @@ export default function Sidebar() {
         </ListItem>
       </List>
 
-      {/* ฝ่ายขายและการชำระเงิน (B6728786: final document SA.docx) */}
-      <SectionLabel sx={{ color: '#10b981' }}>ฝ่ายขายและการชำระเงิน</SectionLabel>
-      <List dense disablePadding>
-        <ListItem disablePadding>
-          <NavItem active={path.startsWith('/sales') || path === '/payment-verification' ? 1 : 0} onClick={() => navigate('/sales/bookings')}>
-            <DotIcon color={path.startsWith('/sales') || path === '/payment-verification' ? '#fff' : '#10b981'} />
-            <ListItemText primary="ตรวจสอบสลิปและออกบัตร" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 600 } } }} />
-          </NavItem>
-        </ListItem>
-      </List>
-
       {/* แอดมินดูแลระบบ */}
       <SectionLabel>แอดมินดูแลระบบ</SectionLabel>
       <List dense disablePadding>
@@ -340,22 +308,13 @@ export default function Sidebar() {
       {/* User */}
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }} />
       <Box sx={{ p: '14px 16px', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Avatar sx={{ width: 36, height: 36, background: 'linear-gradient(135deg,#10b981,#059669)', fontSize: 14, fontWeight: 700 }}>
-          {employee?.firstName?.charAt(0) || 'พ'}
+        <Avatar sx={{ width: 36, height: 36, background: 'linear-gradient(135deg,#d63384,#7c3aed)', fontSize: 14, fontWeight: 700 }}>
+          ค
         </Avatar>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-            {employee ? employee.name : 'พงกรศกร (B6728786)'}
-          </Typography>
-          <Typography sx={{ color: '#94a3b8', fontSize: '0.72rem' }}>
-            {employee?.department || 'ฝ่ายขาย'} · {employee?.employeeCode || 'B6728786'}
-          </Typography>
+        <Box>
+          <Typography sx={{ color: '#fff', fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>คุณนภัส ผู้จัดงาน</Typography>
+          <Typography sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>กิจกรรมคอนเสิร์ต</Typography>
         </Box>
-        <Tooltip title="ออกจากระบบพนักงาน">
-          <IconButton size="small" onClick={handleSignOut} sx={{ color: '#ef4444', p: 0.5, '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.15)' } }}>
-            <LogoutIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
       </Box>
     </SidebarRoot>
   );

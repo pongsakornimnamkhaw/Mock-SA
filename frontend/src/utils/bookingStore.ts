@@ -1,96 +1,43 @@
-import type { BookingRecord, PaymentEvidence, Ticket } from '@/types/booking'
-import { buildQrCodeUrl, buildSeatLabel, buildTicketCode } from '@/utils/ticketCode'
+import type { BookingRecord } from '@/interface/IBookingInterface'
 
-const STORAGE_KEY = 'octavia.bookings.v2'
+const STORAGE_KEY = 'octavia.bookings.v1'
 
 const SEED_BOOKINGS: BookingRecord[] = [
   {
     id: 'BK-1001',
     concertId: 'neon-flux',
     concertTitle: 'Neon Flux Festival 2024',
-    eventDate: '16-18 ม.ค. 2024',
-    location: 'Metroplex Arena, กรุงเทพมหานคร',
-    zoneId: 'A1',
-    tierName: 'VIP',
-    seats: ['A1-01', 'A1-02'],
+    zoneId: 'B3',
+    tierName: 'Standard',
     quantity: 2,
-    unitPrice: 5000,
-    discountAmount: 1000,
-    totalPrice: 9000,
+    totalPrice: 7000,
     customerName: 'สมชาย ใจดี',
-    customerEmail: 'somchai.j@example.com',
-    customerPhone: '0812345678',
-    status: 'issued',
+    status: 'paid',
     createdAt: '2024-01-05T10:15:00.000Z',
-    payment: {
-      evidenceFileName: 'slip_somchai_9000.png',
-      submittedAt: '2024-01-05T10:20:00.000Z',
-      verifiedBy: 'เจ้าหน้าที่ฝ่ายขาย (สมศรี วงศ์สว่าง)',
-      verifiedAt: '2024-01-05T10:30:00.000Z',
-    },
-    tickets: [
-      {
-        code: 'TKT-BK1001-01',
-        seatLabel: 'A1-01',
-        issuedAt: '2024-01-05T10:30:00.000Z',
-        qrCodeUrl: buildQrCodeUrl('TKT-BK1001-01'),
-      },
-      {
-        code: 'TKT-BK1001-02',
-        seatLabel: 'A1-02',
-        issuedAt: '2024-01-05T10:30:00.000Z',
-        qrCodeUrl: buildQrCodeUrl('TKT-BK1001-02'),
-      },
-    ],
   },
   {
     id: 'BK-1002',
-    concertId: 'neon-pulse',
-    concertTitle: 'Neon Pulse',
-    eventDate: '28 ก.พ. 2024',
-    location: 'The Mall Korat, นครราชสีมา',
-    zoneId: 'B2',
-    tierName: 'Standard',
-    seats: ['B2-05'],
+    concertId: 'neon-flux',
+    concertTitle: 'Neon Flux Festival 2024',
+    zoneId: 'C6',
+    tierName: 'Economy',
     quantity: 1,
-    unitPrice: 2000,
-    discountAmount: 0,
     totalPrice: 2000,
     customerName: 'สุดา รักดี',
-    customerEmail: 'suda.r@example.com',
-    customerPhone: '0898765432',
-    status: 'under_review',
-    createdAt: '2024-02-01T14:30:00.000Z',
-    payment: {
-      evidenceFileName: 'transfer_slip_2000.jpg',
-      submittedAt: '2024-02-01T14:35:00.000Z',
-    },
+    status: 'pending_payment',
+    createdAt: '2024-01-06T14:30:00.000Z',
   },
   {
     id: 'BK-1003',
-    concertId: 'celestial-sounds',
-    concertTitle: 'Celestial Sounds',
-    eventDate: '26 มี.ค. 2024',
-    location: 'Chiang Mai Hall, เชียงใหม่',
-    zoneId: 'C1',
-    tierName: 'Economy',
-    seats: ['C1-12'],
-    quantity: 1,
-    unitPrice: 1200,
-    discountAmount: 0,
-    totalPrice: 1200,
+    concertId: 'neon-flux',
+    concertTitle: 'Neon Flux Festival 2024',
+    zoneId: 'A1',
+    tierName: 'VIP',
+    quantity: 3,
+    totalPrice: 15000,
     customerName: 'ปรีชา มั่นคง',
-    customerEmail: 'preecha.m@example.com',
-    customerPhone: '0823456789',
-    status: 'rejected',
-    createdAt: '2024-02-22T09:05:00.000Z',
-    payment: {
-      evidenceFileName: 'slip_blurry.jpg',
-      submittedAt: '2024-02-22T09:10:00.000Z',
-      verifiedBy: 'เจ้าหน้าที่ฝ่ายขาย (อนันต์ ภักดี)',
-      verifiedAt: '2024-02-22T09:40:00.000Z',
-      rejectReason: 'ภาพสลิปไม่ชัดเจน ไม่สามารถตรวจสอบวันเวลาและเลขที่บัญชีปลายทางได้ กรุณาแนบภาพสลิปใหม่อีกครั้ง',
-    },
+    status: 'cancelled',
+    createdAt: '2024-01-07T09:05:00.000Z',
   },
 ]
 
@@ -115,6 +62,7 @@ function writeToStorage(next: BookingRecord[]) {
   }
 }
 
+// เรียกได้จากทั้งตอน render (ผ่าน getSnapshot) จึงห้าม emit ในนี้ ไม่งั้น React จะวนรอบ
 function load() {
   if (loaded) return
   loaded = true
@@ -166,131 +114,32 @@ export function getLoadError(): string | null {
 }
 
 export function addBooking(
-  input: Omit<BookingRecord, 'id' | 'createdAt'>,
+  input: Omit<BookingRecord, 'id' | 'createdAt' | 'status'>,
 ): BookingRecord {
   load()
-  const nextNumber = Math.floor(1000 + Math.random() * 9000)
   const record: BookingRecord = {
     ...input,
-    id: `BK-${nextNumber}`,
+    id: `BK-${Date.now().toString().slice(-6)}`,
     createdAt: new Date().toISOString(),
+    status: 'pending_payment',
   }
-  writeToStorage([record, ...cache])
+  writeToStorage([...cache, record])
   emit()
   return record
 }
 
-export function getBookingById(bookingId: string): BookingRecord | null {
-  load()
-  return cache.find((booking) => booking.id === bookingId) ?? null
+export function countSeatsForZone(
+  bookings: BookingRecord[],
+  concertId: string,
+  zoneId: string,
+): number {
+  return bookings
+    .filter((b) => b.concertId === concertId && b.zoneId === zoneId && b.status !== 'cancelled')
+    .reduce((sum, b) => sum + b.quantity, 0)
 }
 
-function updateBooking(
-  bookingId: string,
-  mutate: (booking: BookingRecord) => BookingRecord,
-): BookingRecord | null {
-  load()
-  const index = cache.findIndex((booking) => booking.id === bookingId)
-  if (index === -1) return null
-
-  const updated = mutate(cache[index])
-  const next = [...cache]
-  next[index] = updated
-  writeToStorage(next)
-  emit()
-  return updated
-}
-
-// UP1: ลูกค้าอัปโหลดหลักฐานการชำระเงิน (สลิป)
-export function submitPaymentEvidence(
-  bookingId: string,
-  evidenceFileName: string,
-  evidenceDataUrl?: string,
-): BookingRecord | null {
-  const current = getBookingById(bookingId)
-  if (current === null) return null
-  if (current.status !== 'pending_payment' && current.status !== 'rejected') return null
-
-  return updateBooking(bookingId, (booking) => ({
-    ...booking,
-    status: 'under_review',
-    payment: {
-      evidenceFileName,
-      evidenceDataUrl,
-      submittedAt: new Date().toISOString(),
-      rejectReason: undefined,
-    },
-  }))
-}
-
-// UP2 & UP3: เจ้าหน้าที่ตรวจสอบและอนุมัติการชำระเงิน -> ระบบออกบัตรอัตโนมัติพร้อม QR Code
-export function approvePayment(bookingId: string, verifiedBy: string): BookingRecord | null {
-  const current = getBookingById(bookingId)
-  if (current === null || current.status !== 'under_review') return null
-
-  return updateBooking(bookingId, (booking) => {
-    const verifiedAt = new Date().toISOString()
-    const payment: PaymentEvidence = {
-      ...(booking.payment ?? { evidenceFileName: '', submittedAt: verifiedAt }),
-      verifiedBy,
-      verifiedAt,
-      rejectReason: undefined,
-    }
-
-    const tickets: Ticket[] = Array.from({ length: booking.quantity }, (_, index) => {
-      const code = buildTicketCode(booking.id, index)
-      const seatLabel = buildSeatLabel(booking.zoneId, index, booking.seats)
-      return {
-        code,
-        seatLabel,
-        issuedAt: verifiedAt,
-        qrCodeUrl: buildQrCodeUrl(code),
-      }
-    })
-
-    return { ...booking, status: 'issued', payment, tickets }
-  })
-}
-
-// UP2: เจ้าหน้าที่ปฏิเสธการชำระเงิน พร้อมระบุเหตุผล
-export function rejectPayment(
-  bookingId: string,
-  verifiedBy: string,
-  rejectReason: string,
-): BookingRecord | null {
-  const current = getBookingById(bookingId)
-  if (current === null || current.status !== 'under_review') return null
-
-  return updateBooking(bookingId, (booking) => {
-    const verifiedAt = new Date().toISOString()
-    const payment: PaymentEvidence = {
-      ...(booking.payment ?? { evidenceFileName: '', submittedAt: verifiedAt }),
-      verifiedBy,
-      verifiedAt,
-      rejectReason,
-    }
-    return { ...booking, status: 'rejected', payment }
-  })
-}
-
-// UP5: ขอส่งบัตรใบเดิมซ้ำทางอีเมล (QR Code เดิม)
-export function resendTicket(bookingId: string): BookingRecord | null {
-  const current = getBookingById(bookingId)
-  if (current === null || current.status !== 'issued') return null
-
-  return updateBooking(bookingId, (booking) => ({
-    ...booking,
-    resendLog: [...(booking.resendLog ?? []), new Date().toISOString()],
-  }))
-}
-
-// U2: ปล่อยที่นั่งคืนอัตโนมัติเมื่อหมดเวลา
-export function cancelExpiredBooking(bookingId: string): BookingRecord | null {
-  const current = getBookingById(bookingId)
-  if (current === null || current.status !== 'pending_payment') return null
-
-  return updateBooking(bookingId, (booking) => ({
-    ...booking,
-    status: 'expired',
-  }))
+export function countSeatsForConcert(bookings: BookingRecord[], concertId: string): number {
+  return bookings
+    .filter((b) => b.concertId === concertId && b.status !== 'cancelled')
+    .reduce((sum, b) => sum + b.quantity, 0)
 }

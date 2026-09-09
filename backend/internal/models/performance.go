@@ -19,6 +19,8 @@ type PerformanceSchedule struct {
 	PerformanceDetails []PerformanceDetail `gorm:"foreignKey:ScheduleID" json:"performance_details,omitempty"`
 }
 
+func (PerformanceSchedule) TableName() string { return "PerformanceSchedule" }
+
 func (p *PerformanceSchedule) BeforeCreate(tx *gorm.DB) (err error) {
 	if p.ScheduleID == "" {
 		p.ScheduleID = GenerateID("PS")

@@ -72,20 +72,6 @@ type concertReport struct {
 	Zones         []reportZone `json:"zones"`
 }
 
-func reportConcertBase(concert models.Concert) concertReport {
-	return concertReport{
-		ID:         concert.ConcertID,
-		Title:      concert.ConcertName,
-		StartDate:  dateOnly(concert.StartDate),
-		EndDate:    dateOnly(concert.EndDate),
-		Location:   concert.Location,
-		Status:     reportStatus(concert.Status),
-		LastUpdate: concert.UpdatedAt,
-		PosterURL:  fmt.Sprintf("/api/concerts/%s/poster", concert.ConcertID),
-		Zones:      []reportZone{},
-	}
-}
-
 func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 	var concerts []models.Concert
 	// A report is useful once an event has ended. Include explicitly completed
@@ -98,16 +84,19 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 
 	result := make([]concertReport, 0, len(concerts))
 	for _, concert := range concerts {
-		row := reportConcertBase(concert)
+		row := concertReport{ID: concert.ConcertID, Title: concert.ConcertName, StartDate: concert.StartDate,
+			EndDate: concert.EndDate, Location: concert.Location, Status: reportStatus(concert.Status),
+			LastUpdate: concert.UpdatedAt, PosterURL: fmt.Sprintf("/api/concerts/%s/poster", concert.ConcertID), Zones: []reportZone{}}
 
 		// Ticket -> Seat is the authoritative link from a sale to its concert/zone.
 		type zoneAggregate struct {
-			ZoneID string
-			Sold   int64
+			ZoneID  string
+			Sold    int64
+			Revenue float64
 		}
 		var aggregates []zoneAggregate
-		if err := h.db.Table("tickets t").Select("s.zone_id, COUNT(DISTINCT t.ticket_id) AS sold").
-			Joins("JOIN seats s ON s.seat_id = t.seat_id").
+		if err := h.db.Table(`"Ticket" AS t`).Select("s.zone_id, COUNT(DISTINCT t.ticket_id) AS sold, COALESCE(SUM(t.price_ticket), 0) AS revenue").
+			Joins(`JOIN "Seat" AS s ON s.seat_id = t.seat_id`).
 			Where("s.concert_id = ? AND LOWER(t.status_ticket) NOT IN ?", concert.ConcertID, []string{"cancelled", "canceled", "ยกเลิก"}).
 			Group("s.zone_id").Scan(&aggregates).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "ไม่สามารถสรุปยอดขายบัตรได้"})
@@ -118,16 +107,28 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 			if h.db.First(&zone, "zone_id = ?", aggregate.ZoneID).Error == nil && zone.ZoneType != "" {
 				zoneName = zone.ZoneType
 			}
-			var price float64
-			h.db.Model(&models.TicketCategory{}).Where("zone_id = ?", aggregate.ZoneID).Select("COALESCE(MAX(price), 0)").Scan(&price)
-			revenue := price * float64(aggregate.Sold)
 			row.TicketsSold += aggregate.Sold
-			row.TicketRevenue += revenue
-			row.Zones = append(row.Zones, reportZone{Zone: zoneName, SeatsSold: aggregate.Sold, Revenue: revenue})
+			row.TicketRevenue += aggregate.Revenue
+			row.Zones = append(row.Zones, reportZone{Zone: zoneName, SeatsSold: aggregate.Sold, Revenue: aggregate.Revenue})
 		}
 		result = append(result, row)
 	}
 	return c.JSON(result)
+}
+
+func zoneStartingPriceQuery(db *gorm.DB, zoneID string) *gorm.DB {
+	return db.Table(`"Ticket" AS t`).
+		Select("COALESCE(MIN(t.price_ticket), 0)").
+		Joins(`JOIN "Seat" AS s ON s.seat_id = t.seat_id`).
+		Where("s.zone_id = ?", zoneID)
+}
+
+func loadZoneStartingPrice(db *gorm.DB, zoneID string) (float64, error) {
+	var price float64
+	if err := zoneStartingPriceQuery(db, zoneID).Scan(&price).Error; err != nil {
+		return 0, err
+	}
+	return price, nil
 }
 
 func reportStatus(status string) string {

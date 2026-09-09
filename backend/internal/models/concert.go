@@ -8,20 +8,30 @@ import (
 
 // Concert - ข้อมูลงานคอนเสิร์ต
 type Concert struct {
-	ConcertID     string `gorm:"primaryKey;type:varchar(50);not null" json:"concert_id"`
-	ConcertName   string `gorm:"type:varchar(255);not null" json:"concert_name"`
-	StartDate     string `gorm:"type:date;not null" json:"start_date"`
-	EndDate       string `gorm:"type:date;not null" json:"end_date"`
-	StartTime     string `gorm:"type:time without time zone;not null" json:"start_time"`
-	EndTime       string `gorm:"type:time without time zone;not null" json:"end_time"`
-	Location      string `gorm:"type:varchar(255);not null" json:"location"`
-	Status        string `gorm:"type:varchar(50);not null" json:"status"`
-	ConcertPoster []byte `gorm:"type:bytea" json:"concert_poster,omitempty"`
-	Poster        []byte `gorm:"type:bytea" json:"poster,omitempty"`
-	MoreInfo      string `gorm:"type:text;not null" json:"more_info"`
+	ConcertID       string  `gorm:"column:concert_id;primaryKey;type:varchar(50);not null" json:"concert_id"`
+	ConcertName     string  `gorm:"type:varchar(255);not null" json:"concert_name"`
+	StartDate       string  `gorm:"type:date;not null" json:"start_date"`
+	EndDate         string  `gorm:"type:date;not null" json:"end_date"`
+	StartTime       string  `gorm:"type:time without time zone;not null" json:"start_time"`
+	EndTime         string  `gorm:"type:time without time zone;not null" json:"end_time"`
+	Location        string  `gorm:"type:varchar(255);not null" json:"location"`
+	Status          string  `gorm:"type:varchar(50);not null" json:"status"`
+	ConcertPoster   []byte  `gorm:"type:bytea" json:"concert_poster,omitempty"`
+	Poster          []byte  `gorm:"type:bytea" json:"poster,omitempty"`
+	SeatLayoutImage []byte  `gorm:"column:seat_layout_image;type:bytea" json:"-"`
+	TimeOpenGate    *string `gorm:"column:time_open_gate;type:time without time zone" json:"time_open_gate,omitempty"`
+	MoreInfo        string  `gorm:"type:text;not null" json:"more_info"`
+
+	PerformanceSchedules []PerformanceSchedule `gorm:"foreignKey:ConcertID;references:ConcertID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
+	Zones                []Zone                `gorm:"foreignKey:ConcertID;references:ConcertID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
+	Seats                []Seat                `gorm:"foreignKey:ConcertID;references:ConcertID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
+	Publication          *Publication          `gorm:"foreignKey:ConcertID;references:ConcertID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
+	LayoutObjects        []LayoutObject        `gorm:"foreignKey:ConcertID;references:ConcertID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
 
 	BaseModel
 }
+
+func (Concert) TableName() string { return "Concert" }
 
 func (c *Concert) BeforeCreate(tx *gorm.DB) (err error) {
 	if c.ConcertID == "" {
@@ -58,7 +68,7 @@ type ModifiedHistory struct {
 	HistoryID   string    `gorm:"primaryKey;type:varchar(50);not null" json:"history_id"`
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
-	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	CreatedAt   time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
 	ConcertID   string    `gorm:"type:varchar(50);not null" json:"concert_id"`
 }
 

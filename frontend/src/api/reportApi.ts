@@ -27,21 +27,9 @@ interface ReportRow {
 }
 
 const money = (value: number) => `${value.toLocaleString('th-TH')} บาท`;
-const thaiDate = (value: string) => {
-  const normalized = value?.trim().match(/^(\d{4}-\d{2}-\d{2})(?:[T\s]|$)/)?.[1];
-  if (!normalized) return '-';
-  const date = new Date(`${normalized}T00:00:00`);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(date)
-    : '-';
-};
-
-const thaiTimestamp = (value: string) => {
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-    : '-';
-};
+const thaiDate = (value: string) => value
+  ? new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T00:00:00`))
+  : '-';
 
 export const reportApi = {
   async getConcerts(): Promise<ConcertItem[]> {
@@ -55,7 +43,7 @@ export const reportApi = {
       ticketsSold: `${row.tickets_sold.toLocaleString('th-TH')} ใบ`,
       location: row.location,
       status: row.status,
-      lastUpdate: thaiTimestamp(row.last_update),
+      lastUpdate: new Intl.DateTimeFormat('th-TH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(row.last_update)),
       seatingSummary: row.zones.map((zone) => ({ zone: zone.zone, seatsSold: `${zone.seats_sold.toLocaleString('th-TH')} ที่นั่ง`, revenue: money(zone.revenue) })),
       totalTicketRevenue: money(row.ticket_revenue),
       sponsorSummary: [],

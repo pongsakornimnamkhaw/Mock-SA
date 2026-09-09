@@ -185,7 +185,7 @@ type invitationResponse struct {
 
 func (h *ArtistHandler) listInvitations(c *fiber.Ctx) error {
 	var rows []invitationResponse
-	h.db.Table("concerts").Select("concerts.concert_id, concerts.concert_name, concerts.start_date, concerts.end_date, concerts.start_time, concerts.end_time, concerts.location, COALESCE(concert_artists.invitation_status, 'รอการตอบรับ') AS invitation_status").Joins("LEFT JOIN concert_artists ON concert_artists.concert_id=concerts.concert_id AND concert_artists.artist_id=?", c.Params("id")).Order("concerts.start_date").Scan(&rows)
+	h.db.Table(`"Concert" AS concerts`).Select("concerts.concert_id, concerts.concert_name, concerts.start_date, concerts.end_date, concerts.start_time, concerts.end_time, concerts.location, COALESCE(concert_artists.invitation_status, 'รอการตอบรับ') AS invitation_status").Joins("LEFT JOIN concert_artists ON concert_artists.concert_id=concerts.concert_id AND concert_artists.artist_id=?", c.Params("id")).Order("concerts.start_date").Scan(&rows)
 	for i := range rows {
 		rows[i].StartDate = dateOnly(rows[i].StartDate)
 		rows[i].EndDate = dateOnly(rows[i].EndDate)

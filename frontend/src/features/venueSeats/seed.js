@@ -16,21 +16,22 @@ export const initialConcerts = [
       { id: 'zone-c3', name: 'C3', color: '#5bd84f', seats: 50, price: 1500, type: 'ปกติ', shape: 'rectangle', width: 12, height: 12, rotation: 0, z: 8, x: 69, y: 78 },
     ],
     layoutObjects: [{ id: 'object-stage', name: 'STAGE', kind: 'object', shape: 'rectangle', color: '#dfe0e5', textColor: '#3f435b', x: 50, y: 8, width: 36, height: 8, rotation: 0, z: 0 }],
+    ticketLayoutObjects: [],
   },
   {
     id: 'concert-2', name: 'Neon Pulse', artist: 'The Soul Quarters', date: '2024-09-18', endDate: '',
     location: 'นครราชสีมา', category: 'Concert', status: 'กำลังแสดง', description: '', cover: '', rounds: [],
-    publishing: { scheduleFile: '', scheduleImage: '', saleStart: '', saleEnd: '', publishAt: '', unpublishAt: '' }, zones: [], layoutObjects: [],
+    publishing: { scheduleFile: '', scheduleImage: '', saleStart: '', saleEnd: '', publishAt: '', unpublishAt: '' }, zones: [], layoutObjects: [], ticketLayoutObjects: [],
   },
   {
     id: 'concert-3', name: 'Celestial Sounds', artist: 'Iron Lotus', date: '2024-10-26', endDate: '',
     location: 'เชียงใหม่', category: 'Concert', status: 'กำลังแสดง', description: '', cover: '', rounds: [],
-    publishing: { scheduleFile: '', scheduleImage: '', saleStart: '', saleEnd: '', publishAt: '', unpublishAt: '' }, zones: [], layoutObjects: [],
+    publishing: { scheduleFile: '', scheduleImage: '', saleStart: '', saleEnd: '', publishAt: '', unpublishAt: '' }, zones: [], layoutObjects: [], ticketLayoutObjects: [],
   },
 ]
 
 export const blankConcert = () => ({
   id: `concert-${Date.now()}`, name: '', artist: '', date: '', endDate: '', location: '', category: '',
   status: 'ฉบับร่าง', description: '', cover: '', rounds: [],
-  publishing: { scheduleFile: '', scheduleImage: '', saleStart: '', saleEnd: '', publishAt: '', unpublishAt: '' }, zones: [], layoutObjects: [],
+  publishing: { scheduleFile: '', scheduleImage: '', saleStart: '', saleEnd: '', publishAt: '', unpublishAt: '' }, zones: [], layoutObjects: [], ticketLayoutObjects: [],
 })
