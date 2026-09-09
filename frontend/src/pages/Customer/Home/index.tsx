@@ -2,6 +2,12 @@ import { Box } from '@mui/material';
 import Slide from '@/components/slide/Slide';
 import EventList from '@/components/posterShow/posterShow';
 import CustomerHeader from '@/components/common/CustomerHeader';
+import { pulse, celestial } from '@/assets/poster';
+
+const comingSoonPosters = [
+    { id: 'coming-soon-1', image: pulse, title: 'Neon Pulse' },
+    { id: 'coming-soon-2', image: celestial, title: 'Celestial Sounds' },
+];
 
 const HomePage = () => {
     return(
@@ -28,7 +34,7 @@ const HomePage = () => {
 
         
         <Box>
-            <EventList title="หน้าแรก" />
+            <EventList title="หน้าแรก" comingSoon={comingSoonPosters} />
         </Box>
         
     </Box>

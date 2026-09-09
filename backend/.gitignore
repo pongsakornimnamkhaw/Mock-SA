@@ -7,3 +7,5 @@ tmp/*.exe
 tmp/*.log
 server-latest.log
 server-latest.err.log
+
+.env

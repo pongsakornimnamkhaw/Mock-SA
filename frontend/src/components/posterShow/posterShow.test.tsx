@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import type { CustomerPromotionConcert } from '@/types/customerPromotion';
-import EventList from '@/components/posterShow/posterShow';
+import EventList, { type ComingSoonPoster } from '@/components/posterShow/posterShow';
 
 const concert = (id: string, name: string, location: string): CustomerPromotionConcert => ({
     concert_id: id,
@@ -19,9 +19,9 @@ const mockConcerts = (rows: CustomerPromotionConcert[]) => vi
     .spyOn(customerPromotionApi, 'listConcerts')
     .mockResolvedValue({ data: rows });
 
-const renderList = (query = '') => render(
+const renderList = (query = '', comingSoon: ComingSoonPoster[] = []) => render(
     <MemoryRouter>
-        <EventList query={query} />
+        <EventList query={query} comingSoon={comingSoon} />
     </MemoryRouter>,
 );
 
@@ -77,6 +77,25 @@ describe('EventList', () => {
         renderList();
 
         expect(await screen.findByText(/ยังไม่มีคอนเสิร์ตที่เปิดจำหน่าย/)).toBeInTheDocument();
+    });
+
+    it('shows coming-soon posters alongside the real concerts', async () => {
+        mockConcerts([concert('CC0001', 'Riverside Sound Festival', 'ธันเดอร์โดม เมืองทองธานี')]);
+
+        renderList('', [{ id: 'coming-soon-1', image: '/pulse.png', title: 'Neon Pulse' }]);
+
+        expect(await screen.findByText('Riverside Sound Festival')).toBeInTheDocument();
+        expect(screen.getByText('Neon Pulse')).toBeInTheDocument();
+        expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
+
+    it('hides coming-soon posters while the customer is searching', async () => {
+        mockConcerts([concert('CC0001', 'Riverside Sound Festival', 'ธันเดอร์โดม เมืองทองธานี')]);
+
+        renderList('riverside', [{ id: 'coming-soon-1', image: '/pulse.png', title: 'Neon Pulse' }]);
+
+        expect(await screen.findByText('Riverside Sound Festival')).toBeInTheDocument();
+        expect(screen.queryByText('Neon Pulse')).not.toBeInTheDocument();
     });
 
     it('shows the failure reason when the concert list cannot be loaded', async () => {
