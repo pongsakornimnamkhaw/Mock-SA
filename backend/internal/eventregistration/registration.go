@@ -12,19 +12,24 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-var errTicketConflict = errors.New("ticket cannot be checked in")
+var (
+	errTicketConflict     = errors.New("ticket cannot be checked in")
+	errTicketWrongConcert = errors.New("ticket belongs to another concert")
+)
 
 type RegistrationHandler struct {
 	db *gorm.DB
 }
 
 type checkInRequest struct {
-	TicketID string `json:"ticketId"`
-	GateID   int    `json:"gateId"`
+	TicketID  string `json:"ticketId"`
+	GateID    int    `json:"gateId"`
+	ConcertID string `json:"concertId"`
 }
 
 type registrationTicketDTO struct {
 	TicketID       string     `json:"ticketId"`
+	ConcertID      string     `json:"concertId"`
 	ConcertName    string     `json:"concertName"`
 	TicketDateTime time.Time  `json:"ticketDateTime"`
 	TicketImageURL string     `json:"ticketImageUrl"`
@@ -122,6 +127,9 @@ func (h *RegistrationHandler) lookupTicket(c *fiber.Ctx) error {
 	if err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "load check-in status", err)
 	}
+	if concertID := strings.TrimSpace(c.Query("concertId")); concertID != "" && result.ConcertID != concertID {
+		return apiError(c, fiber.StatusConflict, "ticket belongs to another concert", nil)
+	}
 	if !CanCheckIn(ticket.StatusTicket) {
 		return c.Status(fiber.StatusConflict).JSON(result)
 	}
@@ -187,8 +195,9 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		return apiError(c, fiber.StatusBadRequest, "invalid request body", err)
 	}
 	request.TicketID = strings.TrimSpace(request.TicketID)
-	if request.TicketID == "" || request.GateID <= 0 {
-		return apiError(c, fiber.StatusBadRequest, "ticketId and a positive gateId are required", nil)
+	request.ConcertID = strings.TrimSpace(request.ConcertID)
+	if request.TicketID == "" || request.GateID <= 0 || request.ConcertID == "" {
+		return apiError(c, fiber.StatusBadRequest, "ticketId, concertId and a positive gateId are required", nil)
 	}
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {
@@ -198,6 +207,13 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		}
 		if !CanCheckIn(ticket.StatusTicket) {
 			return errTicketConflict
+		}
+		var seat models.Seat
+		if err := tx.First(&seat, "seat_id = ?", ticket.SeatID).Error; err != nil {
+			return err
+		}
+		if !ticketBelongsToConcert(seat, request.ConcertID) {
+			return errTicketWrongConcert
 		}
 		var existing models.GateCheckIn
 		if err := tx.First(&existing, "ticket_id = ?", request.TicketID).Error; err == nil {
@@ -224,6 +240,8 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 			return apiError(c, fiber.StatusNotFound, "ticket not found", nil)
 		case errors.Is(err, errTicketConflict):
 			return apiError(c, fiber.StatusConflict, "ticket has already been used or is unavailable", nil)
+		case errors.Is(err, errTicketWrongConcert):
+			return apiError(c, fiber.StatusConflict, "ticket belongs to another concert", nil)
 		default:
 			return apiError(c, fiber.StatusInternalServerError, "check in ticket", err)
 		}
@@ -256,7 +274,7 @@ func (h *RegistrationHandler) registrationTicket(ticket models.Ticket) (registra
 		return registrationTicketDTO{}, checkInErr
 	}
 	result := registrationTicketDTO{
-		TicketID: ticket.TicketID, ConcertName: ticket.NameConcert, TicketDateTime: ticket.TicketDateTime,
+		TicketID: ticket.TicketID, ConcertID: seat.ConcertID, ConcertName: ticket.NameConcert, TicketDateTime: ticket.TicketDateTime,
 		TicketImageURL: ticketImageURL(ticket), TicketStatus: ticket.StatusTicket,
 		SeatID: ticket.SeatID, SeatRow: seat.SeatRow, SeatColumn: seat.SeatColumn,
 		ZoneID: seat.ZoneID, ZoneType: zone.ZoneType, CheckedIn: checkInErr == nil,
@@ -266,6 +284,10 @@ func (h *RegistrationHandler) registrationTicket(ticket models.Ticket) (registra
 		result.GateID = checkIn.GateID
 	}
 	return result, nil
+}
+
+func ticketBelongsToConcert(seat models.Seat, concertID string) bool {
+	return strings.TrimSpace(concertID) != "" && seat.ConcertID == strings.TrimSpace(concertID)
 }
 
 func ticketImageURL(ticket models.Ticket) string {

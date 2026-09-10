@@ -19,33 +19,24 @@ export const loadConcerts = async () => {
 }
 
 export const saveConcertPlan = async concert => {
-  try {
-    return await request(`/concerts/${encodeURIComponent(concert.id)}`, {
-      method: 'PUT',
-      body: JSON.stringify(concert),
-    })
-  } catch {
-    return null
-  }
+  return request(`/concerts/${encodeURIComponent(concert.id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(concert),
+  })
 }
 
-export const saveConcertLayout = async (concertId, zones, layoutObjects, ticketLayoutObjects = []) => {
-  try {
-    return await request(`/concerts/${encodeURIComponent(concertId)}/layout`, {
-      method: 'PUT',
-      body: JSON.stringify({ zones, layoutObjects, ticketLayoutObjects }),
-    })
-  } catch {
-    return null
-  }
+export const saveConcertLayout = async (concertId, zones, layoutObjects) => {
+  return request(`/concerts/${encodeURIComponent(concertId)}/layout`, {
+    method: 'PUT',
+    body: JSON.stringify({ zones, layoutObjects }),
+  })
 }
 
 export const clearConcertLayout = async concertId => {
-  try {
-    return await request(`/concerts/${encodeURIComponent(concertId)}/layout`, { method: 'DELETE' })
-  } catch {
-    return null
-  }
+  return request(`/concerts/${encodeURIComponent(concertId)}/layout`, { method: 'DELETE' })
 }
 
-
+export const saveTicketDesign = async (concertId, objects) => request(
+  `/concerts/${encodeURIComponent(concertId)}/ticket-design`,
+  { method: 'PUT', body: JSON.stringify({ objects }) },
+)

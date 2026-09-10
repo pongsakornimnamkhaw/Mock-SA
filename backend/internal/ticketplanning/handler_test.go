@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+func TestLayoutSeatStatusPreservesIssuedSeatState(t *testing.T) {
+	if got := layoutSeatStatus(false, "SOLD", true); got != "SOLD" {
+		t.Fatalf("issued seat status changed to %q", got)
+	}
+	if got := layoutSeatStatus(true, "AVAILABLE", false); got != "DISABLED" {
+		t.Fatalf("unissued disabled seat status = %q", got)
+	}
+	if got := layoutSeatStatus(false, "DISABLED", false); got != "AVAILABLE" {
+		t.Fatalf("unissued enabled seat status = %q", got)
+	}
+}
+
 func TestTicketLayoutFieldsSurviveTransportAndJSONStorage(t *testing.T) {
 	const payload = `{"id":"image-1","kind":"image","imageSrc":"data:image/png;base64,AAAA","fontSize":42,"aspectRatio":1.5}`
 	var transport layoutObjectDTO

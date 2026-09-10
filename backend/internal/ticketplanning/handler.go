@@ -20,6 +20,13 @@ type VenueSeatHandler struct {
 	db *gorm.DB
 }
 
+var (
+	errLayoutHasIssuedTickets = errors.New("layout contains seats referenced by tickets")
+	errLayoutOwnership        = errors.New("layout item belongs to another system")
+)
+
+const maxLayerOrder = int64(1<<31 - 1)
+
 func RegisterRoutes(app *fiber.App, db *gorm.DB) {
 	handler := &VenueSeatHandler{db: db}
 	group := app.Group("/api/ticket-planning")
@@ -225,6 +232,11 @@ func (h *VenueSeatHandler) putTicketDesign(c *fiber.Ctx) error {
 	var payload ticketDesignDTO
 	if err := c.BodyParser(&payload); err != nil {
 		return apiError(c, fiber.StatusBadRequest, "invalid ticket design body", err)
+	}
+	for _, item := range payload.Objects {
+		if item.Layer < 0 || item.Layer > maxLayerOrder {
+			return apiError(c, fiber.StatusBadRequest, "ticket layer order is out of range", nil)
+		}
 	}
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("concert_id = ? AND layout_type = ?", concertID, "TICKET").Delete(&models.LayoutObject{}).Error; err != nil {
@@ -494,6 +506,14 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 		if item.Seats > 0 && len(item.SeatItems) > item.Seats {
 			return apiError(c, fiber.StatusBadRequest, "seat items exceed zone capacity", nil)
 		}
+		if item.Layer < 0 || item.Layer > maxLayerOrder {
+			return apiError(c, fiber.StatusBadRequest, "zone layer order is out of range", nil)
+		}
+	}
+	for _, item := range payload.LayoutObjects {
+		if item.Layer < 0 || item.Layer > maxLayerOrder {
+			return apiError(c, fiber.StatusBadRequest, "object layer order is out of range", nil)
+		}
 	}
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {
@@ -501,49 +521,12 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&concert, "concert_id = ?", concertID).Error; err != nil {
 			return err
 		}
-		if err := clearLayoutRecords(tx, concertID); err != nil {
+		if err := syncPlanningZones(tx, concertID, payload.Zones); err != nil {
 			return err
 		}
-
-		for _, item := range payload.Zones {
-			zoneID := item.ID
-			if zoneID == "" {
-				zoneID = uuid.NewString()
-			}
-			capacity := item.Seats
-			if capacity == 0 {
-				capacity = len(item.SeatItems)
-			}
-			zone := models.Zone{
-				ZoneID: zoneID, ConcertID: &concertID, ZoneType: item.Type, Capacity: capacity,
-				Shape: item.Shape, Color: item.Color, PositionX: item.X, PositionY: item.Y,
-				Width: item.Width, Height: item.Height, Rotation: item.Rotation, LayerOrder: int(item.Layer),
-			}
-			if zone.ZoneType == "" {
-				zone.ZoneType = item.Name
-			}
-			if err := tx.Create(&zone).Error; err != nil {
-				return err
-			}
-			for _, seatItem := range item.SeatItems {
-				seatID := seatItem.ID
-				if seatID == "" {
-					seatID = uuid.NewString()
-				}
-				status := "AVAILABLE"
-				if seatItem.Disabled {
-					status = "DISABLED"
-				}
-				seat := models.Seat{
-					SeatID: seatID, ZoneID: zoneID, ConcertID: concertID, SeatLabel: seatItem.Name,
-					StatusSeat: status, PositionX: seatItem.X, PositionY: seatItem.Y,
-				}
-				if err := tx.Create(&seat).Error; err != nil {
-					return err
-				}
-			}
+		if err := tx.Where("concert_id = ? AND layout_type = ?", concertID, "VENUE").Delete(&models.LayoutObject{}).Error; err != nil {
+			return err
 		}
-
 		for _, item := range payload.LayoutObjects {
 			objectID := item.ID
 			if objectID == "" {
@@ -566,56 +549,26 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 				return err
 			}
 		}
-		if payload.TicketLayoutObjects != nil {
-			if err := tx.Where("concert_id = ? AND layout_type = ?", concertID, "TICKET").Delete(&models.LayoutObject{}).Error; err != nil {
-				return err
-			}
-			for _, item := range payload.TicketLayoutObjects {
-				objectID := item.ID
-				if objectID == "" {
-					objectID = uuid.NewString()
-				}
-				objectData, err := marshalJSONString(venueObjectData{Kind: item.Kind, Shape: item.Shape, Name: item.Name, ImageSrc: item.ImageSrc, AspectRatio: item.AspectRatio})
-				if err != nil {
-					return err
-				}
-				styleJSON, err := marshalJSONString(venueObjectStyle{Color: item.Color, TextColor: item.TextColor, FontSize: item.FontSize})
-				if err != nil {
-					return err
-				}
-				object := models.LayoutObject{
-					ObjectID: objectID, ConcertID: concertID, LayoutType: "TICKET", SideType: optionalString(item.Side), ObjectType: item.Kind,
-					PositionX: item.X, PositionY: item.Y, Width: item.Width, Height: item.Height,
-					Rotation: item.Rotation, LayerOrder: int(item.Layer), ObjectData: objectData, StyleJSON: styleJSON,
-				}
-				if err := tx.Create(&object).Error; err != nil {
-					return err
-				}
-			}
-		}
 		return nil
 	})
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return apiError(c, fiber.StatusNotFound, "concert not found", err)
 		}
+		if errors.Is(err, errLayoutHasIssuedTickets) || errors.Is(err, errLayoutOwnership) {
+			return apiError(c, fiber.StatusConflict, err.Error(), nil)
+		}
 		return apiError(c, fiber.StatusInternalServerError, "save layout", err)
 	}
-	if payload.Zones == nil {
-		payload.Zones = []zoneDTO{}
+	var saved models.Concert
+	if err := h.db.First(&saved, "concert_id = ?", concertID).Error; err != nil {
+		return apiError(c, fiber.StatusInternalServerError, "reload layout", err)
 	}
-	for i := range payload.Zones {
-		if payload.Zones[i].SeatItems == nil {
-			payload.Zones[i].SeatItems = []seatDTO{}
-		}
+	result, err := h.buildConcertDTO(saved)
+	if err != nil {
+		return apiError(c, fiber.StatusInternalServerError, "reload layout", err)
 	}
-	if payload.LayoutObjects == nil {
-		payload.LayoutObjects = []layoutObjectDTO{}
-	}
-	if payload.TicketLayoutObjects == nil {
-		payload.TicketLayoutObjects = []layoutObjectDTO{}
-	}
-	return c.JSON(payload)
+	return c.JSON(layoutDTO{Zones: result.Zones, LayoutObjects: result.LayoutObjects, TicketLayoutObjects: result.TicketLayoutObjects})
 }
 
 func (h *VenueSeatHandler) clearLayout(c *fiber.Ctx) error {
@@ -624,19 +577,183 @@ func (h *VenueSeatHandler) clearLayout(c *fiber.Ctx) error {
 		return apiError(c, fiber.StatusNotFound, "concert not found", err)
 	}
 	if err := h.db.Transaction(func(tx *gorm.DB) error { return clearLayoutRecords(tx, concertID) }); err != nil {
+		if errors.Is(err, errLayoutHasIssuedTickets) {
+			return apiError(c, fiber.StatusConflict, err.Error(), nil)
+		}
 		return apiError(c, fiber.StatusInternalServerError, "clear layout", err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func clearLayoutRecords(tx *gorm.DB, concertID string) error {
-	if err := tx.Where("concert_id = ?", concertID).Delete(&models.Seat{}).Error; err != nil {
+	var zoneIDs []string
+	if err := tx.Model(&models.Zone{}).Where("concert_id = ?", concertID).Pluck("zone_id", &zoneIDs).Error; err != nil {
 		return err
 	}
-	if err := tx.Where("concert_id = ?", concertID).Delete(&models.Zone{}).Error; err != nil {
-		return err
+	if len(zoneIDs) > 0 {
+		var seatIDs []string
+		if err := tx.Model(&models.Seat{}).Where("zone_id IN ?", zoneIDs).Pluck("seat_id", &seatIDs).Error; err != nil {
+			return err
+		}
+		if err := ensureSeatsHaveNoTickets(tx, seatIDs); err != nil {
+			return err
+		}
+		if err := tx.Where("zone_id IN ?", zoneIDs).Delete(&models.Seat{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("zone_id IN ?", zoneIDs).Delete(&models.Zone{}).Error; err != nil {
+			return err
+		}
 	}
 	return tx.Where("concert_id = ? AND layout_type = ?", concertID, "VENUE").Delete(&models.LayoutObject{}).Error
+}
+
+func syncPlanningZones(tx *gorm.DB, concertID string, items []zoneDTO) error {
+	var existing []models.Zone
+	if err := tx.Where("concert_id = ?", concertID).Find(&existing).Error; err != nil {
+		return err
+	}
+	incoming := make(map[string]struct{}, len(items))
+	for index := range items {
+		if strings.TrimSpace(items[index].ID) == "" {
+			items[index].ID = uuid.NewString()
+		}
+		incoming[items[index].ID] = struct{}{}
+	}
+	for _, zone := range existing {
+		if _, keep := incoming[zone.ZoneID]; keep {
+			continue
+		}
+		var seatIDs []string
+		if err := tx.Model(&models.Seat{}).Where("zone_id = ?", zone.ZoneID).Pluck("seat_id", &seatIDs).Error; err != nil {
+			return err
+		}
+		if err := ensureSeatsHaveNoTickets(tx, seatIDs); err != nil {
+			return err
+		}
+		if err := tx.Where("zone_id = ?", zone.ZoneID).Delete(&models.Seat{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(&models.Zone{}, "zone_id = ?", zone.ZoneID).Error; err != nil {
+			return err
+		}
+	}
+
+	for _, item := range items {
+		var conflictCount int64
+		if err := tx.Model(&models.Zone{}).Where("zone_id = ? AND (concert_id IS NULL OR concert_id <> ?)", item.ID, concertID).Count(&conflictCount).Error; err != nil {
+			return err
+		}
+		if conflictCount > 0 {
+			return errLayoutOwnership
+		}
+		capacity := item.Seats
+		if capacity == 0 {
+			capacity = len(item.SeatItems)
+		}
+		zoneName := strings.TrimSpace(item.Name)
+		if zoneName == "" {
+			zoneName = strings.TrimSpace(item.Type)
+		}
+		zone := models.Zone{
+			ZoneID: item.ID, ConcertID: &concertID, ZoneType: zoneName, Capacity: capacity,
+			Shape: item.Shape, Color: item.Color, PositionX: item.X, PositionY: item.Y,
+			Width: item.Width, Height: item.Height, Rotation: item.Rotation, LayerOrder: int(item.Layer),
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "zone_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"concert_id", "zone_type", "capacity", "shape", "color", "position_x", "position_y", "width", "height", "rotation", "layer_order"}),
+		}).Create(&zone).Error; err != nil {
+			return err
+		}
+		if err := syncPlanningSeats(tx, concertID, item.ID, item.SeatItems); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func syncPlanningSeats(tx *gorm.DB, concertID, zoneID string, items []seatDTO) error {
+	var existing []models.Seat
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("zone_id = ?", zoneID).Find(&existing).Error; err != nil {
+		return err
+	}
+	existingByID := make(map[string]models.Seat, len(existing))
+	existingIDs := make([]string, 0, len(existing))
+	for _, seat := range existing {
+		existingByID[seat.SeatID] = seat
+		existingIDs = append(existingIDs, seat.SeatID)
+	}
+	issued := make(map[string]bool, len(existing))
+	if len(existingIDs) > 0 {
+		var issuedIDs []string
+		if err := tx.Model(&models.Ticket{}).Where("seat_id IN ?", existingIDs).Pluck("seat_id", &issuedIDs).Error; err != nil {
+			return err
+		}
+		for _, seatID := range issuedIDs {
+			issued[seatID] = true
+		}
+	}
+	incoming := make(map[string]struct{}, len(items))
+	for index := range items {
+		if strings.TrimSpace(items[index].ID) == "" {
+			items[index].ID = uuid.NewString()
+		}
+		incoming[items[index].ID] = struct{}{}
+	}
+	for _, seat := range existing {
+		if _, keep := incoming[seat.SeatID]; keep {
+			continue
+		}
+		if err := ensureSeatsHaveNoTickets(tx, []string{seat.SeatID}); err != nil {
+			return err
+		}
+		if err := tx.Delete(&models.Seat{}, "seat_id = ?", seat.SeatID).Error; err != nil {
+			return err
+		}
+	}
+	for _, item := range items {
+		var conflictCount int64
+		if err := tx.Model(&models.Seat{}).Where("seat_id = ? AND zone_id <> ?", item.ID, zoneID).Count(&conflictCount).Error; err != nil {
+			return err
+		}
+		if conflictCount > 0 {
+			return errLayoutOwnership
+		}
+		status := layoutSeatStatus(item.Disabled, existingByID[item.ID].StatusSeat, issued[item.ID])
+		seat := models.Seat{SeatID: item.ID, ZoneID: zoneID, ConcertID: concertID, SeatLabel: item.Name, StatusSeat: status, PositionX: item.X, PositionY: item.Y}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "seat_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"zone_id", "concert_id", "seat_label", "status_seat", "position_x", "position_y"}),
+		}).Create(&seat).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func layoutSeatStatus(disabled bool, existingStatus string, issued bool) string {
+	if issued && strings.TrimSpace(existingStatus) != "" {
+		return existingStatus
+	}
+	if disabled {
+		return "DISABLED"
+	}
+	return "AVAILABLE"
+}
+
+func ensureSeatsHaveNoTickets(tx *gorm.DB, seatIDs []string) error {
+	if len(seatIDs) == 0 {
+		return nil
+	}
+	var count int64
+	if err := tx.Model(&models.Ticket{}).Where("seat_id IN ?", seatIDs).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errLayoutHasIssuedTickets
+	}
+	return nil
 }
 
 type venueObjectData struct {

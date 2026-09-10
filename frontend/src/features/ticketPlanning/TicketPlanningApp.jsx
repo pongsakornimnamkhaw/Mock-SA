@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeftIcon, CheckIcon, CloseIcon, PlusIcon, SaveIcon, SearchIcon, TrashIcon, UploadIcon, UsersIcon } from './icons'
 import { blankConcert, initialConcerts } from './seed'
-import { loadConcerts, saveConcertLayout, saveConcertPlan } from './api'
+import { clearConcertLayout, loadConcerts, saveConcertLayout, saveConcertPlan, saveTicketDesign } from './api'
+import { nextLayerOrder } from './layerOrder'
 
 const STORAGE_KEY = 'octavia-concerts-v1'
 
@@ -321,14 +322,14 @@ function arrangeSeats(count, shape, oldSeats = []) {
 
 function ItemModal({ kind, shape, onClose, onSave }) {
   const isZone = kind === 'zone'
-  const [item, setItem] = useState({ id: `${kind}-${Date.now()}`, kind, shape, name: isZone ? '' : 'วัตถุ', color: isZone ? '#e72d70' : '#777b91', textColor: '#ffffff', seats: 0, seatItems: [], price: 0, type: 'ปกติ', x: 50, y: 50, width: 13, height: 15, rotation: 0, z: Date.now() })
+  const [item, setItem] = useState({ id: `${kind}-${Date.now()}`, kind, shape, name: isZone ? '' : 'วัตถุ', color: isZone ? '#e72d70' : '#777b91', textColor: '#ffffff', seats: 0, seatItems: [], price: 0, type: '', x: 50, y: 50, width: 13, height: 15, rotation: 0, z: 0 })
   const update = (key, value) => setItem(current => ({ ...current, [key]: value }))
   return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="modal zone-modal">
     <div className="modal-title"><div><span className="eyebrow">LAYOUT ITEM</span><h2>สร้าง{isZone ? 'โซนที่นั่ง' : 'วัตถุปกติ'}รูป{shapeNames[shape]}</h2></div><button className="icon-button" onClick={onClose}><CloseIcon/></button></div>
     <div className="form-grid">
       <FormField label={isZone ? 'ชื่อโซน' : 'ชื่อวัตถุ'} required><input value={item.name} onChange={e => update('name', e.target.value)} placeholder={isZone ? 'เช่น A1' : 'เช่น เวที หรือ ทางเข้า'}/></FormField>
       <FormField label="สี" required><input className="color-input" type="color" value={item.color} onChange={e => update('color', e.target.value)}/></FormField>
-      {isZone && <><FormField label="ราคา (บาท)"><input type="number" min="0" value={item.price} onChange={e => update('price', +e.target.value)}/></FormField><FormField label="ประเภทบัตร"><input value={item.type} onChange={e => update('type', e.target.value)}/></FormField></>}
+      {isZone && <p className="form-note">ราคาของโซนจะอ่านจาก <b>Ticket.PriceTicket</b> เมื่อมีการออกบัตรแล้ว</p>}
     </div>
     <div className="modal-actions"><button className="btn ghost" onClick={onClose}>ยกเลิก</button><button disabled={!item.name} className="btn primary" onClick={() => onSave(item)}><PlusIcon/>สร้าง{isZone ? 'โซน' : 'วัตถุ'}</button></div>
   </div></div>
@@ -358,7 +359,7 @@ function ZoneDetail({ zone, onBack, onSave, onDelete }) {
     <div className="zone-detail-grid">
       <div className="seat-shape-frame"><div ref={seatCanvas} className={`free-seat-canvas ${working.shape}`} style={{ '--zone-color': working.color }} onClick={() => setSelectedSeat(null)}>{working.seatItems.map(seat => <button key={seat.id} className={`free-seat ${seat.disabled ? 'disabled' : ''} ${activeSeat?.id === seat.id ? 'selected' : ''}`} style={{ left: `${seat.x}%`, top: `${seat.y}%` }} onPointerDown={e => dragSeat(e, seat)} onClick={e => { e.stopPropagation(); setSelectedSeat(seat) }}>{seat.name}</button>)}</div><p className="seat-hint">ลากเก้าอี้ได้อย่างอิสระ และคลิกเพื่อแก้ชื่อรายตัว</p></div>
       <aside className="zone-form"><div className="zone-badge" style={{ background: working.color, ...shapeStyle(working.shape) }}>{working.name}<small>{working.seatItems.length} ที่นั่ง</small></div>
-        <FormField label="ชื่อโซน"><input value={working.name} onChange={e => update('name', e.target.value)}/></FormField><FormField label="สีโซน"><input className="color-input" type="color" value={working.color} onChange={e => update('color', e.target.value)}/></FormField><FormField label="ราคา"><input type="number" value={working.price} onChange={e => update('price', +e.target.value)}/></FormField><FormField label="ประเภท"><input value={working.type} onChange={e => update('type', e.target.value)}/></FormField>
+        <FormField label="ชื่อโซน"><input value={working.name} onChange={e => update('name', e.target.value)}/></FormField><FormField label="สีโซน"><input className="color-input" type="color" value={working.color} onChange={e => update('color', e.target.value)}/></FormField><div className="zone-stat"><span>ราคาเริ่มต้นจาก Ticket</span><b>{Number(working.price || 0).toLocaleString('th-TH')} ฿</b></div>
         {activeSeat && <div className="seat-inspector"><b>เก้าอี้ที่เลือก</b><FormField label="ชื่อเก้าอี้"><input value={activeSeat.name} onChange={e => updateSeat({ ...activeSeat, name: e.target.value })}/></FormField><button className={`btn small ${activeSeat.disabled ? 'success' : 'ghost'}`} onClick={() => updateSeat({ ...activeSeat, disabled: !activeSeat.disabled })}>{activeSeat.disabled ? 'เปิดใช้งานเก้าอี้' : 'ปิดใช้งานเก้าอี้'}</button><button className="btn danger small" onClick={() => { setWorking(current => ({ ...current, seatItems: current.seatItems.filter(seat => seat.id !== activeSeat.id) })); setSelectedSeat(null) }}><TrashIcon/>ลบเก้าอี้</button></div>}
         <div className="zone-stat"><span>ที่นั่งพร้อมใช้</span><b>{working.seatItems.length - disabledCount}</b></div><div className="zone-stat"><span>ปิดใช้งาน</span><b>{disabledCount}</b></div>
       </aside>
@@ -377,7 +378,7 @@ function SeatPlanner({ zones, setZones, objects, setObjects, onSeatSave }) {
   const total = zones.reduce((sum, zone) => sum + Number(zone.seatItems?.length ?? zone.seats ?? 0), 0)
   const updateItem = next => next.kind === 'object' ? setObjects(objects.map(item => item.id === next.id ? next : item)) : setZones(zones.map(item => item.id === next.id ? next : item))
   const removeSelected = () => { if (!selectedItem) return; if (selectedItem.kind === 'object') setObjects(objects.filter(item => item.id !== selectedItem.id)); else setZones(zones.filter(item => item.id !== selectedItem.id)); setSelected(null) }
-  const duplicate = () => { if (!selectedItem) return; const copy = { ...selectedItem, id: `${selectedItem.kind}-${Date.now()}`, name: `${selectedItem.name} สำเนา`, x: Math.min(94, selectedItem.x + 4), y: Math.min(94, selectedItem.y + 4), z: Date.now(), seatItems: selectedItem.seatItems?.map(seat => ({ ...seat, id: `seat-${Date.now()}-${seat.id}` })) }; if (copy.kind === 'object') setObjects([...objects, copy]); else setZones([...zones, copy]); setSelected({ kind: copy.kind || 'zone', id: copy.id }) }
+  const duplicate = () => { if (!selectedItem) return; const copy = { ...selectedItem, id: `${selectedItem.kind}-${Date.now()}`, name: `${selectedItem.name} สำเนา`, x: Math.min(94, selectedItem.x + 4), y: Math.min(94, selectedItem.y + 4), z: nextLayerOrder([...objects, ...zones]), seatItems: selectedItem.seatItems?.map(seat => ({ ...seat, id: `seat-${Date.now()}-${seat.id}` })) }; if (copy.kind === 'object') setObjects([...objects, copy]); else setZones([...zones, copy]); setSelected({ kind: copy.kind || 'zone', id: copy.id }) }
   const moveLayer = direction => {
     if (!selectedItem) return
     const ordered = [...objects, ...zones].sort((a, b) => Number(a.z || 0) - Number(b.z || 0))
@@ -396,7 +397,7 @@ function SeatPlanner({ zones, setZones, objects, setObjects, onSeatSave }) {
   }
   const detailZone = zones.find(zone => zone.id === detailId)
   if (detailZone) return <ZoneDetail zone={detailZone} onBack={() => setDetailId(null)} onSave={updated => { const next = zones.map(zone => zone.id === updated.id ? updated : zone); setZones(next); onSeatSave(next, objects); setDetailId(null) }} onDelete={() => { const next = zones.filter(zone => zone.id !== detailZone.id); setZones(next); onSeatSave(next, objects); setDetailId(null) }}/>
-  const addQuickObject = (shape, name) => setObjects([...objects, { id: `object-${Date.now()}`, kind: 'object', shape, name, color: '#777b91', textColor: '#ffffff', x: 50, y: 50, width: shape === 'line' ? 25 : 14, height: shape === 'line' ? 1 : 10, rotation: 0, z: Date.now() }])
+  const addQuickObject = (shape, name) => setObjects([...objects, { id: `object-${Date.now()}`, kind: 'object', shape, name, color: '#777b91', textColor: '#ffffff', x: 50, y: 50, width: shape === 'line' ? 25 : 14, height: shape === 'line' ? 1 : 10, rotation: 0, z: nextLayerOrder([...objects, ...zones]) }])
   return <div className="seat-planner">
     <div className="seat-summary"><div><UsersIcon/><span>ความจุรวมทั้งหมด<small>นับเฉพาะวัตถุที่กำหนดเป็นโซน</small></span></div><strong>{total.toLocaleString('th-TH')} <small>ที่นั่ง</small></strong><button className="btn success small" onClick={() => onSeatSave(zones, objects)}><SaveIcon/>บันทึกผังที่นั่ง</button></div>
     <div className="designer-toolbar"><div className="tool-group"><b>โซน</b>{Object.keys(shapeNames).map(shape => <button key={`z-${shape}`} title={`สร้างโซน${shapeNames[shape]}`} onClick={() => setCreateConfig({ kind: 'zone', shape })}><i className={`shape-icon ${shape}`}></i>{shapeNames[shape]}</button>)}</div><div className="tool-divider"></div><div className="tool-group"><b>วัตถุปกติ</b>{Object.keys(shapeNames).map(shape => <button key={`o-${shape}`} title={`สร้างวัตถุ${shapeNames[shape]}`} onClick={() => setCreateConfig({ kind: 'object', shape })}><i className={`shape-icon ${shape}`}></i>{shapeNames[shape]}</button>)}<button onClick={() => addQuickObject('text', 'ข้อความ')}><b className="text-tool">T</b>ข้อความ</button><button onClick={() => addQuickObject('line', '')}><b className="line-tool"></b>เส้น</button><button onClick={() => addQuickObject('text', '→')}><b className="arrow-tool">→</b>ลูกศร</button></div></div>
@@ -406,7 +407,14 @@ function SeatPlanner({ zones, setZones, objects, setObjects, onSeatSave }) {
       {[...objects, ...zones].sort((a,b) => Number(a.z || 0) - Number(b.z || 0)).map((item, index) => <div key={item.id} className={`layout-node ${selected?.id === item.id ? 'selected' : ''}`} style={{ left:`${item.x}%`,top:`${item.y}%`,width:`${item.width || 12}%`,height:`${item.height || 12}%`,transform:`translate(-50%,-50%) rotate(${item.rotation || 0}deg)`,zIndex:index + 1 }} onPointerDown={e => dragItem(e,item)} onDoubleClick={() => item.kind !== 'object' && setDetailId(item.id)}><div className={`layout-item ${item.kind || 'zone'} ${item.shape || 'rectangle'}`} style={{background:item.color,color:item.textColor || '#fff',...shapeStyle(item.shape)}}>{item.shape === 'line' ? '' : <><strong>{item.name}</strong>{item.kind !== 'object' && <><span>{item.seatItems?.length ?? item.seats ?? 0}</span><small>{Number(item.price || 0).toLocaleString()} ฿</small></>}</>}</div>{selected?.id === item.id && <TransformHandles item={item} canvasRef={mapRef} onChange={updateItem}/>}</div>)}
       {!zones.length && !objects.length && <div className="empty-map"><UsersIcon size={38}/><b>ผังยังว่างอยู่</b><span>เลือกเครื่องมือด้านบนเพื่อสร้างโซนหรือวัตถุ</span></div>}
     </div>
-    {createConfig && <ItemModal {...createConfig} onClose={() => setCreateConfig(null)} onSave={item => { if (item.kind === 'zone') setZones([...zones,item]); else setObjects([...objects,item]); setCreateConfig(null) }}/>} 
+    {createConfig && (
+      <ItemModal {...createConfig} onClose={() => setCreateConfig(null)} onSave={item => {
+        const next = { ...item, z: nextLayerOrder([...objects, ...zones]) }
+        if (next.kind === 'zone') setZones([...zones,next])
+        else setObjects([...objects,next])
+        setCreateConfig(null)
+      }}/>
+    )}
   </div>
 }
 
@@ -430,7 +438,7 @@ function TicketDesigner({ concert, objects, setObjects, onSave }) {
   const changeObjects = next => setObjects(next)
   const update = next => changeObjects(allObjects.map(item => item.id === next.id ? next : item))
   const add = (kind, values = {}) => {
-    const item = { id:`ticket-${kind}-${Date.now()}`,kind,shape:'rectangle',name:kind === 'qr' ? 'QR CODE' : kind === 'image' ? 'รูปภาพ' : kind === 'shape' ? '' : 'ข้อความใหม่',color:kind === 'shape' ? '#e72d70' : kind === 'image' ? 'transparent' : '#ffffff',textColor:'#071033',fontSize:kind === 'text' ? 24 : 0,x:50,y:50,width:kind === 'text' ? 34 : 18,height:kind === 'text' ? 12 : 20,rotation:0,z:Date.now(),side,...values }
+    const item = { id:`ticket-${kind}-${Date.now()}`,kind,shape:'rectangle',name:kind === 'qr' ? 'QR CODE' : kind === 'image' ? 'รูปภาพ' : kind === 'shape' ? '' : 'ข้อความใหม่',color:kind === 'shape' ? '#e72d70' : kind === 'image' ? 'transparent' : '#ffffff',textColor:'#071033',fontSize:kind === 'text' ? 24 : 0,x:50,y:50,width:kind === 'text' ? 34 : 18,height:kind === 'text' ? 12 : 20,rotation:0,z:nextLayerOrder(allObjects),side,...values }
     changeObjects([...allObjects,item]); setSelectedId(item.id)
   }
   const openImagePicker = (itemId = null) => {
@@ -487,14 +495,19 @@ function TicketDesigner({ concert, objects, setObjects, onSave }) {
   </div>
 }
 
-function Editor({ source, onCancel, onSave, onSeatSave }) {
+function Editor({ source, onCancel, onSave, onSeatSave, onTicketSave }) {
   const [draft, setDraft] = useState(() => structuredClone(source))
   const [tab, setTab] = useState('overview')
   const update = (key, value) => setDraft(current => ({ ...current, [key]: value }))
-  const saveSeatLayout = (zones, layoutObjects, ticketLayoutObjects = draft.ticketLayoutObjects || []) => {
-    const next = { ...draft, zones, layoutObjects, ticketLayoutObjects }
+  const saveSeatLayout = (zones, layoutObjects) => {
+    const next = { ...draft, zones, layoutObjects }
     setDraft(next)
     onSeatSave(next)
+  }
+  const saveTicketLayout = ticketLayoutObjects => {
+    const next = { ...draft, ticketLayoutObjects }
+    setDraft(next)
+    onTicketSave(next)
   }
   const tabs = [{ id: 'overview', label: 'ภาพรวม' }, { id: 'publishing', label: 'วางขายหน้าเว็บ' }, { id: 'seats', label: 'ออกแบบผังและที่นั่ง' }, { id: 'ticket', label: 'ออกแบบบัตร' }]
   return <main className="content editor-page">
@@ -504,7 +517,14 @@ function Editor({ source, onCancel, onSave, onSeatSave }) {
         {tab === 'overview' && <OverviewTab draft={draft} update={update}/>}
         {tab === 'publishing' && <PublishingTab concertName={draft.name} value={draft.publishing} setValue={value => update('publishing', value)}/>}
         {tab === 'seats' && <SeatPlanner zones={draft.zones || []} setZones={zones => update('zones', zones)} objects={draft.layoutObjects || []} setObjects={objects => update('layoutObjects', objects)} onSeatSave={saveSeatLayout}/>}
-        {tab === 'ticket' && <TicketDesigner concert={draft} objects={draft.ticketLayoutObjects || []} setObjects={objects => update('ticketLayoutObjects', objects)} onSave={ticketLayoutObjects => saveSeatLayout(draft.zones || [], draft.layoutObjects || [], ticketLayoutObjects)}/>}
+        {tab === 'ticket' && (
+          <TicketDesigner
+            concert={draft}
+            objects={draft.ticketLayoutObjects || []}
+            setObjects={objects => update('ticketLayoutObjects', objects)}
+            onSave={saveTicketLayout}
+          />
+        )}
       </div>
     </section>
   </main>
@@ -523,28 +543,52 @@ export default function App() {
   const startNew = () => { const fresh = blankConcert(); setConcerts(current => [...current, fresh]); setEditing(fresh.id) }
   const save = async draft => {
     const saved = { ...draft, status: draft.status || 'ฉบับร่าง' }
-    setConcerts(current => current.map(c => c.id === draft.id ? saved : c))
-    await saveConcertPlan(saved)
-    await saveConcertLayout(saved.id, saved.zones || [], saved.layoutObjects || [], saved.ticketLayoutObjects || [])
-    setEditing(null)
-    setToast('บันทึกข้อมูลทุกหน้าเรียบร้อยแล้ว')
+    try {
+      const plan = await saveConcertPlan(saved)
+      const layout = await saveConcertLayout(saved.id, saved.zones || [], saved.layoutObjects || [])
+      const ticketDesign = await saveTicketDesign(saved.id, saved.ticketLayoutObjects || [])
+      const next = hydrateConcert({ ...saved, ...plan, zones: layout.zones, layoutObjects: layout.layoutObjects, ticketLayoutObjects: ticketDesign.objects })
+      setConcerts(current => current.map(c => c.id === draft.id ? next : c))
+      setEditing(null)
+      setToast('บันทึกข้อมูลทุกหน้าเรียบร้อยแล้ว')
+    } catch {
+      setToast('บันทึกไม่สำเร็จ กรุณาตรวจสอบ API และลองอีกครั้ง')
+    }
   }
   const saveSeats = async draft => {
-    setConcerts(current =>
-      current.map(c => c.id === draft.id
-        ? { ...c, zones: draft.zones, layoutObjects: draft.layoutObjects, ticketLayoutObjects: draft.ticketLayoutObjects || [] }
-        : c
-      )
-    )
-    await saveConcertLayout(draft.id, draft.zones || [], draft.layoutObjects || [], draft.ticketLayoutObjects || [])
-    setToast('บันทึกผังและตำแหน่งที่นั่งเรียบร้อยแล้ว')
+    try {
+      const layout = await saveConcertLayout(draft.id, draft.zones || [], draft.layoutObjects || [])
+      setConcerts(current => current.map(c => c.id === draft.id ? { ...c, zones: layout.zones, layoutObjects: layout.layoutObjects } : c))
+      setToast('บันทึกผังและตำแหน่งที่นั่งเรียบร้อยแล้ว')
+    } catch {
+      setToast('บันทึกผังไม่สำเร็จ อาจมีบัตรอ้างอิงที่นั่งอยู่หรือ API ไม่พร้อมใช้งาน')
+    }
+  }
+  const saveTickets = async draft => {
+    try {
+      const result = await saveTicketDesign(draft.id, draft.ticketLayoutObjects || [])
+      setConcerts(current => current.map(c => c.id === draft.id ? { ...c, ticketLayoutObjects: result.objects } : c))
+      setToast('บันทึกแบบบัตรเรียบร้อยแล้ว')
+    } catch {
+      setToast('บันทึกแบบบัตรไม่สำเร็จ กรุณาตรวจสอบ API และลองอีกครั้ง')
+    }
+  }
+  const clearLayout = async () => {
+    if (!deleting) return
+    try {
+      await clearConcertLayout(deleting.id)
+      setConcerts(current => current.map(c => c.id === deleting.id ? { ...c, zones: [], layoutObjects: [] } : c))
+      setDeleting(null)
+      setToast('ล้างผังที่นั่งแล้ว โดยยังเก็บข้อมูลคอนเสิร์ตและแบบบัตรไว้')
+    } catch {
+      setDeleting(null)
+      setToast('ล้างผังไม่สำเร็จ เพราะมีบัตรอ้างอิงที่นั่งอยู่หรือ API ไม่พร้อมใช้งาน')
+    }
   }
   const cancel = () => {
     const item = concerts.find(c => c.id === editing)
     if (item && !item.name) setConcerts(current => current.filter(c => c.id !== editing))
     setEditing(null)
   }
-  return <div className="app-shell venue-seat-app">{active ? <Editor source={active} onCancel={cancel} onSave={save} onSeatSave={saveSeats}/> : <ConcertList concerts={concerts} onAdd={startNew} onEdit={concert => setEditing(concert.id)} onDelete={setDeleting}/>} {deleting && <DeleteModal concert={deleting} onClose={() => setDeleting(null)} onConfirm={() => { const cleared = { ...deleting, zones: [], layoutObjects: [] }; setConcerts(concerts.map(c => c.id === deleting.id ? cleared : c)); setDeleting(null); setToast('ล้างผังที่นั่งแล้ว โดยยังเก็บข้อมูลคอนเสิร์ตไว้') }}/>} {toast && <Toast message={toast} onDone={() => setToast('')}/>}</div>
+  return <div className="app-shell venue-seat-app">{active ? <Editor source={active} onCancel={cancel} onSave={save} onSeatSave={saveSeats} onTicketSave={saveTickets}/> : <ConcertList concerts={concerts} onAdd={startNew} onEdit={concert => setEditing(concert.id)} onDelete={setDeleting}/>} {deleting && <DeleteModal concert={deleting} onClose={() => setDeleting(null)} onConfirm={clearLayout}/>} {toast && <Toast message={toast} onDone={() => setToast('')}/>}</div>
 }
-
-

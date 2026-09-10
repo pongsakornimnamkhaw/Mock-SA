@@ -18,10 +18,9 @@ const request = async (path, options = {}) => {
 export const registrationApi = {
   listConcerts: () => request('/ticket-planning/concerts'),
   dashboard: concertId => request(`/event-registration/concerts/${encodeURIComponent(concertId)}/dashboard`),
-  lookupTicket: ticketId => request(`/event-registration/tickets/${encodeURIComponent(ticketId)}`),
-  checkIn: (ticketId, gateId) => request('/event-registration/check-ins', {
+  lookupTicket: (ticketId, concertId) => request(`/event-registration/tickets/${encodeURIComponent(ticketId)}?concertId=${encodeURIComponent(concertId)}`),
+  checkIn: (ticketId, gateId, concertId) => request('/event-registration/check-ins', {
     method: 'POST',
-    body: JSON.stringify({ ticketId, gateId }),
+    body: JSON.stringify({ ticketId, gateId, concertId }),
   }),
 }
-
