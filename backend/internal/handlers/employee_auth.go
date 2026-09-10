@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -55,6 +56,7 @@ func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
 	group.Post("/logout", h.logout)
 	group.Get("/me", h.requireEmployee, h.getMe)
 	registerEmployeeAccountRoutes(app, db, h)
+	registerEmployeePasswordResetRoutes(app, db, h)
 }
 
 func employeeAuthAccountView(u models.User) employeeAccountDTO {
@@ -113,7 +115,12 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 	err := query.First(&user).Error
 	if err != nil {
 		// หากเป็นบัญชีทดสอบเริ่มต้นของฝ่ายขาย (B6728786)
-		if strings.EqualFold(username, "B6728786") || strings.EqualFold(username, "CD-1234") || strings.Contains(strings.ToLower(username), "sales") {
+		if errors.Is(err, gorm.ErrRecordNotFound) && (strings.EqualFold(username, "B6728786") || strings.EqualFold(username, "CD-1234") || strings.Contains(strings.ToLower(username), "sales")) {
+			// A missing alias must never issue a session for a persisted account.
+			var persisted models.User
+			if lookupErr := h.db.Select("user_id").First(&persisted, "user_id = ?", "EMP-B6728786").Error; !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง"})
+			}
 			user = models.User{
 				UserID:     "EMP-B6728786",
 				FirstName:  "พงกรศกร",
@@ -128,11 +135,8 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 		} else {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง"})
 		}
-	} else if user.PasswordHash != "" {
-		// ตรวจสอบ password hash
-		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil && password != "Admin1234!" && password != "Demo1234!" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "รหัสผ่านไม่ถูกต้อง"})
-		}
+	} else if !employeeLoginPasswordMatches(user.PasswordHash, password) {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "รหัสผ่านไม่ถูกต้อง"})
 	}
 
 	// สร้าง Session พนักงาน
@@ -154,6 +158,10 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 		"message": "เข้าสู่ระบบพนักงานสำเร็จ",
 		"data":    employeeAuthAccountView(user),
 	})
+}
+
+func employeeLoginPasswordMatches(hash, password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
 func (h *employeeAuthHandler) logout(c *fiber.Ctx) error {

@@ -1,13 +1,20 @@
 package handlers
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
+
+func employeeSessionExpired(description string, now time.Time) bool {
+	expiresAt, err := strconv.ParseInt(description, 10, 64)
+	return err != nil || expiresAt <= now.Unix()
+}
 
 func employeeTokenFromRequest(c *fiber.Ctx) string {
 	if token := c.Cookies(employeeSessionCookie); token != "" {
@@ -27,6 +34,10 @@ func loadEmployeeFromRequest(c *fiber.Ctx, db *gorm.DB) (models.User, error) {
 	}
 	var session models.EmpActivityLogs
 	if db == nil || db.Where("action_type = ? AND target_id = ?", employeeSessionAction, hashEmployeeSessionToken(token)).First(&session).Error != nil {
+		return models.User{}, fiber.ErrUnauthorized
+	}
+	if employeeSessionExpired(session.Description, time.Now().UTC()) {
+		_ = db.Delete(&session).Error
 		return models.User{}, fiber.ErrUnauthorized
 	}
 	var user models.User
