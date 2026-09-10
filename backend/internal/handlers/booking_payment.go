@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -84,6 +85,11 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกชื่อและอีเมลผู้จอง"})
 	}
 
+	// การจองต้องระบุที่นั่งเสมอ — ไม่งั้นจะได้ booking ที่ไม่รู้ว่ากินที่นั่งใบไหน
+	if len(input.Seats) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกที่นั่งอย่างน้อย 1 ที่"})
+	}
+
 	now := time.Now().UTC()
 	dateStr := now.Format("20060102")
 	randomSuffix := fmt.Sprintf("%04d", rand.Intn(10000))
@@ -126,36 +132,90 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		TotalPrice:     input.TotalPrice,
 	}
 
-	if err := h.db.Create(&booking).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกการจองได้: " + err.Error()})
+	// เตรียมผังที่นั่งไว้ก่อน (คอนเสิร์ตสาธิตที่ยังไม่มีผังจะได้ผังเริ่มต้น)
+	if err := ensureZoneSeats(h.db, input.ConcertID, input.ZoneID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถเตรียมผังที่นั่งได้"})
 	}
 
-	// บันทึกสลิปการโอนเงิน (Payment)
-	if input.SlipFileName != "" || input.SlipDataURL != "" {
-		paymentID := fmt.Sprintf("PY-%s-%s", dateStr, randomSuffix)
-		var fileBytes []byte
-		if strings.Contains(input.SlipDataURL, "base64,") {
-			parts := strings.Split(input.SlipDataURL, "base64,")
-			if len(parts) == 2 {
-				decoded, _ := base64.StdEncoding.DecodeString(parts[1])
-				fileBytes = decoded
+	var category models.TicketCategory
+	_ = h.db.Where("zone_id = ?", input.ZoneID).First(&category).Error
+
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&booking).Error; err != nil {
+			return err
+		}
+
+		seats, err := reserveSeats(tx, input.ConcertID, input.ZoneID, input.Seats)
+		if err != nil {
+			return err
+		}
+
+		tickets := make([]models.Ticket, 0, len(seats))
+		for i := range seats {
+			label := seats[i].Label()
+			ticketID := fmt.Sprintf("TK-%s-%s", bookingID, label)
+			tickets = append(tickets, models.Ticket{
+				TicketID:       ticketID,
+				NameConcert:    input.ConcertTitle,
+				TicketDateTime: now,
+				PriceTicket:    input.UnitPrice,
+				StatusTicket:   ticketStatusPending,
+				SeatID:         seats[i].SeatID,
+				SeatLabel:      label,
+				CategoryID:     category.CategoryID,
+				BookingID:      bookingID,
+				QrCodeData: fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s",
+					ticketID, input.ConcertTitle, input.ZoneID, label, input.CustomerName),
+			})
+		}
+		if len(tickets) > 0 {
+			if err := tx.Create(&tickets).Error; err != nil {
+				return err
+			}
+			booking.Tickets = tickets
+		}
+
+		// บันทึกสลิปการโอนเงิน (Payment)
+		if input.SlipFileName != "" || input.SlipDataURL != "" {
+			paymentID := fmt.Sprintf("PY-%s-%s", dateStr, randomSuffix)
+			var fileBytes []byte
+			if strings.Contains(input.SlipDataURL, "base64,") {
+				parts := strings.Split(input.SlipDataURL, "base64,")
+				if len(parts) == 2 {
+					decoded, _ := base64.StdEncoding.DecodeString(parts[1])
+					fileBytes = decoded
+				}
+			}
+
+			fileName := input.SlipFileName
+			if fileName == "" {
+				fileName = "payment_slip.jpg"
+			}
+
+			if err := tx.Create(&models.Payment{
+				PaymentID:     paymentID,
+				EvidenceFile:  fileBytes,
+				FileName:      fileName,
+				PaymentStatus: "รอตรวจสอบ",
+				BookingID:     bookingID,
+				CreatedAt:     now,
+			}).Error; err != nil {
+				return err
 			}
 		}
 
-		fileName := input.SlipFileName
-		if fileName == "" {
-			fileName = "payment_slip.jpg"
-		}
+		return nil
+	})
 
-		payment := models.Payment{
-			PaymentID:     paymentID,
-			EvidenceFile:  fileBytes,
-			FileName:      fileName,
-			PaymentStatus: "รอตรวจสอบ",
-			BookingID:     bookingID,
-			CreatedAt:     now,
+	if err != nil {
+		var conflict seatConflictError
+		if errors.As(err, &conflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error":             conflict.Error(),
+				"unavailable_seats": conflict.Labels,
+			})
 		}
-		_ = h.db.Create(&payment).Error
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกการจองได้: " + err.Error()})
 	}
 
 	// Log customer activity
@@ -191,50 +251,6 @@ func (h *bookingPaymentHandler) getCustomerBookings(c *fiber.Ctx) error {
 	var bookings []models.Booking
 	if err := query.Find(&bookings).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดรายการจองได้"})
-	}
-
-	// Auto-repair: หากรายการจองอนุมัติแล้ว (issued) แต่ยังไม่มี tickets ให้สร้างทันที
-	for idx, b := range bookings {
-		if b.Status == "issued" && len(b.Tickets) == 0 {
-			qty := b.Quantity
-			if qty <= 0 {
-				qty = 1
-			}
-			zoneID := b.ZoneID
-			if zoneID == "" {
-				zoneID = "ZONE-A"
-			}
-			tier := b.TierName
-			if tier == "" {
-				tier = "Standard"
-			}
-			_ = h.db.Where("zone_id = ?", zoneID).FirstOrCreate(&models.Zone{ZoneID: zoneID, ZoneType: tier, Capacity: 1000}).Error
-			concertID := b.ConcertID
-			if concertID == "" {
-				concertID = "C001"
-			}
-			for i := 1; i <= qty; i++ {
-				seatLabel := fmt.Sprintf("%s-%02d", zoneID, i)
-				seatID := fmt.Sprintf("ST-%s-%02d", zoneID, i)
-				_ = h.db.Where("seat_id = ?", seatID).FirstOrCreate(&models.Seat{
-					SeatID: seatID, SeatRow: 1, SeatColumn: i, StatusSeat: "ไม่ว่าง", ConcertID: concertID, ZoneID: zoneID,
-				}).Error
-				ticketID := fmt.Sprintf("TCK-%s-%s-%02d-%04d", concertID, zoneID, i, rand.Intn(10000))
-				qrCodePayload := fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s", ticketID, b.ConcertTitle, zoneID, seatLabel, b.CustomerName)
-				ticket := models.Ticket{
-					TicketID:       ticketID,
-					NameConcert:    b.ConcertTitle,
-					TicketDateTime: b.BookingDate,
-					StatusTicket:   "พร้อมใช้งาน",
-					SeatID:         seatID,
-					SeatLabel:      seatLabel,
-					BookingID:      b.BookingID,
-					QrCodeData:     qrCodePayload,
-				}
-				_ = h.db.Create(&ticket).Error
-				bookings[idx].Tickets = append(bookings[idx].Tickets, ticket)
-			}
-		}
 	}
 
 	return c.JSON(fiber.Map{"data": bookings})
@@ -299,65 +315,13 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 	// อัปเดตสถานะ Payment เป็น อนุมัติ
 	_ = h.db.Model(&models.Payment{}).Where("booking_id = ?", bookingID).Update("payment_status", "อนุมัติ").Error
 
-	// UP3: สร้างตั๋ว E-Ticket พร้อม QR Code (หากยังไม่มี)
-	var existingTickets []models.Ticket
-	h.db.Where("booking_id = ?", bookingID).Find(&existingTickets)
-
-	qty := booking.Quantity
-	if qty <= 0 {
-		qty = 1
-	}
-
-	if len(existingTickets) == 0 {
-		zoneID := booking.ZoneID
-		if zoneID == "" {
-			zoneID = "ZONE-A"
-		}
-		tier := booking.TierName
-		if tier == "" {
-			tier = "Standard"
-		}
-		// ตรวจสอบและสร้าง Zone หากยังไม่มี
-		_ = h.db.Where("zone_id = ?", zoneID).FirstOrCreate(&models.Zone{
-			ZoneID:   zoneID,
-			ZoneType: tier,
-			Capacity: 1000,
-		}).Error
-
-		concertID := booking.ConcertID
-		if concertID == "" {
-			concertID = "C001"
-		}
-
-		for i := 1; i <= qty; i++ {
-			seatLabel := fmt.Sprintf("%s-%02d", zoneID, i)
-			seatID := fmt.Sprintf("ST-%s-%02d", zoneID, i)
-
-			// ตรวจสอบและสร้าง Seat เพื่อให้ตรงตาม Foreign Key ของตาราง tickets
-			_ = h.db.Where("seat_id = ?", seatID).FirstOrCreate(&models.Seat{
-				SeatID:     seatID,
-				SeatRow:    1,
-				SeatColumn: i,
-				StatusSeat: "ไม่ว่าง",
-				ConcertID:  concertID,
-				ZoneID:     zoneID,
-			}).Error
-
-			ticketID := fmt.Sprintf("TCK-%s-%s-%02d-%04d", concertID, zoneID, i, rand.Intn(10000))
-			qrCodePayload := fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s", ticketID, booking.ConcertTitle, zoneID, seatLabel, booking.CustomerName)
-
-			ticket := models.Ticket{
-				TicketID:       ticketID,
-				NameConcert:    booking.ConcertTitle,
-				TicketDateTime: now,
-				StatusTicket:   "พร้อมใช้งาน",
-				SeatID:         seatID,
-				SeatLabel:      seatLabel,
-				BookingID:      bookingID,
-				QrCodeData:     qrCodePayload,
-			}
-			_ = h.db.Create(&ticket).Error
-		}
+	// UP3: ออกบัตร E-Ticket — ตั๋วถูกสร้างไว้ตั้งแต่ตอนจองแล้ว ที่นี่แค่เปลี่ยนสถานะ
+	if err := h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Updates(map[string]any{
+			"status_ticket":    ticketStatusIssued,
+			"ticket_date_time": now,
+		}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถออกบัตรได้"})
 	}
 
 	// บันทึกประวัติการตรวจสอบลง emp_activity_logs (Audit Trail)
@@ -409,6 +373,16 @@ func (h *bookingPaymentHandler) rejectBooking(c *fiber.Ctx) error {
 	}
 
 	_ = h.db.Model(&models.Payment{}).Where("booking_id = ?", bookingID).Update("payment_status", "ปฏิเสธ").Error
+
+	// คืนที่นั่งให้ลูกค้าคนอื่นจองต่อได้ และยกเลิกตั๋วของการจองนี้
+	var seatIDs []string
+	if err := h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Pluck("seat_id", &seatIDs).Error; err == nil && len(seatIDs) > 0 {
+		_ = h.db.Model(&models.Seat{}).Where("seat_id IN ?", seatIDs).
+			Update("status_seat", seatStatusAvailable).Error
+	}
+	_ = h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Update("status_ticket", ticketStatusCancelled).Error
 
 	// บันทึก Audit Log
 	_ = h.db.Create(&models.EmpActivityLogs{

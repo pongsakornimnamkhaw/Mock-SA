@@ -48,6 +48,7 @@ func main() {
 	handlers.RegisterCustomerAccountRoutes(app, config.DB)
 	handlers.RegisterEmployeeAuthRoutes(app, config.DB)
 	handlers.RegisterBookingPaymentRoutes(app, config.DB)
+	handlers.RegisterSeatInventoryRoutes(app, config.DB)
 
 	// Start Server
 	port := os.Getenv("PORT")

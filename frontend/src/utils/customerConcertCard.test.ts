@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CustomerPromotionConcert } from '@/types/customerPromotion';
 import { formatThaiDateRange } from '@/utils/customerPromotion';
 import { posterForConcert, toCustomerEvent } from '@/utils/customerConcertCard';
+import { ticketThemeForConcertId } from '@/utils/posterPalette';
 
 const makeConcert = (overrides: Partial<CustomerPromotionConcert> = {}): CustomerPromotionConcert => ({
     concert_id: 'CC0001',
@@ -63,5 +64,24 @@ describe('toCustomerEvent', () => {
     it('never marks a database concert as new', () => {
         // ฟิลด์ isNew ใช้กับข้อมูลประกาศจำลองเท่านั้น ฐานข้อมูลไม่มีแนวคิดนี้
         expect(toCustomerEvent(makeConcert()).isNew).toBeUndefined();
+    });
+});
+
+describe('poster and ticket colour pairing', () => {
+    it('gives concerts that share a ticket colour the same poster image', () => {
+        const postersByTheme = new Map<string, string>();
+
+        for (const concertId of ['CC0001', 'CC0002', 'CC0003', 'CC0004', 'CC0005', 'CC0006', 'CC0007', 'CC0008']) {
+            const poster = posterForConcert(makeConcert({ concert_id: concertId }));
+            const themeId = ticketThemeForConcertId(concertId).id;
+            const alreadySeen = postersByTheme.get(themeId);
+            if (alreadySeen === undefined) {
+                postersByTheme.set(themeId, poster);
+            } else {
+                expect(poster).toBe(alreadySeen);
+            }
+        }
+
+        expect(postersByTheme.size).toBeGreaterThan(1);
     });
 });

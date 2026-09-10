@@ -5,13 +5,10 @@ import {
   Card,
   CardContent,
   Button,
-  TextField,
-  InputAdornment,
   Paper,
   Stack,
   Link as MuiLink
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AddIcon from '@mui/icons-material/Add';
 import { Link } from 'react-router-dom';
@@ -19,26 +16,59 @@ import NotificationBell from '@/components/Notification/NotificationBell';
 
 import { flux, pulse, celestial } from '@/assets/Poster';
 
+const concerts = [
+  {
+    title: 'Neon Flux Festival 2024',
+    date: '16-18 สิงหาคม 2569',
+    time: '',
+    venue: 'Metroplex Arena',
+    poster: flux,
+    status: 'ยืนยันแล้ว'
+  },
+  {
+    title: 'NEON PULSE',
+    date: '28 ตุลาคม 2569',
+    time: '',
+    venue: 'THE Arena LONDON',
+    poster: pulse,
+    status: 'วางแผน'
+  },
+  {
+    title: 'Celestial Sounds',
+    date: '26 ตุลาคม 2569',
+    time: '20.00 - 23.00 น.',
+    venue: 'THE Aurora Concert Hall',
+    poster: celestial,
+    status: 'กำลังแสดง'
+  }
+];
+
 const DashboardPage = () => {
   return (
     <Box sx={{ p: 1, fontFamily: "'Noto Sans Thai', sans-serif" }}>
       {/* Top Search & Actions Bar */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2, mb: 3 }}>
-        <TextField
-          placeholder="ค้นหาคอนเสิร์ต"
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Button
+          component={Link}
+          to="/concert-search"
           variant="outlined"
-          size="small"
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" />
-                </InputAdornment>
-              ),
-            },
+          sx={{
+            minWidth: 230,
+            minHeight: 52,
+            px: 3,
+            borderRadius: 5,
+            borderWidth: 2,
+            borderColor: '#1a237e',
+            color: '#1a237e',
+            bgcolor: '#fff',
+            textTransform: 'none',
+            fontWeight: 'bold',
+            fontSize: '18px',
+            '&:hover': { borderWidth: 2, bgcolor: '#f5f3ff', borderColor: '#1a237e' }
           }}
-          sx={{ backgroundColor: '#fff', borderRadius: 5, width: 280, '& .MuiOutlinedInput-root': { borderRadius: 5, fontSize: '18px' } }}
-        />
+        >
+          ค้นหาคอนเสิร์ต
+        </Button>
 
         <NotificationBell />
 
@@ -129,35 +159,13 @@ const DashboardPage = () => {
         <Typography sx={{ fontWeight: 'bold', color: '#1a1a2e', fontSize: '28px' }}>
           คอนเสิร์ต
         </Typography>
-        <MuiLink component={Link} to="/search-concert" sx={{ textDecoration: 'none', color: '#1a237e', fontWeight: 'bold', fontSize: '18px' }}>
+        <MuiLink component={Link} to="/concert-search" sx={{ textDecoration: 'none', color: '#1a237e', fontWeight: 'bold', fontSize: '18px' }}>
           คอนเสิร์ตทั้งหมด →
         </MuiLink>
       </Box>
 
       <Grid container spacing={2.5} sx={{ mb: 4 }}>
-        {[
-          {
-            title: 'Neon Flux Festival 2024',
-            date: '16-18 สิงหาคม 2569',
-            time: '',
-            venue: 'Metroplex Arena',
-            poster: flux
-          },
-          {
-            title: 'NEON PULSE',
-            date: '28 ตุลาคม 2569',
-            time: '',
-            venue: 'THE Arena LONDON',
-            poster: pulse
-          },
-          {
-            title: 'Celestial Sounds',
-            date: '26 ตุลาคม 2569',
-            time: '20.00 - 23.00 น.',
-            venue: 'THE Aurora Concert Hall',
-            poster: celestial
-          }
-        ].map((concert, index) => (
+        {concerts.map((concert, index) => (
           <Grid size={{ xs: 12, md: 4 }} key={index}>
             <Paper
               elevation={0}
