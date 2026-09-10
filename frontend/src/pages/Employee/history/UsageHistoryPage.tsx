@@ -26,20 +26,53 @@ import Pagination from '../../../components/ui/Pagination';
 import type { ActivityLog } from '../../../types/promotion';
 
 type HistoryLog = ActivityLog & { target_id?: string };
+type HistoryTab = 'staff' | 'user';
+
+const accountActivityTypes: Record<HistoryTab, readonly string[]> = {
+  staff: ['สร้างบัญชี', 'เข้าสู่ระบบ', 'แก้ไขบัญชี', 'เปลี่ยนสิทธิ์', 'เปลี่ยนรหัสผ่าน', 'รีเซ็ตรหัสผ่าน', 'ปิดใช้งานบัญชี'],
+  user: ['สร้างบัญชี', 'เข้าสู่ระบบ', 'แก้ไขบัญชี', 'เปลี่ยนรหัสผ่าน', 'รีเซ็ตรหัสผ่าน'],
+};
+
+const thailandTimeZone = 'Asia/Bangkok';
+const thailandDateTimeFormatter = new Intl.DateTimeFormat('th-TH-u-nu-latn', {
+  timeZone: thailandTimeZone,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+const thailandDateKeyFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: thailandTimeZone,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+function parseLogDate(isoDate: string) {
+  const value = isoDate.trim();
+  const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  return new Date(hasTimeZone ? value : `${value}+07:00`);
+}
 
 function localDateKey(isoDate: string) {
-  const date = new Date(isoDate);
+  const date = parseLogDate(isoDate);
   if (Number.isNaN(date.getTime())) return '';
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const parts = Object.fromEntries(
+    thailandDateKeyFormatter.formatToParts(date).map(part => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function formatLogDate(isoDate: string) {
-  const date = new Date(isoDate);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('th-TH');
+  const date = parseLogDate(isoDate);
+  return Number.isNaN(date.getTime()) ? '—' : `${thailandDateTimeFormatter.format(date)} น.`;
 }
 
 export default function UsageHistoryPage() {
-  const [tab, setTab] = useState<'staff' | 'user'>('staff');
+  const [tab, setTab] = useState<HistoryTab>('staff');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('');
   const [activityType, setActivityType] = useState('all');
@@ -59,7 +92,7 @@ export default function UsageHistoryPage() {
     setLogs([]);
     const load = async () => {
       try {
-        const result = await managementApi.activityLogs(tab);
+        const result = await managementApi.activityLogs(tab, 'account');
         if (active) setLogs(result.data);
       } catch (error) {
         if (active) setLoadError(error instanceof Error ? error.message || 'โหลดประวัติการใช้งานไม่สำเร็จ' : 'โหลดประวัติการใช้งานไม่สำเร็จ');
@@ -71,7 +104,7 @@ export default function UsageHistoryPage() {
     return () => { active = false; };
   }, [tab, reloadKey]);
 
-  const handleTabChange = (_event: SyntheticEvent, newValue: 'staff' | 'user') => {
+  const handleTabChange = (_event: SyntheticEvent, newValue: HistoryTab) => {
     if (newValue === tab) return;
     setLoading(true);
     setLoadError('');
@@ -87,46 +120,36 @@ export default function UsageHistoryPage() {
   const filteredLogs = useMemo(() => {
     const query = filters.searchTerm.trim().toLowerCase();
     return logs.filter(log => {
+      const isAccountActivity = accountActivityTypes[tab].includes(log.activity_type);
       const matchSearch = log.user_name.toLowerCase().includes(query) ||
                           log.user_code.toLowerCase().includes(query);
       const matchDate = !filters.dateRange || localDateKey(log.date) === filters.dateRange;
       const matchType = filters.activityType === 'all' ||
-                        (tab === 'user' && filters.activityType === 'ผู้ใช้ทั้งหมด') ||
                         log.activity_type === filters.activityType;
       
-      return matchSearch && matchDate && matchType;
+      return isAccountActivity && matchSearch && matchDate && matchType;
     });
   }, [logs, filters, tab]);
 
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
   const currentPage = Math.min(page, totalPages);
   const paginatedLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const originalActivityTypes = tab === 'staff'
-    ? ['อัปเดต', 'ลบ', 'สร้าง', 'อนุมัติ']
-    : ['ผู้ใช้ทั้งหมด', 'ซื้อบัตร', 'ติดต่อโฆษณา', 'ซื้อบัตรคอนเสิร์ต', 'ประสานงาน'];
-  const activityTypes = [...new Set([...originalActivityTypes, ...logs.map(log => log.activity_type)])];
+  const activityTypes = accountActivityTypes[tab];
 
   useEffect(() => {
     if (!loading && !loadError) setPage(currentPage);
   }, [currentPage, loading, loadError]);
 
   const getBadgeColor = (type: string) => {
-    if (tab === 'staff') {
-      switch (type) {
-        case 'อัปเดต': return '#f59e0b';
-        case 'ลบ': return '#ef4444';
-        case 'สร้าง': return '#22c55e';
-        case 'อนุมัติ': return '#f97316';
-        default: return '#6b7280';
-      }
-    } else {
-      switch (type) {
-        case 'ซื้อบัตร': return '#22c55e';
-        case 'ติดต่อโฆษณา': return '#7c3aed';
-        case 'ซื้อบัตรคอนเสิร์ต': return '#3b82f6';
-        case 'ประสานงาน': return '#f97316';
-        default: return '#6b7280';
-      }
+    switch (type) {
+      case 'สร้างบัญชี': return '#16a34a';
+      case 'เข้าสู่ระบบ': return '#2563eb';
+      case 'แก้ไขบัญชี': return '#7c3aed';
+      case 'เปลี่ยนสิทธิ์': return '#d97706';
+      case 'เปลี่ยนรหัสผ่าน':
+      case 'รีเซ็ตรหัสผ่าน': return '#ea580c';
+      case 'ปิดใช้งานบัญชี': return '#dc2626';
+      default: return '#6b7280';
     }
   };
 
@@ -135,7 +158,7 @@ export default function UsageHistoryPage() {
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 800, color: '#1e293b' }}>
-          ตรวจสอบประวัติการใช้งาน
+          ประวัติกิจกรรมบัญชี
         </Typography>
       </Box>
 
@@ -167,14 +190,14 @@ export default function UsageHistoryPage() {
           </Box>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <Box sx={{ flex: 1, minWidth: 200 }}>
-              <Typography variant="body2" sx={{ mb: 1 }}>ผู้ใช้งาน</Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>บัญชี</Typography>
               <TextField
                 fullWidth
                 size="small"
-                placeholder="รหัสพนักงาน หรือ ชื่อ"
+                placeholder={tab === 'staff' ? 'รหัสพนักงาน หรือ ชื่อ' : 'รหัสผู้ใช้งาน หรือ ชื่อ'}
                 value={searchTerm}
                 disabled={loading || !!loadError}
-                slotProps={{ htmlInput: { 'aria-label': 'ผู้ใช้งาน' } }}
+                slotProps={{ htmlInput: { 'aria-label': 'บัญชี' } }}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </Box>
@@ -223,9 +246,9 @@ export default function UsageHistoryPage() {
           <TableHead>
             <TableRow sx={{ backgroundColor: '#f8fafc' }}>
               <TableCell>วัน-เวลา</TableCell>
-              <TableCell>ผู้ใช้งาน</TableCell>
+              <TableCell>บัญชี</TableCell>
               <TableCell>ประเภทกิจกรรม</TableCell>
-              <TableCell sx={{ width: 180, whiteSpace: 'nowrap' }}>Id ที่เกี่ยวข้อง</TableCell>
+              <TableCell sx={{ width: 180, whiteSpace: 'nowrap' }}>รหัสบัญชี</TableCell>
               <TableCell>รายละเอียด</TableCell>
             </TableRow>
           </TableHead>
