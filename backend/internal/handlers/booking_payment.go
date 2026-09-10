@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/mailer"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -17,11 +18,18 @@ import (
 )
 
 type bookingPaymentHandler struct {
-	db *gorm.DB
+	db     *gorm.DB
+	mailer mailer.Mailer
 }
 
+// RegisterBookingPaymentRoutes ลงทะเบียน route สำหรับ production ใช้ mailer จริงจาก env
 func RegisterBookingPaymentRoutes(app *fiber.App, db *gorm.DB) {
-	h := &bookingPaymentHandler{db: db}
+	registerBookingPaymentRoutes(app, db, mailer.FromEnv())
+}
+
+// registerBookingPaymentRoutes รับ mailer แยกต่างหากเพื่อให้เทสต์ inject ตัวปลอมได้
+func registerBookingPaymentRoutes(app *fiber.App, db *gorm.DB, sender mailer.Mailer) {
+	h := &bookingPaymentHandler{db: db, mailer: sender}
 
 	// Customer Booking Endpoints
 	app.Post("/api/bookings", h.createBooking)
@@ -458,6 +466,11 @@ func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ไม่สามารถส่งบัตรได้เนื่องจากยังไม่อนุมัติการออกบัตร"})
 	}
 
+	subject, body := buildTicketResendEmail(booking)
+	if err := h.mailer.Send(booking.CustomerEmail, subject, body); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถส่งอีเมลได้"})
+	}
+
 	// บันทึกกิจกรรมขอส่งบัตรซ้ำ
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
@@ -471,6 +484,25 @@ func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
 		"message": fmt.Sprintf("ส่งบัตรเข้าชมซ้ำไปยังอีเมล %s สำเร็จ (ใช้รหัสและ QR Code เดิม)", booking.CustomerEmail),
 		"data":    booking.Tickets,
 	})
+}
+
+// buildTicketResendEmail สร้างหัวข้อ+เนื้อหาอีเมลส่งบัตรซ้ำ จากข้อมูลจริงใน Booking/Ticket
+// ไม่แนบรูปภาพ/QR Code (ต้องมี library เพิ่มซึ่งนอกขอบเขต) — บอกให้เข้าเว็บไปดู QR Code ที่หน้า "บัตรของฉัน" แทน
+func buildTicketResendEmail(booking models.Booking) (string, string) {
+	subject := fmt.Sprintf("บัตรเข้าชม %s (ส่งซ้ำ)", booking.ConcertTitle)
+	lines := []string{
+		fmt.Sprintf("นี่คือบัตรเข้าชม %s ของคุณ (รหัสการจอง %s)", booking.ConcertTitle, booking.BookingID),
+		"",
+		"รายการบัตร:",
+	}
+	for _, ticket := range booking.Tickets {
+		lines = append(lines, fmt.Sprintf("- ที่นั่ง %s (รหัสตั๋ว %s)", ticket.SeatLabel, ticket.TicketID))
+	}
+	lines = append(lines,
+		"",
+		"เข้าสู่ระบบแล้วไปที่หน้า \"บัตรของฉัน\" เพื่อดู QR Code สำหรับสแกนเข้างาน",
+	)
+	return subject, strings.Join(lines, "\r\n")
 }
 
 // 8. Serve Slip Image
