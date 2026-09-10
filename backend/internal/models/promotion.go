@@ -18,7 +18,9 @@ type Promotion struct {
 	UpdatedAt      time.Time `gorm:"type:timestamp without time zone;autoUpdateTime" json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 	TotalRevenue   float64   `gorm:"type:double precision;not null" json:"total_revenue"`
+
 	ConcertID      string    `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 
 	// Relations
 	PromotionApprovals []PromotionApproval `gorm:"foreignKey:PromotionID" json:"promotion_approvals,omitempty"`
@@ -47,7 +49,9 @@ type PromotionApproval struct {
 	StatusApproved string    `gorm:"type:varchar(50);not null" json:"status_approved"`
 	Remark         string    `gorm:"type:text;not null" json:"remark"`
 	UserID         *string   `gorm:"type:varchar(50)" json:"user_id"`
+	
 	PromotionID    string    `gorm:"type:varchar(50);not null" json:"promotion_id"`
+	Promotion Promotion `gorm:"foreignKey:PromotionID;references:PromotionID"`
 }
 
 func (a *PromotionApproval) BeforeCreate(tx *gorm.DB) (err error) {
@@ -62,7 +66,9 @@ type PromoCondition struct {
 	ConditionID     string `gorm:"primaryKey;type:varchar(50);not null" json:"condition_id"`
 	ConditionDetail string `gorm:"type:text;not null" json:"condition_detail"`
 	MaxUsagePerUser int    `gorm:"type:int;not null" json:"max_usage_per_user"`
+
 	PromotionID     string `gorm:"type:varchar(50);not null" json:"promotion_id"`
+	Promotion Promotion `gorm:"foreignKey:PromotionID;references:PromotionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (c *PromoCondition) BeforeCreate(tx *gorm.DB) (err error) {
@@ -80,7 +86,9 @@ type DiscountInfo struct {
 	MinOrderValue     float64 `gorm:"type:double precision;not null" json:"min_order_value"`
 	MaxDiscountAmount float64 `gorm:"type:double precision;not null" json:"max_discount_amount"`
 	PromoCode         string  `gorm:"type:varchar(100);not null" json:"promo_code"`
+
 	PromotionID       string  `gorm:"type:varchar(50);not null" json:"promotion_id"`
+	Promotion Promotion `gorm:"foreignKey:PromotionID;references:PromotionID"`
 }
 
 func (d *DiscountInfo) BeforeCreate(tx *gorm.DB) (err error) {
@@ -97,7 +105,9 @@ type Quota struct {
 	EndDate     time.Time `gorm:"type:date;not null" json:"end_date"`
 	TicketQuota int       `gorm:"type:int;not null" json:"ticket_quota"`
 	UsedQuota   int       `gorm:"type:int;not null" json:"used_quota"`
+
 	PromotionID string    `gorm:"type:varchar(50);not null" json:"promotion_id"`
+	Promotion Promotion `gorm:"foreignKey:PromotionID;references:PromotionID"`
 }
 
 func (q *Quota) BeforeCreate(tx *gorm.DB) (err error) {
@@ -117,5 +127,7 @@ type PromotionUsageLog struct {
 	PurchasedZone string `json:"purchased_zone"`
 	FinalAmount float64 `json:"final_amount"`
 	DiscountAmount float64 `json:"discount_amount"`
+
 	PromotionID string `gorm:"type:varchar(50);not null;index" json:"promotion_id"`
+	Promotion Promotion `gorm:"foreignKey:PromotionID;references:PromotionID"`
 }
