@@ -1,6 +1,7 @@
 // src/components/layout/Sidebar.tsx
 import { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -340,19 +341,40 @@ export default function Sidebar() {
       {/* User */}
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)' }} />
       <Box sx={{ p: '14px 16px', display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Avatar sx={{ width: 36, height: 36, background: 'linear-gradient(135deg,#10b981,#059669)', fontSize: 14, fontWeight: 700 }}>
-          {employee?.firstName?.charAt(0) || 'พ'}
-        </Avatar>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-            {employee ? employee.name : 'พงกรศกร (B6728786)'}
-          </Typography>
-          <Typography sx={{ color: '#94a3b8', fontSize: '0.72rem' }}>
-            {employee?.department || 'ฝ่ายขาย'} · {employee?.employeeCode || 'B6728786'}
-          </Typography>
-        </Box>
+        <ButtonBase
+          onClick={() => navigate('/employee/account')}
+          sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            borderRadius: 2,
+            p: '4px 6px',
+            minWidth: 0,
+            textAlign: 'left',
+            '&:hover': { background: 'rgba(255,255,255,0.06)' },
+            transition: 'background 0.2s',
+          }}
+          aria-label="บัญชีของฉัน"
+        >
+          <Avatar sx={{ width: 36, height: 36, background: 'linear-gradient(135deg,#10b981,#059669)', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+            {employee?.firstName?.charAt(0) || 'พ'}
+          </Avatar>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ color: '#fff', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              {employee ? employee.name : 'พงกรศกร (B6728786)'}
+            </Typography>
+            <Typography sx={{ color: '#94a3b8', fontSize: '0.72rem' }}>
+              {employee?.department || 'ฝ่ายขาย'} · {employee?.employeeCode || 'B6728786'}
+            </Typography>
+          </Box>
+        </ButtonBase>
         <Tooltip title="ออกจากระบบพนักงาน">
-          <IconButton size="small" onClick={handleSignOut} sx={{ color: '#ef4444', p: 0.5, '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.15)' } }}>
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); handleSignOut(); }}
+            sx={{ color: '#ef4444', p: 0.5, flexShrink: 0, '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.15)' } }}
+          >
             <LogoutIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>

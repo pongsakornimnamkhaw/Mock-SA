@@ -53,6 +53,7 @@ import PromotionApprovalPage from './pages/Employee/promotions/approval/Promotio
 import UsageHistoryPage from './pages/Employee/history/UsageHistoryPage'
 import EmployeeListPage from './pages/Employee/employees/EmployeeListPage'
 import EmployeeFormPage from './pages/Employee/employees/EmployeeFormPage'
+import EmployeeAccountPage from './pages/Employee/Account'
 import type { EditHistoryEntry } from './types/promotion'
 
 // B6733377 - External Contact
@@ -131,6 +132,7 @@ function App() {
       <Route path="/employees" element={<EmployeeRouteGuard><PromotionLayout><EmployeeListPage /></PromotionLayout></EmployeeRouteGuard>} />
       <Route path="/employees/new" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
       <Route path="/employees/:id/edit" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/employee/account" element={<EmployeeRouteGuard><PromotionLayout><EmployeeAccountPage /></PromotionLayout></EmployeeRouteGuard>} />
 
       {/* B6733377 - Concert Report System */}
       <Route path="/report/*" element={<EmployeeRouteGuard><PromotionLayout><ConsertReportPage /></PromotionLayout></EmployeeRouteGuard>} />
