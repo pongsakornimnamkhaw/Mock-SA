@@ -33,16 +33,19 @@ type employeeLoginInput struct {
 }
 
 type employeeAccountDTO struct {
-	UserID       string `json:"user_id"`
-	EmployeeCode string `json:"employee_code"`
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	Name         string `json:"name"`
-	Department   string `json:"department"`
-	Role         string `json:"role"`
-	Email        string `json:"email"`
-	Phone        string `json:"phone"`
-	UserType     string `json:"user_type"`
+	UserID        string     `json:"user_id"`
+	EmployeeCode  string     `json:"employee_code"`
+	FirstName     string     `json:"first_name"`
+	LastName      string     `json:"last_name"`
+	Name          string     `json:"name"`
+	Department    string     `json:"department"`
+	Role          string     `json:"role"`
+	Email         string     `json:"email"`
+	Phone         string     `json:"phone"`
+	UserType      string     `json:"user_type"`
+	PersonnelType string     `json:"personnel_type"`
+	LastLoginAt   *time.Time `json:"last_login_at"`
+	Active        bool       `json:"active"`
 }
 
 func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
@@ -51,6 +54,7 @@ func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
 	group.Post("/login", h.login)
 	group.Post("/logout", h.logout)
 	group.Get("/me", h.requireEmployee, h.getMe)
+	registerEmployeeAccountRoutes(app, db, h)
 }
 
 func employeeAuthAccountView(u models.User) employeeAccountDTO {
@@ -71,16 +75,18 @@ func employeeAuthAccountView(u models.User) employeeAccountDTO {
 		role = "sales"
 	}
 	return employeeAccountDTO{
-		UserID:       u.UserID,
-		EmployeeCode: empCode,
-		FirstName:    u.FirstName,
-		LastName:     u.LastName,
-		Name:         name,
-		Department:   dept,
-		Role:         role,
-		Email:        u.Email,
-		Phone:        u.PhoneNumber,
-		UserType:     u.UserType,
+		UserID:        u.UserID,
+		EmployeeCode:  empCode,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		Name:          name,
+		Department:    dept,
+		Role:          role,
+		Email:         u.Email,
+		Phone:         u.PhoneNumber,
+		UserType:      u.UserType,
+		PersonnelType: u.PersonnelType,
+		Active:        !u.EmployeeInactive,
 	}
 }
 
@@ -208,40 +214,6 @@ func clearEmployeeSessionCookie(c *fiber.Ctx) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 	})
-}
-
-func (h *employeeAuthHandler) requireEmployee(c *fiber.Ctx) error {
-	token := c.Cookies(employeeSessionCookie)
-	if token == "" {
-		authHeader := c.Get("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-	}
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "กรุณาเข้าสู่ระบบพนักงาน"})
-	}
-
-	var session models.EmpActivityLogs
-	if err := h.db.Where("action_type = ? AND target_id = ?", employeeSessionAction, hashEmployeeSessionToken(token)).First(&session).Error; err != nil {
-		clearEmployeeSessionCookie(c)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "เซสชันพนักงานหมดอายุ กรุณาเข้าสู่ระบบใหม่"})
-	}
-
-	var user models.User
-	if session.UserID != nil {
-		if err := h.db.Where("user_id = ?", *session.UserID).First(&user).Error; err != nil {
-			user = models.User{
-				UserID:     *session.UserID,
-				FirstName:  "พนักงาน",
-				LastName:   "ฝ่ายขาย",
-				Department: "ฝ่ายขาย",
-				Role:       "sales",
-			}
-		}
-	}
-	c.Locals("employeeUser", user)
-	return c.Next()
 }
 
 func currentEmployee(c *fiber.Ctx) models.User {
