@@ -23,19 +23,19 @@ func TestResendTicketsSendsEmailWithRealBookingData(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Ticket.SeatID มี FK ไปยัง seats.seat_id (ผ่าน Seat.Tickets ใน ticket.go) ต้องมี Zone+Seat จริงก่อน
-	if err := db.Create(&models.Zone{ZoneID: "ZRESEND1", ZoneType: "นั่ง", Capacity: 2}).Error; err != nil {
+	if err := db.Create(&models.Zone{ZoneID: "ZRESEND1", ConcertID: "CCRESEND1", ZoneType: "นั่ง", Capacity: 2}).Error; err != nil {
 		t.Fatal(err)
 	}
 	seats := []models.Seat{
-		{SeatID: "S1", SeatRow: "A", SeatColumn: "1", StatusSeat: seatStatusTaken, ConcertID: "CCRESEND1", ZoneID: "ZRESEND1"},
-		{SeatID: "S2", SeatRow: "A", SeatColumn: "2", StatusSeat: seatStatusTaken, ConcertID: "CCRESEND1", ZoneID: "ZRESEND1"},
+		{SeatLabel: "A1", SeatRow: 1, SeatColumn: 1, StatusSeat: seatStatusTaken, ZoneID: "ZRESEND1"},
+		{SeatLabel: "A2", SeatRow: 1, SeatColumn: 2, StatusSeat: seatStatusTaken, ZoneID: "ZRESEND1"},
 	}
 	if err := db.Create(&seats).Error; err != nil {
 		t.Fatal(err)
 	}
 	tickets := []models.Ticket{
-		{TicketID: "TKRESEND1", NameConcert: "Riverside Sound Festival", StatusTicket: ticketStatusIssued, SeatID: "S1", SeatLabel: "A1", BookingID: "BKRESEND1"},
-		{TicketID: "TKRESEND2", NameConcert: "Riverside Sound Festival", StatusTicket: ticketStatusIssued, SeatID: "S2", SeatLabel: "A2", BookingID: "BKRESEND1"},
+		{NameConcert: "Riverside Sound Festival", StatusTicket: ticketStatusIssued, SeatID: seats[0].SeatID, SeatLabel: "A1", BookingID: "BKRESEND1"},
+		{NameConcert: "Riverside Sound Festival", StatusTicket: ticketStatusIssued, SeatID: seats[1].SeatID, SeatLabel: "A2", BookingID: "BKRESEND1"},
 	}
 	if err := db.Create(&tickets).Error; err != nil {
 		t.Fatal(err)

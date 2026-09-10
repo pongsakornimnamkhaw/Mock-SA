@@ -254,20 +254,8 @@ func seedConcert(tx *gorm.DB, index int, spec concertSpec, poster []byte) error 
 		seats := make([]models.Seat, 0, zone.sold)
 		for seatIndex := 1; seatIndex <= zone.sold; seatIndex++ {
 			seats = append(seats, models.Seat{
-<<<<<<< HEAD
 				SeatRow: (seatIndex-1)/50 + 1, SeatColumn: (seatIndex-1)%50 + 1,
 				SeatLabel: fmt.Sprintf("%s-%04d", zone.code, seatIndex), StatusSeat: "sold", ZoneID: zoneID,
-=======
-				SeatID:     seatID,
-				SeatRow:    fmt.Sprintf("%d", (seatIndex-1)/50+1),
-				SeatColumn: fmt.Sprintf("%d", (seatIndex-1)%50+1),
-				StatusSeat: "sold", ConcertID: spec.id, ZoneID: zoneID,
-			})
-			tickets = append(tickets, models.Ticket{
-				TicketID:    fmt.Sprintf("TK_R%02d_%s_%04d", index+1, zone.code, seatIndex),
-				NameConcert: spec.name, TicketDateTime: eventDate.AddDate(0, -1, 0).Add(time.Duration(seatIndex%720) * time.Minute),
-				StatusTicket: "paid", SeatID: seatID, BookingID: bookingID,
->>>>>>> main
 			})
 		}
 		if err := tx.Omit(clause.Associations).CreateInBatches(seats, 500).Error; err != nil {

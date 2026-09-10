@@ -143,11 +143,7 @@ func TestCustomerAccountPostgreSQLFlow(t *testing.T) {
 	concert := models.Concert{ConcertID: "CUSTOMER_TEST_CONCERT", ConcertName: "คอนเสิร์ตทดสอบ", StartDate: "2027-01-01", EndDate: "2027-01-02", StartTime: "18:00:00", EndTime: "22:00:00", Location: "สถานที่ทดสอบ", Status: "ยืนยันแล้ว"}
 	zone := models.Zone{ZoneID: "CUSTOMER_TEST_ZONE", ConcertID: concert.ConcertID, ZoneType: "VIP", Capacity: 10, ZonePrice: 2500}
 	promotion := models.Promotion{PromotionID: "CUSTOMER_TEST_PROMOTION", PromotionName: "ไม่มีโปรโมชั่น", Description: "ใช้สำหรับทดสอบ", BannerImageUrl: []byte{}, Status: "active", ZoneType: zone.ZoneType, ConcertID: concert.ConcertID}
-<<<<<<< HEAD
 	seat := models.Seat{SeatID: 900001, SeatRow: 1, SeatColumn: 2, StatusSeat: "ไม่ว่าง", ZoneID: zone.ZoneID}
-=======
-	seat := models.Seat{SeatID: "CUSTOMER_TEST_SEAT", SeatRow: "A", SeatColumn: "2", StatusSeat: "ไม่ว่าง", ConcertID: concert.ConcertID, ZoneID: zone.ZoneID}
->>>>>>> main
 	booking := models.Booking{BookingID: "CUSTOMER_TEST_BOOKING", BookingDate: time.Now().UTC(), Status: "สำเร็จ", UserID: &storedUser.UserID}
 	for _, row := range []any{
 		&concert,

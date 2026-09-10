@@ -3,18 +3,12 @@ import { Box, Typography, TextField, Button, Paper, Chip, IconButton, Menu, Menu
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-<<<<<<< HEAD
-import DescriptionIcon from '@mui/icons-material/Description';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import LocationOnIcon from '@mui/icons-material/LocationOn';
-import { flux } from '@/assets/poster';
-=======
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import PersonAddAltOutlinedIcon from '@mui/icons-material/PersonAddAltOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import CheckIcon from '@mui/icons-material/Check';
 import { useNavigate } from 'react-router-dom';
-import { celestial, flux, pulse, starlight } from '@/assets/Poster';
+import { celestial, flux, pulse, starlight } from '@/assets/poster';
 import ConfirmDeleteDialog from '@/components/common/ConfirmDeleteDialog';
 
 const statusOptions = [
@@ -51,7 +45,6 @@ const ConcertSearchPage = () => {
     const matchesText = !keyword || `${concert.title} ${concert.artists} ${concert.venue}`.toLocaleLowerCase('th').includes(keyword);
     return matchesText && (selectedStatus === 'ทั้งหมด' || concert.status === selectedStatus);
   });
->>>>>>> main
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '100vh', fontFamily: "'Noto Sans Thai', sans-serif" }}>
