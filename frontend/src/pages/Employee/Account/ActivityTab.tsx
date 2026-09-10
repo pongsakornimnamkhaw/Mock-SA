@@ -88,7 +88,7 @@ export default function ActivityTab() {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                  {['เวลา', 'การกระทำ', 'โมดูล', 'เป้าหมาย'].map((h) => (
+                  {['เวลา', 'ประเภทกิจกรรม', 'ระบบที่เกี่ยวข้อง', 'เป้าหมาย'].map((h) => (
                     <TableCell key={h} sx={{ color: '#475569', fontWeight: 700, fontSize: '0.85rem', borderColor: '#f1f5f9', py: 1.5 }}>
                       {h}
                     </TableCell>
