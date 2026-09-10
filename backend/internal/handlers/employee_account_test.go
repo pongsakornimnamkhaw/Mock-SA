@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,49 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+func TestValidateNewEmployeePasswordUsesRuneAndBcryptLimits(t *testing.T) {
+	eightThaiRunes := "กขคงจฉชซ"
+	if err := validateNewEmployeePassword(eightThaiRunes, eightThaiRunes); err != nil {
+		t.Fatalf("eight-rune Thai password was rejected: %v", err)
+	}
+	sevenThaiRunes := "กขคงจฉช"
+	assertEmployeePasswordValidationError(t, validateNewEmployeePassword(sevenThaiRunes, sevenThaiRunes))
+	overBcryptLimit := strings.Repeat("ก", 25)
+	err := validateNewEmployeePassword(overBcryptLimit, overBcryptLimit)
+	assertEmployeePasswordValidationError(t, err)
+	if !strings.Contains(err.Error(), "72") {
+		t.Fatalf("bcrypt byte-limit error was unclear: %v", err)
+	}
+}
+
+func TestValidateNewEmployeePasswordRejectsSurroundingWhitespace(t *testing.T) {
+	for _, password := range []string{" SecurePass123!", "SecurePass123! "} {
+		err := validateNewEmployeePassword(password, password)
+		assertEmployeePasswordValidationError(t, err)
+		if !strings.Contains(err.Error(), "ช่องว่าง") {
+			t.Fatalf("password whitespace error was unclear: %v", err)
+		}
+	}
+}
+
+func assertEmployeePasswordValidationError(t *testing.T, err error) {
+	t.Helper()
+	var fiberError *fiber.Error
+	if !errors.As(err, &fiberError) || fiberError.Code != http.StatusBadRequest {
+		t.Fatalf("expected a 400 password validation error, got %v", err)
+	}
+}
+
+func TestValidateEmployeeContactIsIndependentOfManagementPermission(t *testing.T) {
+	email, phone, err := validateEmployeeContact(" Editor@Example.TEST ", " 081-234-5678 ")
+	if err != nil {
+		t.Fatalf("valid edit-role contact fields were rejected: %v", err)
+	}
+	if email != "editor@example.test" || phone != "081-234-5678" {
+		t.Fatalf("contact fields were not normalized: email=%q phone=%q", email, phone)
+	}
+}
 
 func TestEmployeeAccountRoutesRequireSession(t *testing.T) {
 	app := fiber.New()
@@ -41,20 +85,33 @@ func TestEmployeeAccountProfileRules(t *testing.T) {
 
 	internal := employeeAccountTestUser(t, db, "EMPLOYEE_ACCOUNT_INTERNAL", models.PersonnelTypeInternal, "internal@example.test", "0811111111", "InternalPass123!")
 	external := employeeAccountTestUser(t, db, "EMPLOYEE_ACCOUNT_EXTERNAL", models.PersonnelTypeExternal, "external@example.test", "0822222222", "ExternalPass123!")
+	if err := db.Model(&models.User{}).Where("user_id = ?", external.UserID).Update("role", "edit").Error; err != nil {
+		t.Fatal(err)
+	}
+	loginAt := time.Date(2026, 9, 10, 9, 30, 0, 0, accountHistoryLocation)
+	internalID := internal.UserID
+	if err := db.Create(&models.EmpActivityLogs{
+		EmpLogID: "EL_EMPLOYEE_ACCOUNT_LAST_LOGIN", UserID: &internalID, ActionType: "เข้าสู่ระบบ",
+		Description: "เข้าสู่ระบบ", TargetID: internal.UserID, CreatedAt: loginAt,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
 	internalCookie := startEmployeeAccountTestSession(t, app, internal.UserID)
 	externalCookie := startEmployeeAccountTestSession(t, app, external.UserID)
 
 	detailResponse := employeeAccountTestRequest(t, app, http.MethodGet, "/api/employee/account", nil, internalCookie, http.StatusOK)
 	var detail struct {
 		Data struct {
-			Email         string `json:"email"`
-			Phone         string `json:"phone"`
-			PersonnelType string `json:"personnel_type"`
-			Active        bool   `json:"active"`
+			Email         string     `json:"email"`
+			Phone         string     `json:"phone"`
+			PersonnelType string     `json:"personnel_type"`
+			LastLoginAt   *time.Time `json:"last_login_at"`
+			Active        bool       `json:"active"`
 		} `json:"data"`
 	}
 	decodeEmployeeAccountTestBody(t, detailResponse, &detail)
-	if detail.Data.PersonnelType != models.PersonnelTypeInternal || !detail.Data.Active {
+	if detail.Data.PersonnelType != models.PersonnelTypeInternal || !detail.Data.Active ||
+		detail.Data.LastLoginAt == nil || detail.Data.LastLoginAt.Format("2006-01-02T15:04:05Z07:00") != "2026-09-10T09:30:00+07:00" {
 		t.Fatalf("unexpected internal account detail: %#v", detail.Data)
 	}
 
@@ -109,12 +166,15 @@ func TestEmployeeAccountPasswordAndActivityAreSessionScoped(t *testing.T) {
 	otherSessionCookie := startEmployeeAccountTestSession(t, app, user.UserID)
 
 	now := time.Now().In(accountHistoryLocation)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, accountHistoryLocation)
 	userID := user.UserID
 	otherID := other.UserID
 	logs := []models.EmpActivityLogs{
-		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_LOGIN", UserID: &userID, ActionType: "เข้าสู่ระบบ", Description: "เข้าสู่ระบบ", Module: "บัญชี", TargetID: user.UserID, CreatedAt: now.Add(-2 * time.Hour)},
-		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_OWN", UserID: &userID, ActionType: "แก้ไข", Description: "แก้ไขรายการของตนเอง", Module: "คอนเสิร์ต", TargetID: "CONCERT_OWN", CreatedAt: now.Add(-time.Hour)},
-		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_OTHER", UserID: &otherID, ActionType: "ลบ", Description: "รายการของพนักงานอื่น", Module: "คอนเสิร์ต", TargetID: "CONCERT_OTHER", CreatedAt: now},
+		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_LOGIN", UserID: &userID, ActionType: "เข้าสู่ระบบ", Description: "เข้าสู่ระบบ", Module: "บัญชี", TargetID: user.UserID, CreatedAt: dayStart.Add(9 * time.Hour)},
+		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_OWN", UserID: &userID, ActionType: "แก้ไข", Description: "แก้ไขรายการของตนเอง", Module: "คอนเสิร์ต", TargetID: "CONCERT_OWN", CreatedAt: dayStart.Add(10 * time.Hour)},
+		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_PREVIOUS_DAY", UserID: &userID, ActionType: "อนุมัติ", Description: "กิจกรรมวันก่อนหน้า", Module: "โปรโมชั่น", TargetID: "PROMOTION_OLD", CreatedAt: dayStart.Add(-time.Hour)},
+		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_LOGOUT", UserID: &userID, ActionType: "ออกจากระบบ", Description: "ออกจากระบบ", Module: "บัญชี", TargetID: user.UserID, CreatedAt: dayStart.Add(11 * time.Hour)},
+		{EmpLogID: "EL_EMPLOYEE_ACCOUNT_OTHER", UserID: &otherID, ActionType: "ลบ", Description: "รายการของพนักงานอื่น", Module: "คอนเสิร์ต", TargetID: "CONCERT_OTHER", CreatedAt: dayStart.Add(12 * time.Hour)},
 	}
 	if err := db.Create(&logs).Error; err != nil {
 		t.Fatal(err)
@@ -179,15 +239,27 @@ func TestEmployeeAccountPasswordAndActivityAreSessionScoped(t *testing.T) {
 		Total    int64                    `json:"total"`
 	}
 	decodeEmployeeAccountTestBody(t, activityResponse, &activity)
-	if activity.Page != 1 || activity.PageSize != 50 || activity.Total != 3 || len(activity.Data) != 3 {
+	if activity.Page != 1 || activity.PageSize != 50 || activity.Total != 4 || len(activity.Data) != 4 {
 		t.Fatalf("unexpected activity pagination: %#v", activity)
 	}
 	for _, row := range activity.Data {
 		if row.UserID == nil || *row.UserID != user.UserID {
 			t.Fatalf("another employee's activity leaked into response: %#v", row)
 		}
-		if row.ActionType == employeeSessionAction {
-			t.Fatalf("private employee session leaked into activity response: %#v", row)
+		if row.ActionType == employeeSessionAction || row.ActionType == "ออกจากระบบ" {
+			t.Fatalf("private session/logout activity leaked into response: %#v", row)
+		}
+	}
+
+	day := now.Format("2006-01-02")
+	dateResponse := employeeAccountTestRequest(t, app, http.MethodGet, "/api/employee/account/activity?from="+day+"&to="+day, nil, currentCookie, http.StatusOK)
+	decodeEmployeeAccountTestBody(t, dateResponse, &activity)
+	if activity.Total != 3 || len(activity.Data) != 3 {
+		t.Fatalf("activity date range returned unexpected rows: %#v", activity)
+	}
+	for _, row := range activity.Data {
+		if row.EmpLogID == "EL_EMPLOYEE_ACCOUNT_PREVIOUS_DAY" {
+			t.Fatalf("activity outside requested date range leaked into response: %#v", row)
 		}
 	}
 

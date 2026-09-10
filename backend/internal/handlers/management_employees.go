@@ -82,31 +82,46 @@ func (h *managementHandler) getEmployee(c *fiber.Ctx) error {
 
 var employeePhonePattern = regexp.MustCompile(`^[0-9+() -]{8,20}$`)
 
-func validateEmployee(e *employeeDTO) error {
-	e.FirstName = strings.TrimSpace(e.FirstName)
-	e.LastName = strings.TrimSpace(e.LastName)
-	e.EmployeeCode = strings.TrimSpace(e.EmployeeCode)
-	e.Department = strings.TrimSpace(e.Department)
-	e.Email = strings.ToLower(strings.TrimSpace(e.Email))
-	e.Phone = strings.TrimSpace(e.Phone)
-	if e.FirstName == "" || e.LastName == "" || e.EmployeeCode == "" || e.Email == "" || e.Phone == "" {
-		return fiber.NewError(400, "กรุณากรอกชื่อ นามสกุล รหัสพนักงาน อีเมล และเบอร์โทร")
+func validateEmployeeContact(email, phone string) (string, string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	phone = strings.TrimSpace(phone)
+	if email == "" || phone == "" {
+		return email, phone, fiber.NewError(400, "กรุณากรอกอีเมลและเบอร์โทร")
 	}
-	if utf8.RuneCountInString(e.FirstName) > 100 || utf8.RuneCountInString(e.LastName) > 100 || utf8.RuneCountInString(e.EmployeeCode) > 50 || utf8.RuneCountInString(e.Department) > 100 || len(e.Email) > 255 {
-		return fiber.NewError(400, "ข้อมูลยาวเกินกำหนด")
+	if len(email) > 255 {
+		return email, phone, fiber.NewError(400, "ข้อมูลยาวเกินกำหนด")
 	}
-	address, err := mail.ParseAddress(e.Email)
-	if err != nil || address.Address != e.Email || !employeePhonePattern.MatchString(e.Phone) {
-		return fiber.NewError(400, "รูปแบบอีเมลหรือเบอร์โทรไม่ถูกต้อง")
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email || !employeePhonePattern.MatchString(phone) {
+		return email, phone, fiber.NewError(400, "รูปแบบอีเมลหรือเบอร์โทรไม่ถูกต้อง")
 	}
 	digits := 0
-	for _, char := range e.Phone {
+	for _, char := range phone {
 		if char >= '0' && char <= '9' {
 			digits++
 		}
 	}
 	if digits < 9 || digits > 15 {
-		return fiber.NewError(400, "กรุณากรอกเบอร์โทร 9–15 หลัก")
+		return email, phone, fiber.NewError(400, "กรุณากรอกเบอร์โทร 9–15 หลัก")
+	}
+	return email, phone, nil
+}
+
+func validateEmployee(e *employeeDTO) error {
+	e.FirstName = strings.TrimSpace(e.FirstName)
+	e.LastName = strings.TrimSpace(e.LastName)
+	e.EmployeeCode = strings.TrimSpace(e.EmployeeCode)
+	e.Department = strings.TrimSpace(e.Department)
+	var contactErr error
+	e.Email, e.Phone, contactErr = validateEmployeeContact(e.Email, e.Phone)
+	if e.FirstName == "" || e.LastName == "" || e.EmployeeCode == "" || e.Email == "" || e.Phone == "" {
+		return fiber.NewError(400, "กรุณากรอกชื่อ นามสกุล รหัสพนักงาน อีเมล และเบอร์โทร")
+	}
+	if utf8.RuneCountInString(e.FirstName) > 100 || utf8.RuneCountInString(e.LastName) > 100 || utf8.RuneCountInString(e.EmployeeCode) > 50 || utf8.RuneCountInString(e.Department) > 100 {
+		return fiber.NewError(400, "ข้อมูลยาวเกินกำหนด")
+	}
+	if contactErr != nil {
+		return contactErr
 	}
 	if e.Permission != "view_only" && e.Permission != "edit" && e.Permission != "admin" {
 		return fiber.NewError(400, "สิทธิ์พนักงานไม่ถูกต้อง")

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"backend/internal/models"
 
@@ -57,27 +58,23 @@ func (h *employeeAccountHandler) updateProfile(c *fiber.Ctx) error {
 		return employeeAccountError(c, fiber.NewError(fiber.StatusBadRequest, "รูปแบบข้อมูลไม่ถูกต้อง"))
 	}
 	user := currentEmployee(c)
-	requestedEmail := strings.ToLower(strings.TrimSpace(input.Email))
-	if user.PersonnelType != models.PersonnelTypeExternal &&
-		!strings.EqualFold(requestedEmail, strings.TrimSpace(user.Email)) {
-		return employeeAccountError(c, fiber.NewError(fiber.StatusForbidden, "บุคลากรภายในไม่สามารถแก้ไขอีเมลได้"))
-	}
-
-	validated := employeeView(user)
-	validated.Email = input.Email
-	validated.Phone = input.Phone
-	if err := validateEmployee(&validated); err != nil {
+	email, phone, err := validateEmployeeContact(input.Email, input.Phone)
+	if err != nil {
 		return employeeAccountError(c, err)
 	}
+	if user.PersonnelType != models.PersonnelTypeExternal &&
+		!strings.EqualFold(email, strings.TrimSpace(user.Email)) {
+		return employeeAccountError(c, fiber.NewError(fiber.StatusForbidden, "บุคลากรภายในไม่สามารถแก้ไขอีเมลได้"))
+	}
 	if user.PersonnelType != models.PersonnelTypeExternal {
-		validated.Email = user.Email
+		email = user.Email
 	}
 
-	err := h.db.Transaction(func(tx *gorm.DB) error {
+	err = h.db.Transaction(func(tx *gorm.DB) error {
 		if user.PersonnelType == models.PersonnelTypeExternal {
 			var duplicates int64
 			if err := tx.Model(&models.User{}).
-				Where("LOWER(email) = ? AND user_id <> ?", validated.Email, user.UserID).
+				Where("LOWER(email) = ? AND user_id <> ?", email, user.UserID).
 				Count(&duplicates).Error; err != nil {
 				return err
 			}
@@ -86,7 +83,7 @@ func (h *employeeAccountHandler) updateProfile(c *fiber.Ctx) error {
 			}
 		}
 		if err := tx.Model(&models.User{}).Where("user_id = ?", user.UserID).Updates(map[string]any{
-			"email": validated.Email, "phone_number": validated.Phone,
+			"email": email, "phone_number": phone,
 		}).Error; err != nil {
 			return err
 		}
@@ -99,14 +96,20 @@ func (h *employeeAccountHandler) updateProfile(c *fiber.Ctx) error {
 	if err != nil {
 		return employeeAccountError(c, err)
 	}
-	user.Email = validated.Email
-	user.PhoneNumber = validated.Phone
+	user.Email = email
+	user.PhoneNumber = phone
 	return c.JSON(fiber.Map{"data": employeeAuthAccountView(user)})
 }
 
 func validateNewEmployeePassword(password, confirmation string) error {
-	if len(password) < 8 {
+	if password != strings.TrimSpace(password) {
+		return fiber.NewError(fiber.StatusBadRequest, "รหัสผ่านใหม่ต้องไม่มีช่องว่างที่จุดเริ่มต้นหรือท้าย")
+	}
+	if utf8.RuneCountInString(password) < 8 {
 		return fiber.NewError(fiber.StatusBadRequest, "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร")
+	}
+	if len(password) > 72 {
+		return fiber.NewError(fiber.StatusBadRequest, "รหัสผ่านใหม่ต้องมีขนาดไม่เกิน 72 ไบต์")
 	}
 	if password != confirmation {
 		return fiber.NewError(fiber.StatusBadRequest, "รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน")
@@ -169,7 +172,7 @@ func (h *employeeAccountHandler) listActivity(c *fiber.Ctx) error {
 
 	user := currentEmployee(c)
 	query := h.db.Model(&models.EmpActivityLogs{}).
-		Where("user_id = ? AND action_type <> ?", user.UserID, employeeSessionAction)
+		Where("user_id = ? AND action_type NOT IN ?", user.UserID, []string{employeeSessionAction, "ออกจากระบบ"})
 	if module := strings.TrimSpace(c.Query("module")); module != "" {
 		query = query.Where("module = ?", module)
 	}
