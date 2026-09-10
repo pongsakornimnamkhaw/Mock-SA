@@ -23,6 +23,7 @@ type User struct {
 	EmployeeCode     *string   `gorm:"type:varchar(50);uniqueIndex" json:"employee_code,omitempty"`
 	Department       string    `gorm:"type:varchar(100)" json:"department"`
 	EmployeeInactive bool      `gorm:"not null;default:false" json:"employee_inactive"`
+	PersonnelType    string    `gorm:"type:varchar(20)" json:"personnel_type"`
 
 	// Relations
 	Permissions        []Permission        `gorm:"foreignKey:UserID" json:"permissions,omitempty"`
@@ -65,6 +66,7 @@ type EmpActivityLogs struct {
 	ActionType  string    `gorm:"type:varchar(100);not null" json:"action_type"`
 	Description string    `gorm:"type:text;not null" json:"description"`
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
+	Module      string    `gorm:"type:varchar(100)" json:"module"`
 	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
 	UserID      *string   `gorm:"type:varchar(50)" json:"user_id"`
 }

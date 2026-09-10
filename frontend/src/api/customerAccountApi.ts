@@ -17,8 +17,8 @@ export interface CustomerTicket {
   eventDate: string;
   location: string;
   zone: string;
-  seatRow: number;
-  seatColumn: number;
+  seatRow: string;
+  seatColumn: string;
   status: string;
   purchasedAt: string;
 }
@@ -66,8 +66,8 @@ type TicketWire = {
   event_date: string;
   location: string;
   zone: string;
-  seat_row: number;
-  seat_column: number;
+  seat_row: string;
+  seat_column: string;
   status: string;
   purchased_at: string;
 };

@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // Types & Constants
 import type { SeatData } from '@/components/SeatSelection/types';
-import { eventsMap, zonePriceMap, LOCK_DURATION, STEPS, generateSeats } from '@/components/SeatSelection/constants';
+import { eventsMap, zonePriceMap, LOCK_DURATION, STEPS } from '@/components/SeatSelection/constants';
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import { formatThaiDate } from '@/utils/customerPromotion';
 import type { CustomerPromotion } from '@/types/customerPromotion';
 import { calculateDiscount, filterEligiblePromotions, type PromotionOrder } from '@/utils/seatPromotion';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
+import { seatInventoryApi } from '@/api/seatInventoryApi';
 import { getCustomerSession } from '@/utils/customerSession';
 import { pulse } from '@/assets/poster';
 
@@ -21,6 +22,7 @@ import OrderSummary from '@/components/SeatSelection/OrderSummary';
 import QRCodeDialog from '@/components/SeatSelection/dialogs/QRCodeDialog';
 import SuccessDialog from '@/components/SeatSelection/dialogs/SuccessDialog';
 import ExpiredDialog from '@/components/SeatSelection/dialogs/ExpiredDialog';
+import { ErrorAlert } from '@/components/ErrorAlert';
 
 const SeatSelectionPage = () => {
     const navigate = useNavigate();
@@ -28,7 +30,8 @@ const SeatSelectionPage = () => {
     const [event, setEvent] = useState(() => (id && eventsMap[id]) ? eventsMap[id] : eventsMap['2']);
     const zoneInfo = (zone && zonePriceMap[zone]) ? zonePriceMap[zone] : zonePriceMap['A1'];
 
-    const [seats, setSeats] = useState<SeatData[]>(generateSeats);
+    const [seats, setSeats] = useState<SeatData[]>([]);
+    const [bookingError, setBookingError] = useState('');
     const [isLocked, setIsLocked] = useState(false);
     const [timeLeft, setTimeLeft] = useState(LOCK_DURATION);
     const [showExpiredDialog, setShowExpiredDialog] = useState(false);
@@ -71,6 +74,25 @@ const SeatSelectionPage = () => {
         });
         return () => { active = false; };
     }, [id]);
+
+    useEffect(() => {
+        if (!id || !zone) return;
+        let active = true;
+        seatInventoryApi.listSeats(id, zone)
+            .then((rows) => {
+                if (!active) return;
+                setSeats(rows.map((seat) => ({
+                    id: seat.label,
+                    row: seat.row,
+                    number: Number(seat.column) || 0,
+                    status: seat.status === 'ว่าง' ? 'available' : 'reserved',
+                })));
+            })
+            .catch(() => {
+                if (active) setSeats([]);
+            });
+        return () => { active = false; };
+    }, [id, zone]);
 
     useEffect(() => {
         let active = true;
@@ -263,30 +285,46 @@ const SeatSelectionPage = () => {
         setIsLocked(false);
         setShowQRDialog(false);
 
+        setBookingError('');
         const session = getCustomerSession();
         const seatLabels = activeSeats.map((s) => s.id);
-        const record = await bookingPaymentApi.createBooking({
-            concertId: id || '2',
-            concertTitle: event.title,
-            eventDate: event.eventDate,
-            location: event.location,
-            zoneId: zone || 'A1',
-            tierName: zoneInfo.label,
-            seats: seatLabels,
-            quantity: activeSeats.length,
-            unitPrice: zoneInfo.price,
-            discountAmount: discountAmount,
-            totalPrice: finalPrice,
-            customerName: paymentData.customerName,
-            customerEmail: paymentData.customerEmail,
-            customerPhone: paymentData.customerPhone,
-            userId: session?.userId,
-            slipFileName: paymentData.slipFileName,
-            slipDataUrl: paymentData.slipDataUrl,
-        });
+        try {
+            const record = await bookingPaymentApi.createBooking({
+                concertId: id || '2',
+                concertTitle: event.title,
+                eventDate: event.eventDate,
+                location: event.location,
+                zoneId: zone || 'A1',
+                tierName: zoneInfo.label,
+                seats: seatLabels,
+                quantity: activeSeats.length,
+                unitPrice: zoneInfo.price,
+                discountAmount: discountAmount,
+                totalPrice: finalPrice,
+                customerName: paymentData.customerName,
+                customerEmail: paymentData.customerEmail,
+                customerPhone: paymentData.customerPhone,
+                userId: session?.userId,
+                slipFileName: paymentData.slipFileName,
+                slipDataUrl: paymentData.slipDataUrl,
+            });
 
-        setLatestBookingId(record.id);
-        setShowSuccessDialog(true);
+            setLatestBookingId(record.id);
+            setShowSuccessDialog(true);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'ไม่สามารถบันทึกการจองได้';
+            setBookingError(message);
+            // ที่นั่งอาจถูกคนอื่นชิงไป — ดึงผังล่าสุดมาแสดงใหม่
+            if (id && zone) {
+                const rows = await seatInventoryApi.listSeats(id, zone).catch(() => []);
+                setSeats(rows.map((seat) => ({
+                    id: seat.label,
+                    row: seat.row,
+                    number: Number(seat.column) || 0,
+                    status: seat.status === 'ว่าง' ? 'available' : 'reserved',
+                })));
+            }
+        }
     };
 
     // ========== คลิกเลือกที่นั่ง ==========
@@ -338,13 +376,15 @@ const SeatSelectionPage = () => {
                     </Stepper>
                 </Box>
 
+                {bookingError && <ErrorAlert message={bookingError} />}
+
                 <Box sx={{
                     display: 'flex',
                     flexDirection: { xs: 'column', md: 'row' },
                     gap: 4, justifyContent: 'center',
                     alignItems: { xs: 'center', md: 'flex-start' }
                 }}>
-                    <SeatMap 
+                    <SeatMap
                         zone={zone || ''} 
                         zoneInfo={zoneInfo} 
                         seats={seats} 

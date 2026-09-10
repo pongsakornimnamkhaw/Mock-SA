@@ -7,6 +7,7 @@ interface HeaderProps {
   onSearchChange: (value: string) => void;
   selectedConcertId: string | null;
   onBackClick: () => void;
+  concertCount: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   selectedConcertId,
   onBackClick,
+  concertCount,
 }) => {
   return (
     <Box component="header" className="report-header">
@@ -28,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
           <h1 className="header-page-title">รายการคอนเสิร์ต</h1>
           <span className="total-badge-pill">
             <span className="red-dot"></span>
-            คอนเสิร์ตทั้งหมด <strong>22 งาน</strong>
+            คอนเสิร์ตทั้งหมด <strong>{concertCount} งาน</strong>
           </span>
         </div>
       </Box>

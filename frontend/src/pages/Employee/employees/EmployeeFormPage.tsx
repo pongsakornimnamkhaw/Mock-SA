@@ -18,7 +18,7 @@ import IconButton from '@mui/material/IconButton';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
-import type { Employee, EmployeePermission } from '../../../types/promotion';
+import type { Employee, EmployeePermission, PersonnelType } from '../../../types/promotion';
 import { managementApi } from '../../../api/managementApi';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -45,6 +45,7 @@ function EmployeeForm({ id }: { id?: string }) {
   const [department, setDepartment] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [personnelType, setPersonnelType] = useState<PersonnelType>('internal');
   
   const [permission, setPermission] = useState<EmployeePermission>('view_only');
   const [editScope, setEditScope] = useState('');
@@ -76,6 +77,7 @@ function EmployeeForm({ id }: { id?: string }) {
         setDepartment(emp.department);
         setEmail(emp.email);
         setPhone(emp.phone);
+        setPersonnelType(emp.personnel_type ?? 'internal');
         setPermission(emp.permission);
         setEditScope(emp.edit_scope ?? '');
       } catch (error) {
@@ -96,6 +98,7 @@ function EmployeeForm({ id }: { id?: string }) {
       employee_code: employeeCode.trim(), department: department.trim(),
       email: email.trim(), phone: phone.trim(), permission,
       edit_scope: permission === 'edit' ? editScope.trim() : '',
+      personnel_type: personnelType,
     };
     const nextErrors: FieldErrors = {};
     const namePattern = /^[\p{L}\p{M}][\p{L}\p{M} .’'-]*$/u;
@@ -200,7 +203,7 @@ function EmployeeForm({ id }: { id?: string }) {
             </Box>
           </Box>
           
-          <Box sx={{ display: 'flex', gap: 3 }}>
+          <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="body2" sx={{ mb: 1 }}>Email Address*</Typography>
               <TextField fullWidth size="small" type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={disabled} required error={!!errors.email} helperText={errors.email} slotProps={{ htmlInput: { 'aria-label': 'Email Address', maxLength: 255 } }} />
@@ -209,6 +212,23 @@ function EmployeeForm({ id }: { id?: string }) {
               <Typography variant="body2" sx={{ mb: 1 }}>เบอร์โทร*</Typography>
               <TextField fullWidth size="small" type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={disabled} required error={!!errors.phone} helperText={errors.phone} slotProps={{ htmlInput: { 'aria-label': 'เบอร์โทร', maxLength: 20 } }} />
             </Box>
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 3 }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>ประเภทบุคลากร*</Typography>
+              <FormControl fullWidth size="small" disabled={disabled}>
+                <Select
+                  value={personnelType}
+                  onChange={(e) => setPersonnelType(e.target.value as PersonnelType)}
+                  inputProps={{ 'aria-label': 'ประเภทบุคลากร' }}
+                >
+                  <MenuItem value="internal">บุคลากรภายใน (Internal)</MenuItem>
+                  <MenuItem value="external">บุคลากรภายนอก (External)</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box sx={{ flex: 1 }} />
           </Box>
         </CardContent>
       </Card>

@@ -37,6 +37,7 @@ func TestManagementEmployeeValidation(t *testing.T) {
 		{"invalid permission", func(e *employeeDTO) { e.Permission = "owner" }},
 		{"missing scope", func(e *employeeDTO) { e.Permission = "edit" }},
 		{"long code", func(e *employeeDTO) { e.EmployeeCode = strings.Repeat("ก", 51) }},
+		{"invalid personnel type", func(e *employeeDTO) { e.PersonnelType = "contractor" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,11 +49,22 @@ func TestManagementEmployeeValidation(t *testing.T) {
 		})
 	}
 	valid.Email = " Test@Example.com "
+	valid.PersonnelType = ""
 	if err := validateEmployee(&valid); err != nil {
 		t.Fatal(err)
 	}
 	if valid.Email != "test@example.com" {
 		t.Fatal("email not normalized")
+	}
+	if valid.PersonnelType != models.PersonnelTypeInternal {
+		t.Fatalf("personnel type = %q; want %q", valid.PersonnelType, models.PersonnelTypeInternal)
+	}
+	valid.PersonnelType = models.PersonnelTypeExternal
+	if err := validateEmployee(&valid); err != nil {
+		t.Fatal(err)
+	}
+	if valid.PersonnelType != models.PersonnelTypeExternal {
+		t.Fatalf("personnel type = %q; want %q", valid.PersonnelType, models.PersonnelTypeExternal)
 	}
 }
 

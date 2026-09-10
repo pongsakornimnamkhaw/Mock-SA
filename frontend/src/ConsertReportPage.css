@@ -908,6 +908,70 @@ button {
   color: #64748b;
 }
 
+/* Typography scale aligned with the sales/payment verification screen. */
+.report-app-container-no-sidebar .header-page-title {
+  font-size: 1.75rem;
+}
+
+.report-app-container-no-sidebar .total-badge-pill,
+.report-app-container-no-sidebar .search-input,
+.report-app-container-no-sidebar .btn-back-pill {
+  font-size: 1rem;
+}
+
+.report-app-container-no-sidebar .concert-title {
+  font-size: 1.4rem;
+  line-height: 1.45;
+}
+
+.report-app-container-no-sidebar .info-line {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.report-app-container-no-sidebar .location-line,
+.report-app-container-no-sidebar .status-label,
+.report-app-container-no-sidebar .status-badge-text,
+.report-app-container-no-sidebar .status-timestamp,
+.report-app-container-no-sidebar .btn-detail-link {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.report-app-container-no-sidebar .sponsor-header-name,
+.report-app-container-no-sidebar .seating-section-title,
+.report-app-container-no-sidebar .summary-card-title {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+.report-app-container-no-sidebar .table-title,
+.report-app-container-no-sidebar .brand-title-label,
+.report-app-container-no-sidebar .contract-title-label {
+  font-size: 1rem;
+}
+
+.report-app-container-no-sidebar .package-table,
+.report-app-container-no-sidebar .stage-banner-bar,
+.report-app-container-no-sidebar .seat-block,
+.report-app-container-no-sidebar .legend-color-pill,
+.report-app-container-no-sidebar .legend-price-text,
+.report-app-container-no-sidebar .summary-data-row,
+.report-app-container-no-sidebar .summary-card-total,
+.report-app-container-no-sidebar .pdf-filename {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.report-app-container-no-sidebar .brand-logo-text {
+  font-size: 0.78rem;
+}
+
+.report-app-container-no-sidebar .report-footer,
+.report-app-container-no-sidebar .no-data-box {
+  font-size: 1rem;
+}
+
 /* ==========================================================================
    Responsive Breakpoints for Concert Report System (/report)
    ========================================================================== */

@@ -372,8 +372,8 @@ type customerTicketDTO struct {
 	EventDate   string    `json:"event_date"`
 	Location    string    `json:"location"`
 	Zone        string    `json:"zone"`
-	SeatRow     int       `json:"seat_row"`
-	SeatColumn  int       `json:"seat_column"`
+	SeatRow     string    `json:"seat_row"`
+	SeatColumn  string    `json:"seat_column"`
 	Status      string    `json:"status"`
 	PurchasedAt time.Time `json:"purchased_at"`
 }
@@ -385,8 +385,8 @@ func (h *customerAccountHandler) listTickets(c *fiber.Ctx) error {
 		Select(`CONCAT('TK-', t.ticket_id) AS ticket_id, t.booking_id, COALESCE(c.concert_id, '') AS concert_id,
 			COALESCE(NULLIF(t.name_concert, ''), c.concert_name, 'คอนเสิร์ต') AS concert_name,
 			COALESCE(c.start_date::text, '') AS event_date, COALESCE(c.location, '') AS location,
-			COALESCE(z.zone_type, '') AS zone, COALESCE(s.seat_row, 0) AS seat_row,
-			COALESCE(s.seat_column, 0) AS seat_column, t.status_ticket AS status,
+			COALESCE(z.zone_type, '') AS zone, COALESCE(s.seat_row, '') AS seat_row,
+			COALESCE(s.seat_column, '') AS seat_column, t.status_ticket AS status,
 			t.ticket_date_time AS purchased_at`).
 		Joins("JOIN bookings b ON b.booking_id = t.booking_id").
 		Joins("LEFT JOIN seats s ON s.seat_id = t.seat_id").

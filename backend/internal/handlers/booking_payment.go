@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/mailer"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -17,11 +18,18 @@ import (
 )
 
 type bookingPaymentHandler struct {
-	db *gorm.DB
+	db     *gorm.DB
+	mailer mailer.Mailer
 }
 
+// RegisterBookingPaymentRoutes ลงทะเบียน route สำหรับ production ใช้ mailer จริงจาก env
 func RegisterBookingPaymentRoutes(app *fiber.App, db *gorm.DB) {
-	h := &bookingPaymentHandler{db: db}
+	registerBookingPaymentRoutes(app, db, mailer.FromEnv())
+}
+
+// registerBookingPaymentRoutes รับ mailer แยกต่างหากเพื่อให้เทสต์ inject ตัวปลอมได้
+func registerBookingPaymentRoutes(app *fiber.App, db *gorm.DB, sender mailer.Mailer) {
+	h := &bookingPaymentHandler{db: db, mailer: sender}
 
 	// Customer Booking Endpoints
 	app.Post("/api/bookings", h.createBooking)
@@ -140,6 +148,11 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกชื่อและอีเมลผู้จอง"})
 	}
 
+	// การจองต้องระบุที่นั่งเสมอ — ไม่งั้นจะได้ booking ที่ไม่รู้ว่ากินที่นั่งใบไหน
+	if len(input.Seats) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกที่นั่งอย่างน้อย 1 ที่"})
+	}
+
 	now := time.Now().UTC()
 	dateStr := now.Format("20060102")
 	randomSuffix := fmt.Sprintf("%04d", rand.Intn(10000))
@@ -182,36 +195,90 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		TotalPrice:     input.TotalPrice,
 	}
 
-	if err := h.db.Create(&booking).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกการจองได้: " + err.Error()})
+	// เตรียมผังที่นั่งไว้ก่อน (คอนเสิร์ตสาธิตที่ยังไม่มีผังจะได้ผังเริ่มต้น)
+	if err := ensureZoneSeats(h.db, input.ConcertID, input.ZoneID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถเตรียมผังที่นั่งได้"})
 	}
 
-	// บันทึกสลิปการโอนเงิน (Payment)
-	if input.SlipFileName != "" || input.SlipDataURL != "" {
-		paymentID := fmt.Sprintf("PY-%s-%s", dateStr, randomSuffix)
-		var fileBytes []byte
-		if strings.Contains(input.SlipDataURL, "base64,") {
-			parts := strings.Split(input.SlipDataURL, "base64,")
-			if len(parts) == 2 {
-				decoded, _ := base64.StdEncoding.DecodeString(parts[1])
-				fileBytes = decoded
+	var category models.TicketCategory
+	_ = h.db.Where("zone_id = ?", input.ZoneID).First(&category).Error
+
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&booking).Error; err != nil {
+			return err
+		}
+
+		seats, err := reserveSeats(tx, input.ConcertID, input.ZoneID, input.Seats)
+		if err != nil {
+			return err
+		}
+
+		tickets := make([]models.Ticket, 0, len(seats))
+		for i := range seats {
+			label := seats[i].Label()
+			ticketID := fmt.Sprintf("TK-%s-%s", bookingID, label)
+			tickets = append(tickets, models.Ticket{
+				TicketID:       ticketID,
+				NameConcert:    input.ConcertTitle,
+				TicketDateTime: now,
+				PriceTicket:    input.UnitPrice,
+				StatusTicket:   ticketStatusPending,
+				SeatID:         seats[i].SeatID,
+				SeatLabel:      label,
+				CategoryID:     category.CategoryID,
+				BookingID:      bookingID,
+				QrCodeData: fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s",
+					ticketID, input.ConcertTitle, input.ZoneID, label, input.CustomerName),
+			})
+		}
+		if len(tickets) > 0 {
+			if err := tx.Create(&tickets).Error; err != nil {
+				return err
+			}
+			booking.Tickets = tickets
+		}
+
+		// บันทึกสลิปการโอนเงิน (Payment)
+		if input.SlipFileName != "" || input.SlipDataURL != "" {
+			paymentID := fmt.Sprintf("PY-%s-%s", dateStr, randomSuffix)
+			var fileBytes []byte
+			if strings.Contains(input.SlipDataURL, "base64,") {
+				parts := strings.Split(input.SlipDataURL, "base64,")
+				if len(parts) == 2 {
+					decoded, _ := base64.StdEncoding.DecodeString(parts[1])
+					fileBytes = decoded
+				}
+			}
+
+			fileName := input.SlipFileName
+			if fileName == "" {
+				fileName = "payment_slip.jpg"
+			}
+
+			if err := tx.Create(&models.Payment{
+				PaymentID:     paymentID,
+				EvidenceFile:  fileBytes,
+				FileName:      fileName,
+				PaymentStatus: "รอตรวจสอบ",
+				BookingID:     bookingID,
+				CreatedAt:     now,
+			}).Error; err != nil {
+				return err
 			}
 		}
 
-		fileName := input.SlipFileName
-		if fileName == "" {
-			fileName = "payment_slip.jpg"
-		}
+		return nil
+	})
 
-		payment := models.Payment{
-			PaymentID:     paymentID,
-			EvidenceFile:  fileBytes,
-			FileName:      fileName,
-			PaymentStatus: "รอตรวจสอบ",
-			BookingID:     bookingID,
-			CreatedAt:     now,
+	if err != nil {
+		var conflict seatConflictError
+		if errors.As(err, &conflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error":             conflict.Error(),
+				"unavailable_seats": conflict.Labels,
+			})
 		}
-		_ = h.db.Create(&payment).Error
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกการจองได้: " + err.Error()})
 	}
 
 	// Log customer activity
@@ -249,6 +316,7 @@ func (h *bookingPaymentHandler) getCustomerBookings(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดรายการจองได้"})
 	}
 
+<<<<<<< HEAD
 	// Auto-repair: หากรายการจองอนุมัติแล้ว (issued) แต่ยังไม่มี tickets ให้สร้างทันที
 	for idx, b := range bookings {
 		if b.Status == "issued" && len(b.Tickets) == 0 {
@@ -282,6 +350,8 @@ func (h *bookingPaymentHandler) getCustomerBookings(c *fiber.Ctx) error {
 		}
 	}
 
+=======
+>>>>>>> main
 	return c.JSON(fiber.Map{"data": bookings})
 }
 
@@ -314,6 +384,7 @@ func (h *bookingPaymentHandler) getSalesBookings(c *fiber.Ctx) error {
 
 // 4. Approve Booking & Auto-issue E-Tickets with QR Code (UP2 <<include>> UP3)
 func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
+	actorID := optionalEmployeeAuditUserID(c, h.db)
 	bookingID := c.Params("id")
 	var input approveBookingInput
 	_ = c.BodyParser(&input)
@@ -343,6 +414,7 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 	// อัปเดตสถานะ Payment เป็น อนุมัติ
 	_ = h.db.Model(&models.Payment{}).Where("booking_id = ?", bookingID).Update("payment_status", "อนุมัติ").Error
 
+<<<<<<< HEAD
 	// UP3: สร้างตั๋ว E-Ticket พร้อม QR Code (หากยังไม่มี)
 	var existingTickets []models.Ticket
 	h.db.Where("booking_id = ?", bookingID).Find(&existingTickets)
@@ -377,12 +449,23 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถออกบัตรได้"})
 			}
 		}
+=======
+	// UP3: ออกบัตร E-Ticket — ตั๋วถูกสร้างไว้ตั้งแต่ตอนจองแล้ว ที่นี่แค่เปลี่ยนสถานะ
+	if err := h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Updates(map[string]any{
+			"status_ticket":    ticketStatusIssued,
+			"ticket_date_time": now,
+		}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถออกบัตรได้"})
+>>>>>>> main
 	}
 
 	// บันทึกประวัติการตรวจสอบลง emp_activity_logs (Audit Trail)
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
 		ActionType:  "อนุมัติการชำระเงิน",
+		UserID:      actorID,
+		Module:      "การจอง",
 		Description: fmt.Sprintf("อนุมัติการจอง %s และออกบัตรเข้าชม E-Ticket พร้อม QR Code (ผู้ตรวจสอบ: %s)", bookingID, officerName),
 		TargetID:    bookingID,
 		CreatedAt:   now,
@@ -398,6 +481,7 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 
 // 5. Reject Booking (UP4)
 func (h *bookingPaymentHandler) rejectBooking(c *fiber.Ctx) error {
+	actorID := optionalEmployeeAuditUserID(c, h.db)
 	bookingID := c.Params("id")
 	var input rejectBookingInput
 	if err := c.BodyParser(&input); err != nil || input.Reason == "" {
@@ -426,10 +510,22 @@ func (h *bookingPaymentHandler) rejectBooking(c *fiber.Ctx) error {
 
 	_ = h.db.Model(&models.Payment{}).Where("booking_id = ?", bookingID).Update("payment_status", "ปฏิเสธ").Error
 
+	// คืนที่นั่งให้ลูกค้าคนอื่นจองต่อได้ และยกเลิกตั๋วของการจองนี้
+	var seatIDs []string
+	if err := h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Pluck("seat_id", &seatIDs).Error; err == nil && len(seatIDs) > 0 {
+		_ = h.db.Model(&models.Seat{}).Where("seat_id IN ?", seatIDs).
+			Update("status_seat", seatStatusAvailable).Error
+	}
+	_ = h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Update("status_ticket", ticketStatusCancelled).Error
+
 	// บันทึก Audit Log
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
 		ActionType:  "ปฏิเสธการชำระเงิน",
+		UserID:      actorID,
+		Module:      "การจอง",
 		Description: fmt.Sprintf("ปฏิเสธการจอง %s เหตุผล: %s (ผู้ตรวจสอบ: %s)", bookingID, input.Reason, officerName),
 		TargetID:    bookingID,
 		CreatedAt:   now,
@@ -494,6 +590,10 @@ func (h *bookingPaymentHandler) reuploadSlip(c *fiber.Ctx) error {
 
 // 7. Resend Ticket via Email with identical QR code (UP5)
 func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
+	var actorID *string
+	if c.Route().Path == "/api/sales/bookings/:id/resend" {
+		actorID = optionalEmployeeAuditUserID(c, h.db)
+	}
 	bookingID := c.Params("id")
 	var booking models.Booking
 	if err := h.db.Preload("Tickets").Where("booking_id = ?", bookingID).First(&booking).Error; err != nil {
@@ -504,10 +604,17 @@ func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ไม่สามารถส่งบัตรได้เนื่องจากยังไม่อนุมัติการออกบัตร"})
 	}
 
+	subject, body := buildTicketResendEmail(booking)
+	if err := h.mailer.Send(booking.CustomerEmail, subject, body); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถส่งอีเมลได้"})
+	}
+
 	// บันทึกกิจกรรมขอส่งบัตรซ้ำ
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
 		ActionType:  "ขอส่งบัตรซ้ำ",
+		UserID:      actorID,
+		Module:      "การจอง",
 		Description: fmt.Sprintf("ส่งบัตร E-Ticket ซ้ำทางอีเมล (%s) สำหรับการจอง %s", booking.CustomerEmail, bookingID),
 		TargetID:    bookingID,
 		CreatedAt:   time.Now().UTC(),
@@ -517,6 +624,25 @@ func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
 		"message": fmt.Sprintf("ส่งบัตรเข้าชมซ้ำไปยังอีเมล %s สำเร็จ (ใช้รหัสและ QR Code เดิม)", booking.CustomerEmail),
 		"data":    booking.Tickets,
 	})
+}
+
+// buildTicketResendEmail สร้างหัวข้อ+เนื้อหาอีเมลส่งบัตรซ้ำ จากข้อมูลจริงใน Booking/Ticket
+// ไม่แนบรูปภาพ/QR Code (ต้องมี library เพิ่มซึ่งนอกขอบเขต) — บอกให้เข้าเว็บไปดู QR Code ที่หน้า "บัตรของฉัน" แทน
+func buildTicketResendEmail(booking models.Booking) (string, string) {
+	subject := fmt.Sprintf("บัตรเข้าชม %s (ส่งซ้ำ)", booking.ConcertTitle)
+	lines := []string{
+		fmt.Sprintf("นี่คือบัตรเข้าชม %s ของคุณ (รหัสการจอง %s)", booking.ConcertTitle, booking.BookingID),
+		"",
+		"รายการบัตร:",
+	}
+	for _, ticket := range booking.Tickets {
+		lines = append(lines, fmt.Sprintf("- ที่นั่ง %s (รหัสตั๋ว %s)", ticket.SeatLabel, ticket.TicketID))
+	}
+	lines = append(lines,
+		"",
+		"เข้าสู่ระบบแล้วไปที่หน้า \"บัตรของฉัน\" เพื่อดู QR Code สำหรับสแกนเข้างาน",
+	)
+	return subject, strings.Join(lines, "\r\n")
 }
 
 // 8. Serve Slip Image

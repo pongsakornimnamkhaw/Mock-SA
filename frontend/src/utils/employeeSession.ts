@@ -1,3 +1,5 @@
+import type { PersonnelType } from '@/types/promotion';
+
 export interface EmployeeSession {
   userId: string;
   employeeCode: string;
@@ -9,6 +11,8 @@ export interface EmployeeSession {
   email: string;
   phone?: string;
   userType?: string;
+  personnelType?: PersonnelType;
+  lastLoginAt?: string;
 }
 
 const EMPLOYEE_SESSION_KEY = 'octavia-employee-session-ui-v1';

@@ -4,6 +4,7 @@ import "gorm.io/gorm"
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
+<<<<<<< HEAD
 	if err := db.AutoMigrate(allModels()...); err != nil {
 		return err
 	}
@@ -15,10 +16,17 @@ func MigrateAllModels(db *gorm.DB) error {
 
 func allModels() []any {
 	return []any{
+=======
+	if err := prepareSeatColumnTypes(db); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(
+>>>>>>> main
 		// User & Access
 		&User{},
 		&CusActivityLogs{},
 		&EmpActivityLogs{},
+		&EmployeePasswordResetRequest{},
 		&Permission{},
 		&Inquiry{},
 
@@ -62,6 +70,7 @@ func allModels() []any {
 		&SponsorshipRequest{},
 		&Task{},
 	}
+<<<<<<< HEAD
 }
 
 func ensureTicketPlanningConstraints(db *gorm.DB) error {
@@ -79,6 +88,14 @@ func ticketPlanningConstraintStatements() []string {
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert' AND conrelid = 'layout_objects'::regclass) THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert' AND conrelid = 'publications'::regclass) THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
 	}
+=======
+	if err := db.Model(&User{}).
+		Where("(LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND COALESCE(personnel_type, '') = ''", []string{"employee", "staff", "admin", "พนักงาน"}).
+		Update("personnel_type", PersonnelTypeInternal).Error; err != nil {
+		return err
+	}
+	return normalizeOperationalDateTimeColumns(db)
+>>>>>>> main
 }
 
 // normalizeOperationalDateTimeColumns keeps business dates and clock values
@@ -86,6 +103,12 @@ func ticketPlanningConstraintStatements() []string {
 // columns to timestamp without time zone so every table is consistent.
 func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 	statements := []string{
+		// ticket_categories.promotion_name/promotion_id becomes nullable: a category
+		// projected from a seat layout (seat_inventory.go) has no promotion attached.
+		// AutoMigrate does not reliably drop an existing NOT NULL, so do it explicitly.
+		`ALTER TABLE ticket_categories ALTER COLUMN promotion_name DROP NOT NULL`,
+		`ALTER TABLE ticket_categories ALTER COLUMN promotion_id DROP NOT NULL`,
+
 		// operational time/date columns
 		`ALTER TABLE concerts ALTER COLUMN start_time TYPE time without time zone USING start_time::time`,
 		`ALTER TABLE concerts ALTER COLUMN end_time TYPE time without time zone USING end_time::time`,
@@ -121,3 +144,41 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		return nil
 	})
 }
+<<<<<<< HEAD
+=======
+
+// MigrateVenueSeatModels รัน AutoMigrate เฉพาะตาราง Venue/Seat
+// (ถูกเรียกใช้จาก main.go)
+func MigrateVenueSeatModels(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&Concert{},
+		&VenueSeatPlan{},
+		&VenueSeatRound{},
+		&VenueSeatZone{},
+		&VenueSeat{},
+		&VenueLayoutObject{},
+		&VenueSeatPublication{},
+	)
+}
+
+// prepareSeatColumnTypes แปลง seats.seat_row / seat_column จาก integer เป็น varchar
+// ต้องรันก่อน AutoMigrate เพราะ PostgreSQL แปลง integer → varchar ให้เองไม่ได้ ต้องระบุ USING
+// ฟังก์ชันนี้ idempotent: ติดตั้งใหม่ (ยังไม่มีตาราง) หรือแปลงไปแล้ว จะไม่ทำอะไร
+func prepareSeatColumnTypes(db *gorm.DB) error {
+	var dataType string
+	if err := db.Raw(
+		`SELECT data_type FROM information_schema.columns
+		 WHERE table_schema = current_schema() AND table_name = 'seats' AND column_name = 'seat_row'`,
+	).Scan(&dataType).Error; err != nil {
+		return err
+	}
+	if dataType == "" || dataType == "character varying" {
+		return nil
+	}
+	return db.Exec(
+		`ALTER TABLE seats
+		   ALTER COLUMN seat_row TYPE varchar(50) USING seat_row::varchar,
+		   ALTER COLUMN seat_column TYPE varchar(50) USING seat_column::varchar`,
+	).Error
+}
+>>>>>>> main

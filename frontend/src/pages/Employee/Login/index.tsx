@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Divider,
   IconButton,
   InputAdornment,
   Paper,
@@ -42,12 +41,6 @@ export default function EmployeeLoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickFillSales = () => {
-    setUsername('B6728786');
-    setPassword('Admin1234!');
-    setError('');
   };
 
   return (
@@ -164,6 +157,24 @@ export default function EmployeeLoginPage() {
               }}
             />
 
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1.5, mb: 2 }}>
+              <Button
+                component={RouterLink}
+                to="/employee/forgot-password"
+                sx={{
+                  color: '#d63384',
+                  textTransform: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  p: 0,
+                  minWidth: 0,
+                  '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                }}
+              >
+                ลืมรหัสผ่าน
+              </Button>
+            </Box>
+
             <Button
               type="submit"
               variant="contained"
@@ -184,31 +195,6 @@ export default function EmployeeLoginPage() {
               {loading ? 'กำลังตรวจสอบ...' : 'เข้าสู่ระบบพนักงาน'}
             </Button>
           </Box>
-
-          <Divider sx={{ width: '100%', borderColor: '#e2e8f0' }}>
-            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-              บัญชีทดสอบสำหรับตรวจงาน
-            </Typography>
-          </Divider>
-
-          <Button
-            variant="outlined"
-            fullWidth
-            onClick={handleQuickFillSales}
-            sx={{
-              borderColor: '#cbd5e1',
-              color: '#11366b',
-              bgcolor: '#f8fafc',
-              borderRadius: '15px',
-              py: 1,
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '0.88rem',
-              '&:hover': { borderColor: '#11366b', bgcolor: '#f1f5f9' },
-            }}
-          >
-            ใส่ข้อมูลเจ้าหน้าที่ฝ่ายขาย (B6728786) ทันที
-          </Button>
 
           <Button
             component={RouterLink}

@@ -1,0 +1,12 @@
+./artist.go
+./base.go
+./concert.go
+./employee_password_reset.go
+./migrate.go
+./performance.go
+./promotion.go
+./ticket.go
+./user.go
+./venue.go
+./work.go
+./employee_password_reset_test.go

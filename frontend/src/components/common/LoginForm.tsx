@@ -105,22 +105,7 @@ const LoginForm = () => { //React.FC || () =>  identify that this is a functiona
                 {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </Button>
 
-            <Box sx={{ mt: 3, pt: 2, borderTop: '1px dashed #e0e0e0', textAlign: 'center' }}>
-                <Button
-                    variant="text"
-                    size="small"
-                    onClick={() => {
-                        setEmail('customer.demo@octavia.test');
-                        setPassword('Demo1234!');
-                        setError('');
-                    }}
-                    sx={{ color: '#11366b', textTransform: 'none', fontSize: '0.85rem' }}
-                >
-                    กรอกข้อมูลบัญชีทดสอบลูกค้า (Demo Customer)
-                </Button>
-            </Box>
-
-            <Box sx={{ mt: 1, textAlign: 'center' }}>
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <Link
                     component={RouterLink}
                     to="/employee/login"
