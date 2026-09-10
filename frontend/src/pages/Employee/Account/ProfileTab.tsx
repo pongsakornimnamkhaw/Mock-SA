@@ -108,8 +108,10 @@ export default function ProfileTab({ profile, onProfileUpdated }: Props) {
         disabled={isInternal}
         size="small"
         type="email"
-        inputProps={{ 'aria-label': 'อีเมล' }}
-        slotProps={{ inputLabel: { shrink: true } }}
+        slotProps={{
+          htmlInput: { 'aria-label': 'อีเมล' },
+          inputLabel: { shrink: true },
+        }}
         sx={fieldSx}
       />
       <TextField
@@ -117,8 +119,10 @@ export default function ProfileTab({ profile, onProfileUpdated }: Props) {
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
         size="small"
-        inputProps={{ 'aria-label': 'เบอร์โทรศัพท์' }}
-        slotProps={{ inputLabel: { shrink: true } }}
+        slotProps={{
+          htmlInput: { 'aria-label': 'เบอร์โทรศัพท์' },
+          inputLabel: { shrink: true },
+        }}
         sx={fieldSx}
       />
 

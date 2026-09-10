@@ -164,6 +164,24 @@ export default function EmployeeLoginPage() {
               }}
             />
 
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1.5, mb: 2 }}>
+              <Button
+                component={RouterLink}
+                to="/employee/forgot-password"
+                sx={{
+                  color: '#d63384',
+                  textTransform: 'none',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  p: 0,
+                  minWidth: 0,
+                  '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+                }}
+              >
+                ลืมรหัสผ่าน
+              </Button>
+            </Box>
+
             <Button
               type="submit"
               variant="contained"

@@ -61,7 +61,7 @@ const makeActivityPage = (): EmployeeActivityPage => ({
   total: 1,
 });
 
-function renderAccount(personnelType: PersonnelType = 'internal') {
+function renderAccount(_personnelType: PersonnelType = 'internal') {
   render(
     <MemoryRouter>
       <EmployeeAccountPage />

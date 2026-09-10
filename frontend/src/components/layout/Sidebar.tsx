@@ -1,6 +1,7 @@
 // src/components/layout/Sidebar.tsx
 import { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
+import Badge from '@mui/material/Badge';
 import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import List from '@mui/material/List';
@@ -20,6 +21,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LogoutIcon from '@mui/icons-material/Logout';
 import logoImage from '../../assets/octavia-logo.png';
 import { getEmployeeSession, clearEmployeeSession, EMPLOYEE_SESSION_EVENT } from '@/utils/employeeSession';
+import { employeeAccountApi } from '@/api/employeeAccountApi';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -113,6 +115,7 @@ export default function Sidebar() {
   const path = location.pathname;
 
   const [employee, setEmployee] = useState(getEmployeeSession);
+  const [pendingResetCount, setPendingResetCount] = useState(0);
 
   useEffect(() => {
     const sync = () => setEmployee(getEmployeeSession());
@@ -123,6 +126,32 @@ export default function Sidebar() {
       window.removeEventListener(EMPLOYEE_SESSION_EVENT, sync);
     };
   }, []);
+
+  useEffect(() => {
+    if (employee?.role !== 'admin') {
+      setPendingResetCount(0);
+      return;
+    }
+
+    let active = true;
+    const fetchCount = async () => {
+      try {
+        const count = await employeeAccountApi.getPendingResetCount();
+        if (active) {
+          setPendingResetCount(count);
+        }
+      } catch {
+        // ignore errors silently
+      }
+    };
+
+    fetchCount();
+    const interval = setInterval(fetchCount, 60000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [employee?.role]);
 
   const handleSignOut = () => {
     clearEmployeeSession();
@@ -320,6 +349,21 @@ export default function Sidebar() {
           <NavItem active={isEmployees ? 1 : 0} onClick={() => navigate('/employees')}>
             <DotIcon color={isEmployees ? '#fff' : '#94a3b8'} />
             <ListItemText primary="จัดการสิทธิ์พนักงาน" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {pendingResetCount > 0 && (
+              <Badge
+                badgeContent={pendingResetCount}
+                color="error"
+                sx={{
+                  '& .MuiBadge-badge': {
+                    bgcolor: '#ef4444',
+                    color: '#ffffff',
+                    fontSize: '0.7rem',
+                    height: 18,
+                    minWidth: 18,
+                  },
+                }}
+              />
+            )}
           </NavItem>
         </ListItem>
       </List>

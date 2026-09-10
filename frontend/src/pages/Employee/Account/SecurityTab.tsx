@@ -52,8 +52,10 @@ export default function SecurityTab() {
         value={currentPassword}
         onChange={(e) => setCurrentPassword(e.target.value)}
         size="small"
-        inputProps={{ 'aria-label': 'รหัสผ่านปัจจุบัน' }}
-        slotProps={{ inputLabel: { shrink: true } }}
+        slotProps={{
+          htmlInput: { 'aria-label': 'รหัสผ่านปัจจุบัน' },
+          inputLabel: { shrink: true },
+        }}
         sx={fieldSx}
       />
       <TextField
@@ -62,8 +64,10 @@ export default function SecurityTab() {
         value={newPassword}
         onChange={(e) => setNewPassword(e.target.value)}
         size="small"
-        inputProps={{ 'aria-label': 'รหัสผ่านใหม่' }}
-        slotProps={{ inputLabel: { shrink: true } }}
+        slotProps={{
+          htmlInput: { 'aria-label': 'รหัสผ่านใหม่' },
+          inputLabel: { shrink: true },
+        }}
         sx={fieldSx}
       />
       <TextField
@@ -72,8 +76,10 @@ export default function SecurityTab() {
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
         size="small"
-        inputProps={{ 'aria-label': 'ยืนยันรหัสผ่านใหม่' }}
-        slotProps={{ inputLabel: { shrink: true } }}
+        slotProps={{
+          htmlInput: { 'aria-label': 'ยืนยันรหัสผ่านใหม่' },
+          inputLabel: { shrink: true },
+        }}
         sx={fieldSx}
       />
 

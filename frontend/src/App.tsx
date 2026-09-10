@@ -54,6 +54,7 @@ import UsageHistoryPage from './pages/Employee/history/UsageHistoryPage'
 import EmployeeListPage from './pages/Employee/employees/EmployeeListPage'
 import EmployeeFormPage from './pages/Employee/employees/EmployeeFormPage'
 import EmployeeAccountPage from './pages/Employee/Account'
+import EmployeePasswordRecoveryPage from './pages/Employee/PasswordRecovery'
 import type { EditHistoryEntry } from './types/promotion'
 
 // B6733377 - External Contact
@@ -77,6 +78,7 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/employee/login" element={<EmployeeLoginPage />} />
       <Route path="/staff/login" element={<EmployeeLoginPage />} />
+      <Route path="/employee/forgot-password" element={<EmployeePasswordRecoveryPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/register" element={<RegisterPage />} />

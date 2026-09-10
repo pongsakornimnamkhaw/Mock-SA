@@ -21,6 +21,18 @@ The backend uses its existing `.env` PostgreSQL connection (`DB_HOST`, `DB_PORT`
 | `/api/activity-logs?type=user` | GET | Existing customer activity logs |
 | `/api/activity-logs?type=staff&scope=account` | GET | Employee account activity only |
 | `/api/activity-logs?type=user&scope=account` | GET | Customer account activity only |
+| `/api/employee/auth/login` | POST | Authenticate employee and set secure session cookie |
+| `/api/employee/auth/logout` | POST | Destroy employee session |
+| `/api/employee/account/profile` | GET, PATCH | View and update self profile (internal: phone only, external: email & phone) |
+| `/api/employee/account/password` | POST | Change self password with current password verification |
+| `/api/employee/account/activity` | GET | Paginated session-scoped employee activity audit log |
+| `/api/employee/password-recovery/request` | POST | Create public password reset request and issue browser token |
+| `/api/employee/password-recovery/status` | GET | Check password reset status (pending / approved / rejected / expired) |
+| `/api/employee/password-recovery/complete` | POST | Set new password once approved by administrator |
+| `/api/employee/admin/password-reset-requests` | GET | Admin list reset requests with pagination & filtering |
+| `/api/employee/admin/password-reset-requests/pending-count` | GET | Admin count of pending reset requests for badge notification |
+| `/api/employee/admin/password-reset-requests/:id/approve` | POST | Admin approve reset request with phone confirmation requirement |
+| `/api/employee/admin/password-reset-requests/:id/reject` | POST | Admin reject reset request with reason |
 
 Mutations and their audit records share a transaction. Promotion edits require a new approval. Superseded pending requests are retained as rejected with an automatic cancellation explanation; decided requests remain unchanged. Row locks guard simultaneous decisions. Promo codes are case-insensitive and remain reserved after archiving. Unique employee codes and emails are validated. Customer records cannot be modified through employee endpoints.
 

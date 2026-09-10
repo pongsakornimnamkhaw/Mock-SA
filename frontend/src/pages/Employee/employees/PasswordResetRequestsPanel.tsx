@@ -229,7 +229,7 @@ export default function PasswordResetRequestsPanel() {
                                     size="small"
                                     checked={isVerified}
                                     onChange={(e) => handleVerifyChange(item.requestId, e.target.checked)}
-                                    inputProps={{ 'aria-label': 'โทรยืนยันกับเบอร์เดิมแล้ว' }}
+                                    slotProps={{ htmlInput: { 'aria-label': 'โทรยืนยันกับเบอร์เดิมแล้ว' } }}
                                   />
                                 }
                                 label={<Typography variant="caption" sx={{ color: '#334155', fontWeight: 500 }}>โทรยืนยันกับเบอร์เดิมแล้ว</Typography>}
