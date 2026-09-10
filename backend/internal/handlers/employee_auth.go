@@ -141,7 +141,7 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 		ActionType:  "เข้าสู่ระบบ",
 		Description: "พนักงาน " + user.FirstName + " เข้าสู่ระบบ",
 		TargetID:    user.UserID,
-		CreatedAt:   time.Now().UTC(),
+		CreatedAt:   time.Now().In(accountHistoryLocation),
 	}).Error
 
 	return c.JSON(fiber.Map{
