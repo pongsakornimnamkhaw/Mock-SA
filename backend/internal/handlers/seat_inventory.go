@@ -190,3 +190,48 @@ func clearTicketingProjection(tx *gorm.DB, concertID string, zoneIDs []string) e
 	}
 	return tx.Where("zone_id IN ?", removable).Delete(&models.Zone{}).Error
 }
+
+// seatConflictError บอกว่าที่นั่งใบไหนจองไม่ได้ (ถูกคนอื่นชิงไปแล้ว หรือไม่มีอยู่จริง)
+type seatConflictError struct {
+	Labels []string
+}
+
+func (e seatConflictError) Error() string {
+	return "ที่นั่งไม่ว่างแล้ว: " + strings.Join(e.Labels, ", ")
+}
+
+// reserveSeats เปลี่ยนที่นั่งที่ลูกค้าเลือกให้เป็นไม่ว่าง แล้วคืนแถวที่จองได้
+// กันจองซ้ำด้วย conditional update: ถ้าจำนวนแถวที่อัปเดตได้ไม่ครบ แปลว่ามีคนชิงไประหว่างทาง
+func reserveSeats(tx *gorm.DB, concertID, zoneID string, labels []string) ([]models.Seat, error) {
+	if len(labels) == 0 {
+		return nil, nil
+	}
+
+	var seats []models.Seat
+	if err := tx.Where(
+		"concert_id = ? AND zone_id = ? AND (seat_row || seat_column) IN ?",
+		concertID, zoneID, labels,
+	).Find(&seats).Error; err != nil {
+		return nil, err
+	}
+	if len(seats) != len(labels) {
+		return nil, seatConflictError{Labels: missingSeatLabels(labels, seats)}
+	}
+
+	seatIDs := make([]string, 0, len(seats))
+	for i := range seats {
+		seatIDs = append(seatIDs, seats[i].SeatID)
+	}
+
+	result := tx.Model(&models.Seat{}).
+		Where("seat_id IN ? AND status_seat = ?", seatIDs, seatStatusAvailable).
+		Update("status_seat", seatStatusTaken)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if int(result.RowsAffected) != len(seatIDs) {
+		return nil, seatConflictError{Labels: labels}
+	}
+
+	return seats, nil
+}

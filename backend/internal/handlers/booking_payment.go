@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -84,6 +85,11 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกชื่อและอีเมลผู้จอง"})
 	}
 
+	// การจองต้องระบุที่นั่งเสมอ — ไม่งั้นจะได้ booking ที่ไม่รู้ว่ากินที่นั่งใบไหน
+	if len(input.Seats) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณาเลือกที่นั่งอย่างน้อย 1 ที่"})
+	}
+
 	now := time.Now().UTC()
 	dateStr := now.Format("20060102")
 	randomSuffix := fmt.Sprintf("%04d", rand.Intn(10000))
@@ -126,36 +132,90 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		TotalPrice:     input.TotalPrice,
 	}
 
-	if err := h.db.Create(&booking).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกการจองได้: " + err.Error()})
+	// เตรียมผังที่นั่งไว้ก่อน (คอนเสิร์ตสาธิตที่ยังไม่มีผังจะได้ผังเริ่มต้น)
+	if err := ensureZoneSeats(h.db, input.ConcertID, input.ZoneID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถเตรียมผังที่นั่งได้"})
 	}
 
-	// บันทึกสลิปการโอนเงิน (Payment)
-	if input.SlipFileName != "" || input.SlipDataURL != "" {
-		paymentID := fmt.Sprintf("PY-%s-%s", dateStr, randomSuffix)
-		var fileBytes []byte
-		if strings.Contains(input.SlipDataURL, "base64,") {
-			parts := strings.Split(input.SlipDataURL, "base64,")
-			if len(parts) == 2 {
-				decoded, _ := base64.StdEncoding.DecodeString(parts[1])
-				fileBytes = decoded
+	var category models.TicketCategory
+	_ = h.db.Where("zone_id = ?", input.ZoneID).First(&category).Error
+
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&booking).Error; err != nil {
+			return err
+		}
+
+		seats, err := reserveSeats(tx, input.ConcertID, input.ZoneID, input.Seats)
+		if err != nil {
+			return err
+		}
+
+		tickets := make([]models.Ticket, 0, len(seats))
+		for i := range seats {
+			label := seats[i].Label()
+			ticketID := fmt.Sprintf("TK-%s-%s", bookingID, label)
+			tickets = append(tickets, models.Ticket{
+				TicketID:       ticketID,
+				NameConcert:    input.ConcertTitle,
+				TicketDateTime: now,
+				PriceTicket:    input.UnitPrice,
+				StatusTicket:   ticketStatusPending,
+				SeatID:         seats[i].SeatID,
+				SeatLabel:      label,
+				CategoryID:     category.CategoryID,
+				BookingID:      bookingID,
+				QrCodeData: fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s",
+					ticketID, input.ConcertTitle, input.ZoneID, label, input.CustomerName),
+			})
+		}
+		if len(tickets) > 0 {
+			if err := tx.Create(&tickets).Error; err != nil {
+				return err
+			}
+			booking.Tickets = tickets
+		}
+
+		// บันทึกสลิปการโอนเงิน (Payment)
+		if input.SlipFileName != "" || input.SlipDataURL != "" {
+			paymentID := fmt.Sprintf("PY-%s-%s", dateStr, randomSuffix)
+			var fileBytes []byte
+			if strings.Contains(input.SlipDataURL, "base64,") {
+				parts := strings.Split(input.SlipDataURL, "base64,")
+				if len(parts) == 2 {
+					decoded, _ := base64.StdEncoding.DecodeString(parts[1])
+					fileBytes = decoded
+				}
+			}
+
+			fileName := input.SlipFileName
+			if fileName == "" {
+				fileName = "payment_slip.jpg"
+			}
+
+			if err := tx.Create(&models.Payment{
+				PaymentID:     paymentID,
+				EvidenceFile:  fileBytes,
+				FileName:      fileName,
+				PaymentStatus: "รอตรวจสอบ",
+				BookingID:     bookingID,
+				CreatedAt:     now,
+			}).Error; err != nil {
+				return err
 			}
 		}
 
-		fileName := input.SlipFileName
-		if fileName == "" {
-			fileName = "payment_slip.jpg"
-		}
+		return nil
+	})
 
-		payment := models.Payment{
-			PaymentID:     paymentID,
-			EvidenceFile:  fileBytes,
-			FileName:      fileName,
-			PaymentStatus: "รอตรวจสอบ",
-			BookingID:     bookingID,
-			CreatedAt:     now,
+	if err != nil {
+		var conflict seatConflictError
+		if errors.As(err, &conflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error":             conflict.Error(),
+				"unavailable_seats": conflict.Labels,
+			})
 		}
-		_ = h.db.Create(&payment).Error
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถบันทึกการจองได้: " + err.Error()})
 	}
 
 	// Log customer activity
