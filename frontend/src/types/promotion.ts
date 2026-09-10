@@ -122,6 +122,7 @@ export interface Employee {
   phone: string;
   permission: EmployeePermission;
   edit_scope?: string;
+  personnel_type?: PersonnelType;
 }
 
 export interface ActivityLog {
