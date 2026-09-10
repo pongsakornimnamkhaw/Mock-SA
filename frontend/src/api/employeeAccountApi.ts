@@ -152,12 +152,12 @@ function mapProfile(d: Record<string, unknown>): EmployeeProfile {
 
 function mapActivity(d: Record<string, unknown>): EmployeeActivity {
   return {
-    logId: d.log_id as string,
-    action: d.action as string,
-    module: d.module as string,
-    targetId: d.target_id as string | undefined,
-    description: d.description as string | undefined,
-    createdAt: d.created_at as string,
+    logId: (d.log_id ?? d.emp_log_id) as string,
+    action: (d.action ?? d.action_type) as string,
+    module: (d.module ?? '-') as string,
+    targetId: (d.target_id ?? d.targetId) as string | undefined,
+    description: (d.description ?? d.detail) as string | undefined,
+    createdAt: (d.created_at ?? d.createdAt ?? d.date) as string,
   };
 }
 
