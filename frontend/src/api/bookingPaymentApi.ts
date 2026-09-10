@@ -9,6 +9,17 @@ import {
 } from '@/utils/bookingStore';
 import { buildQrCodeUrl } from '@/utils/ticketCode';
 
+/** เซิร์ฟเวอร์ปฏิเสธการจอง (เช่น ที่นั่งถูกคนอื่นชิงไปแล้ว) — ต่างจาก "ต่อเซิร์ฟเวอร์ไม่ติด" */
+export class BookingRejectedError extends Error {
+  readonly unavailableSeats: string[];
+
+  constructor(message: string, unavailableSeats: string[] = []) {
+    super(message);
+    this.name = 'BookingRejectedError';
+    this.unavailableSeats = unavailableSeats;
+  }
+}
+
 type BackendBookingWire = {
   booking_id: string;
   concert_id: string;
@@ -142,7 +153,11 @@ export const bookingPaymentApi = {
       });
 
       if (!res.ok) {
-        throw new Error('บันทึกการจองไม่สำเร็จ');
+        const body = await res.json().catch(() => ({}));
+        throw new BookingRejectedError(
+          body?.error || 'บันทึกการจองไม่สำเร็จ',
+          body?.unavailable_seats ?? [],
+        );
       }
 
       const json = await res.json();
@@ -150,7 +165,11 @@ export const bookingPaymentApi = {
       // Keep local sync in case user switches views
       addLocalBooking(mapped);
       return mapped;
-    } catch {
+    } catch (error) {
+      // เซิร์ฟเวอร์ตอบว่าไม่ผ่าน → ต้องให้ผู้ใช้เห็น ห้ามกลืนแล้วบอกว่าจองสำเร็จ
+      if (error instanceof BookingRejectedError) {
+        throw error;
+      }
       // Local Fallback
       return addLocalBooking({
         concertId: data.concertId,

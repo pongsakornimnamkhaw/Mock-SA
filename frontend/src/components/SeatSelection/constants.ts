@@ -1,5 +1,5 @@
 import { pulse, flux, celestial, starlight } from '@/assets/Poster';
-import type { EventData, ZoneInfo, SeatData } from './types';
+import type { EventData, ZoneInfo } from './types';
 
 // ข้อมูลคอนเสิร์ต (Mock)
 export const eventsMap: Record<string, EventData> = {
@@ -27,26 +27,6 @@ export const zonePriceMap: Record<string, ZoneInfo> = {
 export const LOCK_DURATION = 900;
 
 export const STEPS = ['เลือกโซนบัตร', 'เลือกที่นั่ง', 'ชำระเงิน'];
-
-// สร้างที่นั่งจำลอง 5 แถว x 8 ที่นั่ง
-export const generateSeats = (): SeatData[] => {
-    const rows = ['A', 'B', 'C', 'D', 'E'];
-    const seats: SeatData[] = [];
-    const reservedSeats = new Set(['A3', 'A4', 'B2', 'B5', 'B7', 'C1', 'C6', 'D4', 'D8', 'E2', 'E3', 'E7']);
-
-    rows.forEach((row) => {
-        for (let i = 1; i <= 8; i++) {
-            const seatId = `${row}${i}`;
-            seats.push({
-                id: seatId,
-                row: row,
-                number: i,
-                status: reservedSeats.has(seatId) ? 'reserved' : 'available',
-            });
-        }
-    });
-    return seats;
-};
 
 // ========== Format เวลา mm:ss ==========
 export const formatTime = (seconds: number) => {
