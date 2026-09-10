@@ -7,16 +7,9 @@ interface ConcertDetailReportProps {
   onBack: () => void;
 }
 
-export const ConcertDetailReport: React.FC<ConcertDetailReportProps> = ({ concert, onBack }) => {
+export const ConcertDetailReport: React.FC<ConcertDetailReportProps> = ({ concert }) => {
   return (
     <div className="concert-detail-report-view">
-      {/* Top Action Bar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '8px' }}>
-        <button type="button" className="btn-back-pill" onClick={onBack}>
-          ← ย้อนกลับไปหน้ารายการคอนเสิร์ต
-        </button>
-      </div>
-
       {/* Top Overview Card */}
       <ConcertCard concert={concert} onSelect={() => {}} />
 
