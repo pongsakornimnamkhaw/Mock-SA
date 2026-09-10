@@ -34,6 +34,8 @@ export const employeeAuthApi = {
         email: d.email,
         phone: d.phone,
         userType: d.user_type,
+        personnelType: d.personnel_type,
+        lastLoginAt: d.last_login_at,
       };
     } catch (err) {
       if (err instanceof EmployeeAuthError) throw err;
@@ -85,6 +87,8 @@ export const employeeAuthApi = {
         email: d.email,
         phone: d.phone,
         userType: d.user_type,
+        personnelType: d.personnel_type,
+        lastLoginAt: d.last_login_at,
       };
     } catch {
       return null;

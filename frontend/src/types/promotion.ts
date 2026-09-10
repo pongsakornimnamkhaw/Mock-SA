@@ -122,6 +122,7 @@ export interface Employee {
   phone: string;
   permission: EmployeePermission;
   edit_scope?: string;
+  personnel_type?: PersonnelType;
 }
 
 export interface ActivityLog {
@@ -134,4 +135,28 @@ export interface ActivityLog {
   detail: string;
 }
 
+// ============================================================
+// Personnel type — shared between backend and frontend
+// ============================================================
 
+export type PersonnelType = 'internal' | 'external';
+
+// ============================================================
+// Employee password reset request — admin panel view
+// ============================================================
+
+export interface EmployeeResetRequest {
+  requestId: string;
+  referenceCode: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone: string;
+  department: string;
+  personnelType: PersonnelType;
+  status: 'pending' | 'approved' | 'rejected' | 'used' | 'expired';
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  createdAt: string;
+}

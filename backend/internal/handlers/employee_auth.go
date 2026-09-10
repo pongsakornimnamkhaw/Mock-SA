@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -33,16 +35,19 @@ type employeeLoginInput struct {
 }
 
 type employeeAccountDTO struct {
-	UserID       string `json:"user_id"`
-	EmployeeCode string `json:"employee_code"`
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	Name         string `json:"name"`
-	Department   string `json:"department"`
-	Role         string `json:"role"`
-	Email        string `json:"email"`
-	Phone        string `json:"phone"`
-	UserType     string `json:"user_type"`
+	UserID        string     `json:"user_id"`
+	EmployeeCode  string     `json:"employee_code"`
+	FirstName     string     `json:"first_name"`
+	LastName      string     `json:"last_name"`
+	Name          string     `json:"name"`
+	Department    string     `json:"department"`
+	Role          string     `json:"role"`
+	Email         string     `json:"email"`
+	Phone         string     `json:"phone"`
+	UserType      string     `json:"user_type"`
+	PersonnelType string     `json:"personnel_type"`
+	LastLoginAt   *time.Time `json:"last_login_at"`
+	Active        bool       `json:"active"`
 }
 
 func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
@@ -51,6 +56,8 @@ func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
 	group.Post("/login", h.login)
 	group.Post("/logout", h.logout)
 	group.Get("/me", h.requireEmployee, h.getMe)
+	registerEmployeeAccountRoutes(app, db, h)
+	registerEmployeePasswordResetRoutes(app, db, h)
 }
 
 func employeeAuthAccountView(u models.User) employeeAccountDTO {
@@ -71,16 +78,18 @@ func employeeAuthAccountView(u models.User) employeeAccountDTO {
 		role = "sales"
 	}
 	return employeeAccountDTO{
-		UserID:       u.UserID,
-		EmployeeCode: empCode,
-		FirstName:    u.FirstName,
-		LastName:     u.LastName,
-		Name:         name,
-		Department:   dept,
-		Role:         role,
-		Email:        u.Email,
-		Phone:        u.PhoneNumber,
-		UserType:     u.UserType,
+		UserID:        u.UserID,
+		EmployeeCode:  empCode,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		Name:          name,
+		Department:    dept,
+		Role:          role,
+		Email:         u.Email,
+		Phone:         u.PhoneNumber,
+		UserType:      u.UserType,
+		PersonnelType: u.PersonnelType,
+		Active:        !u.EmployeeInactive,
 	}
 }
 
@@ -96,43 +105,47 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "กรุณากรอกรหัสพนักงานหรืออีเมล และรหัสผ่าน"})
 	}
 
-	// ค้นหาพนักงานจาก employee_code หรือ email
 	var user models.User
-	query := h.db.Where(
-		"(LOWER(email) = ? OR UPPER(employee_code) = ?) AND (LOWER(user_type) IN ? OR employee_code IS NOT NULL)",
-		strings.ToLower(username),
-		strings.ToUpper(username),
-		[]string{"employee", "staff", "admin", "พนักงาน"},
-	)
-	err := query.First(&user).Error
-	if err != nil {
-		// หากเป็นบัญชีทดสอบเริ่มต้นของฝ่ายขาย (B6728786)
-		if strings.EqualFold(username, "B6728786") || strings.EqualFold(username, "CD-1234") || strings.Contains(strings.ToLower(username), "sales") {
-			user = models.User{
-				UserID:     "EMP-B6728786",
-				FirstName:  "พงกรศกร",
-				LastName:   "อิ่มน้ำขาว",
-				Email:      "sales.b6728786@octavia.test",
-				Department: "ฝ่ายขาย",
-				Role:       "sales",
-				UserType:   "employee",
+	var sessionCookie *fiber.Cookie
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// Keep the same user lock used by password reset until both password
+		// verification and session insertion finish. Reset can then revoke every
+		// session authenticated with the old password before it commits.
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"(LOWER(email) = ? OR UPPER(employee_code) = ?) AND (LOWER(user_type) IN ? OR employee_code IS NOT NULL)",
+			strings.ToLower(username), strings.ToUpper(username),
+			[]string{"employee", "staff", "admin", "พนักงาน"},
+		).First(&user).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) && (strings.EqualFold(username, "B6728786") || strings.EqualFold(username, "CD-1234") || strings.Contains(strings.ToLower(username), "sales")) {
+				// Synthetic fallback needs no persisted row lock. Both lookups must
+				// confirm absence so an alias cannot impersonate a real account.
+				var persisted models.User
+				if lookupErr := tx.Select("user_id").First(&persisted, "user_id = ?", "EMP-B6728786").Error; !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+					return fiber.NewError(fiber.StatusUnauthorized, "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง")
+				}
+				user = models.User{
+					UserID: "EMP-B6728786", FirstName: "พงกรศกร", LastName: "อิ่มน้ำขาว",
+					Email: "sales.b6728786@octavia.test", Department: "ฝ่ายขาย", Role: "sales", UserType: "employee",
+				}
+				code := "B6728786"
+				user.EmployeeCode = &code
+			} else {
+				return fiber.NewError(fiber.StatusUnauthorized, "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง")
 			}
-			code := "B6728786"
-			user.EmployeeCode = &code
-		} else {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง"})
+		} else if !employeeLoginPasswordMatches(user.PasswordHash, password) {
+			return fiber.NewError(fiber.StatusUnauthorized, "รหัสผ่านไม่ถูกต้อง")
 		}
-	} else if user.PasswordHash != "" {
-		// ตรวจสอบ password hash
-		if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil && password != "Admin1234!" && password != "Demo1234!" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "รหัสผ่านไม่ถูกต้อง"})
-		}
+		sessionCookie, err = createEmployeeSession(tx, user.UserID)
+		return err
+	})
+	if err != nil {
+		return employeeAccountError(c, err)
 	}
-
-	// สร้าง Session พนักงาน
-	if err := h.startSession(c, user.UserID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถสร้างเซสชันพนักงานได้"})
-	}
+	// A successful insert is insufficient if the transaction's commit fails.
+	// Only expose the browser token after the complete transaction succeeds.
+	sessionCookie.Secure = c.Protocol() == "https"
+	c.Cookie(sessionCookie)
 
 	// บันทึก Activity Log สำหรับพนักงาน
 	_ = h.db.Create(&models.EmpActivityLogs{
@@ -150,6 +163,10 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 	})
 }
 
+func employeeLoginPasswordMatches(hash, password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
 func (h *employeeAuthHandler) logout(c *fiber.Ctx) error {
 	if token := c.Cookies(employeeSessionCookie); token != "" {
 		_ = h.db.Where("action_type = ? AND target_id = ?", employeeSessionAction, hashEmployeeSessionToken(token)).Delete(&models.EmpActivityLogs{}).Error
@@ -164,9 +181,19 @@ func (h *employeeAuthHandler) getMe(c *fiber.Ctx) error {
 }
 
 func (h *employeeAuthHandler) startSession(c *fiber.Ctx, userID string) error {
+	cookie, err := createEmployeeSession(h.db, userID)
+	if err != nil {
+		return err
+	}
+	cookie.Secure = c.Protocol() == "https"
+	c.Cookie(cookie)
+	return nil
+}
+
+func createEmployeeSession(db *gorm.DB, userID string) (*fiber.Cookie, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return err
+		return nil, err
 	}
 	token := hex.EncodeToString(tokenBytes)
 	now := time.Now().UTC()
@@ -179,18 +206,18 @@ func (h *employeeAuthHandler) startSession(c *fiber.Ctx, userID string) error {
 		Description: strconv.FormatInt(expiresAt.Unix(), 10),
 		CreatedAt:   now,
 	}
-	_ = h.db.Create(&session).Error
+	if err := db.Create(&session).Error; err != nil {
+		return nil, err
+	}
 
-	c.Cookie(&fiber.Cookie{
+	return &fiber.Cookie{
 		Name:     employeeSessionCookie,
 		Value:    token,
 		Path:     "/",
 		HTTPOnly: true,
 		SameSite: "Lax",
-		Secure:   c.Protocol() == "https",
 		Expires:  expiresAt,
-	})
-	return nil
+	}, nil
 }
 
 func hashEmployeeSessionToken(token string) string {
@@ -208,40 +235,6 @@ func clearEmployeeSessionCookie(c *fiber.Ctx) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 	})
-}
-
-func (h *employeeAuthHandler) requireEmployee(c *fiber.Ctx) error {
-	token := c.Cookies(employeeSessionCookie)
-	if token == "" {
-		authHeader := c.Get("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-	}
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "กรุณาเข้าสู่ระบบพนักงาน"})
-	}
-
-	var session models.EmpActivityLogs
-	if err := h.db.Where("action_type = ? AND target_id = ?", employeeSessionAction, hashEmployeeSessionToken(token)).First(&session).Error; err != nil {
-		clearEmployeeSessionCookie(c)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "เซสชันพนักงานหมดอายุ กรุณาเข้าสู่ระบบใหม่"})
-	}
-
-	var user models.User
-	if session.UserID != nil {
-		if err := h.db.Where("user_id = ?", *session.UserID).First(&user).Error; err != nil {
-			user = models.User{
-				UserID:     *session.UserID,
-				FirstName:  "พนักงาน",
-				LastName:   "ฝ่ายขาย",
-				Department: "ฝ่ายขาย",
-				Role:       "sales",
-			}
-		}
-	}
-	c.Locals("employeeUser", user)
-	return c.Next()
 }
 
 func currentEmployee(c *fiber.Ctx) models.User {

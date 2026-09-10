@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Card from '@mui/material/Card';
@@ -28,7 +30,9 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 
 import type { Employee, EmployeePermission } from '../../../types/promotion';
 import { managementApi } from '../../../api/managementApi';
+import { getEmployeeSession } from '@/utils/employeeSession';
 import Pagination from '../../../components/ui/Pagination';
+import PasswordResetRequestsPanel from './PasswordResetRequestsPanel';
 import { useNavigate } from 'react-router-dom';
 
 export default function EmployeeListPage() {
@@ -45,6 +49,10 @@ export default function EmployeeListPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [permissionFilter, setPermissionFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState<'employees' | 'reset-requests'>('employees');
+  
+  const currentSession = getEmployeeSession();
+  const isAdmin = currentSession?.role === 'admin';
   
   const [page, setPage] = useState(1);
   const itemsPerPage = 5;
@@ -137,18 +145,41 @@ export default function EmployeeListPage() {
         <Typography variant="h5" sx={{ fontWeight: 800, color: '#1e293b', flex: 1 }}>
           จัดการสิทธิ์ของพนักงาน
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          sx={{ background: 'linear-gradient(135deg, #d63384, #7c3aed)', '&:hover': { background: 'linear-gradient(135deg,#b5206a,#6d28d9)' }, fontWeight: 700, boxShadow: '0 4px 12px rgba(214,51,132,0.3)' }}
-          onClick={() => navigate('/employees/new')}
-          disabled={deletingId !== null}
-        >
-          เพิ่มรายชื่อพนักงานใหม่
-        </Button>
+        {activeTab === 'employees' && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            sx={{ background: 'linear-gradient(135deg, #d63384, #7c3aed)', '&:hover': { background: 'linear-gradient(135deg,#b5206a,#6d28d9)' }, fontWeight: 700, boxShadow: '0 4px 12px rgba(214,51,132,0.3)' }}
+            onClick={() => navigate('/employees/new')}
+            disabled={deletingId !== null}
+          >
+            เพิ่มรายชื่อพนักงานใหม่
+          </Button>
+        )}
       </Box>
 
-      {/* Stats Cards */}
+      {isAdmin && (
+        <Tabs
+          value={activeTab}
+          onChange={(_, val: 'employees' | 'reset-requests') => setActiveTab(val)}
+          sx={{
+            mb: 3,
+            borderBottom: '1px solid #e2e8f0',
+            '& .MuiTab-root': { fontWeight: 700, textTransform: 'none', fontSize: '0.95rem' },
+            '& .Mui-selected': { color: '#d63384' },
+            '& .MuiTabs-indicator': { backgroundColor: '#d63384' },
+          }}
+        >
+          <Tab label="รายชื่อพนักงาน" value="employees" />
+          <Tab label="คำร้องรีเซ็ตรหัสผ่าน" value="reset-requests" />
+        </Tabs>
+      )}
+
+      {activeTab === 'reset-requests' && isAdmin ? (
+        <PasswordResetRequestsPanel />
+      ) : (
+        <>
+          {/* Stats Cards */}
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <Card sx={{ flex: 1, border: '1px solid #f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
           <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -228,6 +259,7 @@ export default function EmployeeListPage() {
             <TableRow sx={{ backgroundColor: '#f8fafc' }}>
               <TableCell>พนักงาน</TableCell>
               <TableCell>ตำแหน่ง</TableCell>
+              <TableCell>ประเภท</TableCell>
               <TableCell>สิทธิ์ปัจจุบัน</TableCell>
               <TableCell align="center">จัดการ</TableCell>
             </TableRow>
@@ -242,6 +274,18 @@ export default function EmployeeListPage() {
                   <Typography variant="caption" color="text.secondary">{emp.employee_code}</Typography>
                 </TableCell>
                 <TableCell>{emp.department}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={emp.personnel_type === 'external' ? 'ภายนอก' : 'ภายใน'}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      borderColor: emp.personnel_type === 'external' ? '#a855f7' : '#3b82f6',
+                      color: emp.personnel_type === 'external' ? '#7e22ce' : '#1d4ed8',
+                      fontWeight: 600,
+                    }}
+                  />
+                </TableCell>
                 <TableCell>
                   <Chip 
                     label={getPermissionLabel(emp.permission)}
@@ -272,18 +316,18 @@ export default function EmployeeListPage() {
               </TableRow>
             ))}
             {loading && (
-              <TableRow><TableCell colSpan={4} align="center">
+              <TableRow><TableCell colSpan={5} align="center">
                 <Box role="status" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}><CircularProgress size={20} />กำลังโหลดรายชื่อพนักงาน...</Box>
               </TableCell></TableRow>
             )}
             {!loading && loadError && (
-              <TableRow><TableCell colSpan={4}>
+              <TableRow><TableCell colSpan={5}>
                 <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => { setLoading(true); setReloadKey(value => value + 1); }}>ลองอีกครั้ง</Button>}>{loadError}</Alert>
               </TableCell></TableRow>
             )}
             {!loading && !loadError && paginatedEmployees.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} align="center">ไม่พบข้อมูล</TableCell>
+                <TableCell colSpan={5} align="center">ไม่พบข้อมูล</TableCell>
               </TableRow>
             )}
           </TableBody>
@@ -298,6 +342,8 @@ export default function EmployeeListPage() {
           <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={nextPage => { if (!busy) setPage(nextPage); }} />
         </Box>
       </Box>}
+        </>
+      )}
     </Box>
   );
 }

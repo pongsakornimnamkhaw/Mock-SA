@@ -12,6 +12,7 @@ func MigrateAllModels(db *gorm.DB) error {
 		&User{},
 		&CusActivityLogs{},
 		&EmpActivityLogs{},
+		&EmployeePasswordResetRequest{},
 		&Permission{},
 		&Inquiry{},
 
@@ -63,6 +64,11 @@ func MigrateAllModels(db *gorm.DB) error {
 		&VenueLayoutObject{},
 		&VenueSeatPublication{},
 	); err != nil {
+		return err
+	}
+	if err := db.Model(&User{}).
+		Where("(LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND COALESCE(personnel_type, '') = ''", []string{"employee", "staff", "admin", "พนักงาน"}).
+		Update("personnel_type", PersonnelTypeInternal).Error; err != nil {
 		return err
 	}
 	return normalizeOperationalDateTimeColumns(db)

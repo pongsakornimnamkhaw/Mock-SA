@@ -54,6 +54,8 @@ import PromotionApprovalPage from './pages/Employee/promotions/approval/Promotio
 import UsageHistoryPage from './pages/Employee/history/UsageHistoryPage'
 import EmployeeListPage from './pages/Employee/employees/EmployeeListPage'
 import EmployeeFormPage from './pages/Employee/employees/EmployeeFormPage'
+import EmployeeAccountPage from './pages/Employee/Account'
+import EmployeePasswordRecoveryPage from './pages/Employee/PasswordRecovery'
 import type { EditHistoryEntry } from './types/promotion'
 
 // B6733377 - External Contact
@@ -77,6 +79,7 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/employee/login" element={<EmployeeLoginPage />} />
       <Route path="/staff/login" element={<EmployeeLoginPage />} />
+      <Route path="/employee/forgot-password" element={<EmployeePasswordRecoveryPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -133,6 +136,7 @@ function App() {
       <Route path="/employees" element={<EmployeeRouteGuard><PromotionLayout><EmployeeListPage /></PromotionLayout></EmployeeRouteGuard>} />
       <Route path="/employees/new" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
       <Route path="/employees/:id/edit" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/employee/account" element={<EmployeeRouteGuard><PromotionLayout><EmployeeAccountPage /></PromotionLayout></EmployeeRouteGuard>} />
 
       {/* B6733377 - Concert Report System */}
       <Route path="/report/*" element={<EmployeeRouteGuard><Layout title="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" showBack={false}><ConsertReportPage /></Layout></EmployeeRouteGuard>} />
