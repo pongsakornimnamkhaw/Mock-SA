@@ -31,6 +31,7 @@ import ConcertStatusPage from './pages/Employee/ConcertStatus'
 import DocumentsPage from './pages/Employee/AddDocument'
 import EditHistoryPage from './pages/Employee/ConcertEditHistory'
 import SearchConcertPage from './features/venueSeats/VenueSeatsModule'
+import ConcertSearchPage from './pages/Employee/SearchConcert'
 import ArtistDashboardPage from './pages/Employee/ArtistDashboard'
 import ArtistInfoPage from './pages/Employee/ArtistInfo'
 import InvitationPage from './pages/Employee/ArtistInvitation'
@@ -100,7 +101,7 @@ function App() {
       <Route path="/payment-verification" element={<EmployeeRouteGuard><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6707651 - Concert Management Routes */}
-      <Route path="/dashboard" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ตทั้งหมด"><DashboardPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/dashboard" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ตทั้งหมด" showBack={false}><DashboardPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/add-concert" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><AddConcertPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/edit-concert" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><EditConcertPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/responsibility" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
@@ -108,6 +109,7 @@ function App() {
       <Route path="/documents" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/edit-history" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/search-concert" element={<EmployeeRouteGuard><Layout title="วางแผนหารจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/concert-search" element={<EmployeeRouteGuard><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/artist-dashboard" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/artist-info" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/invitation" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><InvitationPage /></Layout></EmployeeRouteGuard>} />
@@ -133,7 +135,7 @@ function App() {
       <Route path="/employees/:id/edit" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
 
       {/* B6733377 - Concert Report System */}
-      <Route path="/report/*" element={<EmployeeRouteGuard><PromotionLayout><ConsertReportPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/report/*" element={<EmployeeRouteGuard><Layout title="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" showBack={false}><ConsertReportPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6733377 - External Contact */}
       <Route path="/contact" element={<ExternalContactLayout />}>
