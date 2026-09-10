@@ -42,9 +42,12 @@ type Seat struct {
 	PositionX  float64 `gorm:"column:position_x;type:double precision;not null;default:0" json:"position_x"`
 	PositionY  float64 `gorm:"column:position_y;type:double precision;not null;default:0" json:"position_y"`
 	Rotation   float64 `gorm:"type:double precision;not null;default:0" json:"rotation"`
+	
 	ConcertID  string  `gorm:"type:varchar(50);not null;index" json:"concert_id"`
-	ZoneID     string  `gorm:"type:varchar(50);not null;index" json:"zone_id"`
+	Concert Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 
+	ZoneID     string  `gorm:"type:varchar(50);not null;index" json:"zone_id"`
+	Zone Zone `gorm:"foreignKey:ZoneID;references:ZoneID"`
 	// Relations
 	Tickets []Ticket `gorm:"foreignKey:SeatID" json:"tickets,omitempty"`
 }
@@ -72,8 +75,12 @@ type TicketCategory struct {
 	Price         float64 `gorm:"type:float;not null" json:"price"`
 	Quantity      int     `gorm:"type:int;not null" json:"quantity"`
 	PromotionName *string `gorm:"type:varchar(255)" json:"promotion_name,omitempty"`
+
 	PromotionID   *string `gorm:"type:varchar(50)" json:"promotion_id,omitempty"`
+	Promotion Promotion `gorm:"foreignKey:PromotionID;references:PromotionID"`
+
 	ZoneID        string  `gorm:"type:varchar(50);not null" json:"zone_id"`
+	Zone Zone `gorm:"foreignKey:ZoneID;references:ZoneID"`
 }
 
 func (t *TicketCategory) BeforeCreate(tx *gorm.DB) (err error) {
@@ -90,6 +97,8 @@ type TicketSalesInfo struct {
 	PriceTicket     float64   `gorm:"type:float;not null" json:"price_ticket"`
 	ReturnCondition string    `gorm:"type:text;not null" json:"return_condition"`
 	PublishDate     time.Time `gorm:"type:date;not null" json:"publish_date"`
+
+	// SeatID string  `gorm:"primaryKey;type:varchar(50);not null" json:"seat_id"`
 }
 
 func (t *TicketSalesInfo) BeforeCreate(tx *gorm.DB) (err error) {
@@ -190,7 +199,9 @@ type SalesReport struct {
 	TicketSold   int       `gorm:"type:int;not null" json:"ticket_sold"`
 	TotalSelling float64   `gorm:"type:double precision;not null" json:"total_selling"`
 	ReportDate   time.Time `gorm:"type:date;not null" json:"report_date"`
+	
 	UserID       string    `gorm:"type:varchar(50);not null" json:"user_id"`
+	User User `gorm:"foreignKey:UserID;references:UserID"`
 }
 
 func (s *SalesReport) BeforeCreate(tx *gorm.DB) (err error) {

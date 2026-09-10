@@ -13,7 +13,9 @@ type WorkPlan struct {
 	Budget         float64   `gorm:"type:float;not null" json:"budget"`
 	ApprovalStatus string    `gorm:"type:varchar(50);not null" json:"approval_status"`
 	UpdateDate     time.Time `gorm:"type:date;not null" json:"update_date"`
-	ConcertID      string    `gorm:"type:varchar(50);not null" json:"concert_id"`
+
+	ConcertID string  `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 }
 
 func (w *WorkPlan) BeforeCreate(tx *gorm.DB) (err error) {
@@ -31,7 +33,9 @@ type SponsorshipRequest struct {
 	AgreementDocURL string    `gorm:"type:varchar(500);not null" json:"agreement_doc_url"`
 	SubmitDate      time.Time `gorm:"type:date;not null" json:"submit_date"`
 	Status          string    `gorm:"type:varchar(50);not null" json:"status"`
-	ConcertID       string    `gorm:"type:varchar(50);not null" json:"concert_id"`
+
+	ConcertID string `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 }
 
 func (s *SponsorshipRequest) BeforeCreate(tx *gorm.DB) (err error) {
@@ -50,7 +54,9 @@ type Task struct {
 	Department       string `gorm:"type:varchar(100);not null" json:"department"`
 	TaskStatus       string `gorm:"type:varchar(50);not null" json:"task_status"`
 	MoreInfo         string `gorm:"type:varchar(500);not null" json:"more_info"`
-	ConcertID        string `gorm:"type:varchar(50);not null" json:"concert_id"`
+
+	ConcertID string  `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 }
 
 func (t *Task) BeforeCreate(tx *gorm.DB) (err error) {

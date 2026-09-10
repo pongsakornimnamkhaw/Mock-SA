@@ -50,7 +50,9 @@ type CusActivityLogs struct {
 	Description string    `gorm:"type:text;not null" json:"description"`
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
 	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	
 	UserID      string    `gorm:"type:varchar(50);not null" json:"user_id"`
+	User User `gorm:"foreignKey:UserID;references:UserID"`
 }
 
 func (c *CusActivityLogs) BeforeCreate(tx *gorm.DB) (err error) {
@@ -68,7 +70,9 @@ type EmpActivityLogs struct {
 	TargetID    string    `gorm:"type:varchar(50)" json:"target_id"`
 	Module      string    `gorm:"type:varchar(100)" json:"module"`
 	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
+	
 	UserID      *string   `gorm:"type:varchar(50)" json:"user_id"`
+	User User `gorm:"foreignKey:UserID;references:UserID"`
 }
 
 func (e *EmpActivityLogs) BeforeCreate(tx *gorm.DB) (err error) {
@@ -84,7 +88,9 @@ type Permission struct {
 	Position       string `gorm:"type:varchar(100);not null" json:"position"`
 	PermissionName string `gorm:"type:varchar(100);not null" json:"permission_name"`
 	Scope          string `gorm:"type:varchar(100);not null" json:"scope"`
+	
 	UserID         string `gorm:"type:varchar(50);not null" json:"user_id"`
+	User User `gorm:"foreignKey:UserID;references:UserID"`
 }
 
 func (p *Permission) BeforeCreate(tx *gorm.DB) (err error) {
@@ -100,7 +106,9 @@ type Inquiry struct {
 	QuestionText string `gorm:"type:text;not null" json:"question_text"`
 	AnswerText   string `gorm:"type:text;not null" json:"answer_text"`
 	Status       string `gorm:"type:varchar(50);not null" json:"status"`
+
 	UserID       string `gorm:"type:varchar(50);not null" json:"user_id"`
+	User User `gorm:"foreignKey:UserID;references:UserID"`
 }
 
 func (i *Inquiry) BeforeCreate(tx *gorm.DB) (err error) {
