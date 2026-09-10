@@ -9,11 +9,11 @@
 
 ```powershell
 docker compose -f compose.gg-clean.yml up -d postgres-gg-clean
-Copy-Item .env.gg-clean.example .env
 go run ./cmd/server
 ```
 
 ฐานนี้ใช้ PostgreSQL ที่พอร์ต `5434` และ volume `gg_clean_postgres_data` จึงไม่แตะฐานเดิมพอร์ต `5432`
+เมื่อไม่มี `.env` ตัว Backend จะโหลด `.env.gg-clean.example` อัตโนมัติ ส่วนผู้ที่มี `.env` อยู่แล้วจะใช้ค่าจากไฟล์นั้นก่อน
 การเริ่ม API ใช้ `AutoMigrate` แบบเพิ่ม schema เท่านั้น ไม่มี `DROP TABLE` หรือ rename legacy
 
 ## ตารางที่ระบบใหม่อ่านและเขียน

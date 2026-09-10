@@ -8,8 +8,12 @@ import (
 
 // LoadEnv loads environment variables from .env file
 func LoadEnv() {
-	err := godotenv.Overload()
-	if err != nil {
-		log.Println("Warning: No .env file found or error loading it, using system environment variables")
+	if err := godotenv.Overload(".env"); err == nil {
+		return
 	}
+	if err := godotenv.Overload(".env.gg-clean.example"); err == nil {
+		log.Println("No .env found; using the gg-clean development database settings")
+		return
+	}
+	log.Println("Warning: No environment file found, using system environment variables")
 }
