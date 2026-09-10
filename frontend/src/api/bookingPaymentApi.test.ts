@@ -43,3 +43,42 @@ describe('bookingPaymentApi.createBooking', () => {
         expect(record.quantity).toBe(2);
     });
 });
+
+describe('bookingPaymentApi.getCustomerBookings', () => {
+    it('ไม่ปั้นตั๋วปลอมเมื่อ backend ไม่ส่ง tickets มา แม้สถานะเป็น issued', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, {
+            data: [{
+                booking_id: 'BK-1', concert_id: 'CC1', concert_title: 'งานทดสอบ',
+                zone_id: 'A1', tier_name: 'โซน A', quantity: 2, unit_price: 2000,
+                discount_amount: 0, total_price: 4000, customer_name: 'ลูกค้า',
+                customer_email: 'test@example.com', customer_phone: '0800000000',
+                status: 'issued', booking_date: '2026-09-10', tickets: [],
+            }],
+        }));
+
+        const [booking] = await bookingPaymentApi.getCustomerBookings('U1');
+
+        expect(booking.tickets).toEqual([]);
+    });
+
+    it('แปลงตั๋วจริงจาก backend และเติม seats จาก seatLabel ของตั๋ว', async () => {
+        vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, {
+            data: [{
+                booking_id: 'BK-2', concert_id: 'CC1', concert_title: 'งานทดสอบ',
+                zone_id: 'A1', tier_name: 'โซน A', quantity: 2, unit_price: 2000,
+                discount_amount: 0, total_price: 4000, customer_name: 'ลูกค้า',
+                customer_email: 'test@example.com', customer_phone: '0800000000',
+                status: 'issued', booking_date: '2026-09-10',
+                tickets: [
+                    { ticket_id: 'TK-BK-2-A1', name_concert: 'งานทดสอบ', seat_label: 'A1', status_ticket: 'พร้อมใช้งาน', ticket_datetime: '2026-09-10T00:00:00Z' },
+                    { ticket_id: 'TK-BK-2-A2', name_concert: 'งานทดสอบ', seat_label: 'A2', status_ticket: 'พร้อมใช้งาน', ticket_datetime: '2026-09-10T00:00:00Z' },
+                ],
+            }],
+        }));
+
+        const [booking] = await bookingPaymentApi.getCustomerBookings('U1');
+
+        expect(booking.tickets?.map((t) => t.code)).toEqual(['TK-BK-2-A1', 'TK-BK-2-A2']);
+        expect(booking.seats).toEqual(['A1', 'A2']);
+    });
+});
