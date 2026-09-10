@@ -93,6 +93,14 @@
           <mxGeometry x="900" y="440" width="30" height="20" as="geometry" />
         </mxCell>
 
+        <!-- Round 2: payment-booking-ticket-real-data — no schema change, behavior/data-flow fix only -->
+        <mxCell id="round2-title" value="รอบถัดมา: payment-booking-ticket-real-data" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=13;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="940" y="700" width="420" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="round2-note" value="&lt;b&gt;ไม่มีการแก้ schema ในรอบนี้&lt;/b&gt; — Payment/Booking/Ticket มีโครงสร้างครบจากรอบก่อนแล้ว งานรอบนี้เป็นการแก้ &lt;i&gt;data flow / พฤติกรรม&lt;/i&gt; เท่านั้น:&lt;br&gt;&lt;br&gt;1) หน้าเว็บเคยมี fallback &amp;quot;ปั้นตั๋วปลอม&amp;quot; อยู่ 2 ชั้น (mapWireToBooking + หน้า &amp;quot;บัตรของฉัน&amp;quot;) เวลา backend ไม่ส่ง tickets มา — ลบทิ้งแล้ว ตอนนี้การ์ดบัตรที่ผู้ใช้เห็นมาจากแถวจริงในตาราง Ticket เท่านั้น ถ้าไม่มีตั๋วจริงจะโชว์ข้อความบอกตรง ๆ แทน&lt;br&gt;&lt;br&gt;2) &lt;font color=&quot;#2e7d32&quot;&gt;&lt;b&gt;ปุ่ม &amp;quot;ส่งบัตรซ้ำ&amp;quot;&lt;/b&gt;&lt;/font&gt; เดิมเป็น stub ตอบสำเร็จเฉย ๆ ไม่ส่งอีเมลจริง — ตอนนี้เรียก mailer.Send() จริง (แพทเทิร์นเดียวกับฟีเจอร์ลืมรหัสผ่าน) เนื้อหาอีเมลดึงจาก Booking/Ticket จริง (ชื่องาน, เลขที่นั่งแต่ละใบ, รหัสตั๋ว)" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontSize=12;fillColor=#eef7ff;strokeColor=#5b8def;" vertex="1" parent="1">
+          <mxGeometry x="940" y="726" width="420" height="260" as="geometry" />
+        </mxCell>
+
       </root>
     </mxGraphModel>
   </diagram>
