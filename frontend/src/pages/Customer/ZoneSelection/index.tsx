@@ -6,6 +6,7 @@ import { pulse, flux, celestial, starlight } from '@/assets/Poster';
 import { useEffect, useState } from 'react';
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import { formatThaiDate } from '@/utils/customerPromotion';
+import { seatInventoryApi } from '@/api/seatInventoryApi';
 
 // ข้อมูลคอนเสิร์ต (Mock)
 const eventsMap: Record<string, { title: string; image: string; eventDate: string }> = {
@@ -43,6 +44,21 @@ const ZoneSelectionPage = () => {
     const [event, setEvent] = useState(() => (id && eventsMap[id]) ? eventsMap[id] : eventsMap['2']);
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
     const [selectedZone, setSelectedZone] = useState<string | null>(null);
+    const [zonePrices, setZonePrices] = useState<Record<string, number>>({});
+
+    useEffect(() => {
+        if (!id) return;
+        let active = true;
+        seatInventoryApi.listZones(id)
+            .then((zones) => {
+                if (!active) return;
+                setZonePrices(Object.fromEntries(zones.map((zone) => [zone.zoneId, zone.price])));
+            })
+            .catch(() => {
+                // ใช้ราคาตั้งต้นในหน้าเว็บต่อไปเมื่อโหลดไม่ได้
+            });
+        return () => { active = false; };
+    }, [id]);
 
     useEffect(() => {
         if (!id || eventsMap[id]) {
@@ -265,17 +281,25 @@ const ZoneSelectionPage = () => {
                                 borderRadius: '12px', mb: 2,
                             }}
                         />
-                        {priceLegend.map((item) => (
-                            <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
-                                <Box sx={{
-                                    width: 40, height: 24, bgcolor: item.color,
-                                    borderRadius: '6px', flexShrink: 0,
-                                }} />
-                                <Typography sx={{ color: '#333', fontSize: '0.95rem', fontWeight: 500 }}>
-                                    {item.label} — {item.price}
-                                </Typography>
-                            </Box>
-                        ))}
+                        {priceLegend.map((item) => {
+                            const rowLetter = item.label.slice(-1);
+                            const representativeZone = zonesData.find((zone) => zone.row === rowLetter);
+                            const livePrice = representativeZone ? zonePrices[representativeZone.id] : undefined;
+                            const priceLabel = livePrice !== undefined
+                                ? `${livePrice.toLocaleString('th-TH')} บ.`
+                                : item.price;
+                            return (
+                                <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5 }}>
+                                    <Box sx={{
+                                        width: 40, height: 24, bgcolor: item.color,
+                                        borderRadius: '6px', flexShrink: 0,
+                                    }} />
+                                    <Typography sx={{ color: '#333', fontSize: '0.95rem', fontWeight: 500 }}>
+                                        {item.label} — {priceLabel}
+                                    </Typography>
+                                </Box>
+                            );
+                        })}
                     </Paper>
                 </Box>
             </Container>
