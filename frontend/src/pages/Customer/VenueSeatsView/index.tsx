@@ -154,10 +154,11 @@ export default function VenueSeatsViewPage() {
           alignItems: { xs: 'stretch', md: 'center' },
           justifyContent: 'space-between',
           flexDirection: { xs: 'column', md: 'row' },
+          flexWrap: 'wrap',
           gap: 2,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
           <Box
             sx={{
               width: 44,
@@ -172,7 +173,7 @@ export default function VenueSeatsViewPage() {
           >
             <EventSeatOutlinedIcon />
           </Box>
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ color: '#11183f', fontSize: 22, fontWeight: 700, lineHeight: 1.4 }}>
               ผังที่นั่งที่บันทึกแล้ว
             </Typography>
@@ -185,6 +186,7 @@ export default function VenueSeatsViewPage() {
         <Box
           sx={{
             display: 'flex',
+            flexWrap: 'wrap',
             flexDirection: { xs: 'column', sm: 'row' },
             gap: 1.5,
             width: { xs: '100%', md: 'auto' },
@@ -197,7 +199,7 @@ export default function VenueSeatsViewPage() {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             disabled={availableConcerts.length === 0}
-            sx={{ width: { xs: '100%', sm: 320 } }}
+            sx={{ width: { xs: '100%', sm: 220 }, flex: { sm: '1 1 220px' }, minWidth: 0 }}
             slotProps={{
               input: {
                 startAdornment: (
@@ -208,7 +210,7 @@ export default function VenueSeatsViewPage() {
               },
             }}
           />
-          <FormControl size="small" sx={{ width: { xs: '100%', sm: 360 } }}>
+          <FormControl size="small" sx={{ width: { xs: '100%', sm: 240 }, flex: { sm: '1 1 240px' }, minWidth: 0 }}>
             <InputLabel id="saved-seat-concert-label">คอนเสิร์ต</InputLabel>
             <Select
               labelId="saved-seat-concert-label"

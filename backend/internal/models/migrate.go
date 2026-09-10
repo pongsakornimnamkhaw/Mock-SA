@@ -4,6 +4,9 @@ import "gorm.io/gorm"
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
+	if err := prepareSeatColumnTypes(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(
 		// User & Access
 		&User{},
@@ -70,6 +73,12 @@ func MigrateAllModels(db *gorm.DB) error {
 // columns to timestamp without time zone so every table is consistent.
 func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 	statements := []string{
+		// ticket_categories.promotion_name/promotion_id becomes nullable: a category
+		// projected from a seat layout (seat_inventory.go) has no promotion attached.
+		// AutoMigrate does not reliably drop an existing NOT NULL, so do it explicitly.
+		`ALTER TABLE ticket_categories ALTER COLUMN promotion_name DROP NOT NULL`,
+		`ALTER TABLE ticket_categories ALTER COLUMN promotion_id DROP NOT NULL`,
+
 		// operational time/date columns
 		`ALTER TABLE concerts ALTER COLUMN start_time TYPE time without time zone USING start_time::time`,
 		`ALTER TABLE concerts ALTER COLUMN end_time TYPE time without time zone USING end_time::time`,
@@ -128,4 +137,25 @@ func MigrateVenueSeatModels(db *gorm.DB) error {
 		&VenueLayoutObject{},
 		&VenueSeatPublication{},
 	)
+}
+
+// prepareSeatColumnTypes แปลง seats.seat_row / seat_column จาก integer เป็น varchar
+// ต้องรันก่อน AutoMigrate เพราะ PostgreSQL แปลง integer → varchar ให้เองไม่ได้ ต้องระบุ USING
+// ฟังก์ชันนี้ idempotent: ติดตั้งใหม่ (ยังไม่มีตาราง) หรือแปลงไปแล้ว จะไม่ทำอะไร
+func prepareSeatColumnTypes(db *gorm.DB) error {
+	var dataType string
+	if err := db.Raw(
+		`SELECT data_type FROM information_schema.columns
+		 WHERE table_schema = current_schema() AND table_name = 'seats' AND column_name = 'seat_row'`,
+	).Scan(&dataType).Error; err != nil {
+		return err
+	}
+	if dataType == "" || dataType == "character varying" {
+		return nil
+	}
+	return db.Exec(
+		`ALTER TABLE seats
+		   ALTER COLUMN seat_row TYPE varchar(50) USING seat_row::varchar,
+		   ALTER COLUMN seat_column TYPE varchar(50) USING seat_column::varchar`,
+	).Error
 }
