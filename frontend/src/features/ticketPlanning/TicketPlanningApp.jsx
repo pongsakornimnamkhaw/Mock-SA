@@ -22,7 +22,7 @@ function useStoredConcerts() {
   useEffect(() => {
 	let active = true
 	loadConcerts().then(rows => {
-	  if (!active || !Array.isArray(rows) || !rows.length) return
+	  if (!active || !Array.isArray(rows)) return
 	  setConcerts(rows.map(hydrateConcert))
 	})
 	return () => { active = false }
@@ -243,6 +243,8 @@ function RoundsTab({ rounds }) {
 
 function OverviewTab({ draft, update }) {
   const zones = draft.zones || []
+  const layoutObjects = draft.layoutObjects || []
+  const layoutItems = [...layoutObjects, ...zones].sort((a, b) => Number(a.z || 0) - Number(b.z || 0))
   const totalSeats = zones.reduce((sum, zone) => sum + Number(zone.seatItems?.length ?? zone.seats ?? 0), 0)
   const plannedSeats = zones.reduce((sum, zone) => sum + Number(zone.seatItems?.length || 0), 0)
   const quotaPercent = totalSeats ? Math.min(100, Math.round(plannedSeats / totalSeats * 100)) : 0
@@ -255,7 +257,10 @@ function OverviewTab({ draft, update }) {
     </div>
     <div className="overview-grid">
       <section className="overview-map-card"><div className="section-title"><div><h3>แผนผังที่นั่งในสถานที่</h3><p>ภาพรวมโซนและจำนวนที่นั่ง</p></div><strong>{totalSeats.toLocaleString('th-TH')} ที่นั่ง</strong></div>
-        <div className="overview-map"><div className="overview-stage">เวที</div>{zones.map(zone => <div key={zone.id} className={`overview-zone ${zone.shape || 'rectangle'}`} style={{ left:`${zone.x}%`,top:`${zone.y}%`,width:`${zone.width || 14}%`,height:`${zone.height || 14}%`,background:zone.color,transform:`translate(-50%,-50%) rotate(${zone.rotation || 0}deg)`,...shapeStyle(zone.shape) }}><b>{zone.name || zone.type}</b><span>{zone.seatItems?.length ?? zone.seats ?? 0} ที่นั่ง</span><small>{Number(zone.zonePrice || 0).toLocaleString()} ฿</small></div>)}</div>
+        <div className="overview-map">
+          {layoutItems.map((item, index) => <div key={item.id} className="overview-layout-node" style={{ left:`${item.x}%`,top:`${item.y}%`,width:`${item.width || 12}%`,height:`${item.height || 12}%`,transform:`translate(-50%,-50%) rotate(${item.rotation || 0}deg)`,zIndex:index + 1 }}><div className={`overview-layout-item ${item.kind || 'zone'} ${item.shape || 'rectangle'}`} style={{background:item.color,color:item.textColor || '#fff',...shapeStyle(item.shape)}}>{item.shape === 'line' ? '' : <><b>{item.name || item.type}</b>{item.kind !== 'object' && <><span>{item.seatItems?.length ?? item.seats ?? 0} ที่นั่ง</span><small>{Number(item.zonePrice || 0).toLocaleString()} ฿</small></>}</>}</div></div>)}
+          {!layoutItems.length && <div className="empty-map"><UsersIcon size={38}/><b>ผังยังว่างอยู่</b><span>เพิ่มโซนหรือวัตถุจากแท็บ “ออกแบบผังและที่นั่ง”</span></div>}
+        </div>
       </section>
       <section className="overview-form"><h3>ข้อมูลคอนเสิร์ต</h3><GeneralTab draft={draft} update={update}/></section>
     </div>
