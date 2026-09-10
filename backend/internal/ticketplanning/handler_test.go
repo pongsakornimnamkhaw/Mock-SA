@@ -17,6 +17,28 @@ func TestLayoutSeatStatusPreservesIssuedSeatState(t *testing.T) {
 	}
 }
 
+func TestZonePriceSurvivesLayoutTransport(t *testing.T) {
+	const payload = `{"id":"zone-a","zonePrice":1250.50}`
+	var zone zoneDTO
+	if err := json.Unmarshal([]byte(payload), &zone); err != nil {
+		t.Fatalf("decode zone payload: %v", err)
+	}
+	if zone.ZonePrice != 1250.50 {
+		t.Fatalf("ZonePrice = %v, want 1250.50", zone.ZonePrice)
+	}
+	encoded, err := json.Marshal(zone)
+	if err != nil {
+		t.Fatalf("encode zone payload: %v", err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(encoded, &result); err != nil {
+		t.Fatalf("decode encoded zone: %v", err)
+	}
+	if result["zonePrice"] != 1250.50 {
+		t.Fatalf("zonePrice was dropped from response: %#v", result["zonePrice"])
+	}
+}
+
 func TestTicketLayoutFieldsSurviveTransportAndJSONStorage(t *testing.T) {
 	const payload = `{"id":"image-1","kind":"image","imageSrc":"data:image/png;base64,AAAA","fontSize":42,"aspectRatio":1.5}`
 	var transport layoutObjectDTO

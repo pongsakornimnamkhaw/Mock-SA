@@ -58,7 +58,7 @@ func main() {
 	apply := flag.Bool("apply", false, "Insert demo records into the database configured in backend/.env")
 	flag.Parse()
 	if !*apply {
-		fmt.Println("Preview: 10 promotions (3 active / 2 expired / 3 pending / 2 rejected), 8 employees, 3 demo customers, 3 zones, approvals and activity/redemption history.")
+		fmt.Println("Preview: 10 promotions (3 active / 2 expired / 3 pending / 2 rejected), 8 employees, 3 demo customers, 3 zones per concert, approvals and activity/redemption history.")
 		fmt.Println("Run from backend: go run ./cmd/seed-management --apply")
 		fmt.Println("Development data only. Adds DEMO_MGMT_V1_ records once; does not overwrite existing data, migrate tables or create bookings/payments.")
 		return
@@ -87,7 +87,7 @@ func main() {
 		fmt.Println("Demo dataset already installed. Skipped all writes, preserving edits, decisions and deletions made during testing.")
 		return
 	}
-	fmt.Println("Created: 10 promotions, 10 approval requests, 8 employees, 3 customers, 3 zones, 27 simulated redemptions, 26 staff logs and 30 customer logs.")
+	fmt.Println("Created: 10 promotions, 10 approval requests, 8 employees, 3 customers, 3 zones per concert, 27 simulated redemptions, 26 staff logs and 30 customer logs.")
 	fmt.Println("All demo IDs start with DEMO_MGMT_V1_; promo codes start with TEST-MGMT-. Existing records are unchanged.")
 }
 
@@ -163,18 +163,23 @@ func seed(db *gorm.DB, now time.Time) (bool, error) {
 				return err
 			}
 		}
-		zones := []models.Zone{
-			{ZoneID: prefix + "ZONE_VIP", ZoneType: "VIP [ทดสอบ]", Capacity: 100},
-			{ZoneID: prefix + "ZONE_A", ZoneType: "โซน A [ทดสอบ]", Capacity: 300},
-			{ZoneID: prefix + "ZONE_STANDING", ZoneType: "ยืน [ทดสอบ]", Capacity: 500},
-		}
-		for i := range zones {
-			if err := create(tx, &zones[i]); err != nil {
-				return err
+		zonesByConcert := make(map[string][]models.Zone, len(concerts))
+		for concertIndex, concert := range concerts {
+			zones := []models.Zone{
+				{ZoneID: fmt.Sprintf("%sC%02d_ZONE_VIP", prefix, concertIndex+1), ConcertID: concert.ConcertID, ZoneType: "VIP [ทดสอบ]", Capacity: 100, ZonePrice: 3500},
+				{ZoneID: fmt.Sprintf("%sC%02d_ZONE_A", prefix, concertIndex+1), ConcertID: concert.ConcertID, ZoneType: "โซน A [ทดสอบ]", Capacity: 300, ZonePrice: 2500},
+				{ZoneID: fmt.Sprintf("%sC%02d_ZONE_STANDING", prefix, concertIndex+1), ConcertID: concert.ConcertID, ZoneType: "ยืน [ทดสอบ]", Capacity: 500, ZonePrice: 1500},
 			}
+			for i := range zones {
+				if err := create(tx, &zones[i]); err != nil {
+					return err
+				}
+			}
+			zonesByConcert[concert.ConcertID] = zones
 		}
 		for i, spec := range promotions {
-			if err := seedPromotion(tx, i, spec, concerts[i%len(concerts)].ConcertID, staff, customers, zones, today, now); err != nil {
+			concertID := concerts[i%len(concerts)].ConcertID
+			if err := seedPromotion(tx, i, spec, concertID, staff, customers, zonesByConcert[concertID], today, now); err != nil {
 				return err
 			}
 		}

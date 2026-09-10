@@ -102,13 +102,15 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 
 		// Ticket -> Seat is the authoritative link from a sale to its concert/zone.
 		type zoneAggregate struct {
-			ZoneID string
-			Sold   int64
+			ZoneID  string
+			Sold    int64
+			Revenue float64
 		}
 		var aggregates []zoneAggregate
-		if err := h.db.Table("tickets t").Select("s.zone_id, COUNT(DISTINCT t.ticket_id) AS sold").
+		if err := h.db.Table("tickets t").Select("s.zone_id, COUNT(DISTINCT t.ticket_id) AS sold, COALESCE(SUM(t.price_ticket), 0) AS revenue").
 			Joins("JOIN seats s ON s.seat_id = t.seat_id").
-			Where("s.concert_id = ? AND LOWER(t.status_ticket) NOT IN ?", concert.ConcertID, []string{"cancelled", "canceled", "ยกเลิก"}).
+			Joins("JOIN zones z ON z.zone_id = s.zone_id").
+			Where("z.concert_id = ? AND LOWER(t.status_ticket) NOT IN ?", concert.ConcertID, []string{"cancelled", "canceled", "ยกเลิก"}).
 			Group("s.zone_id").Scan(&aggregates).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "ไม่สามารถสรุปยอดขายบัตรได้"})
 		}
@@ -118,12 +120,9 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 			if h.db.First(&zone, "zone_id = ?", aggregate.ZoneID).Error == nil && zone.ZoneType != "" {
 				zoneName = zone.ZoneType
 			}
-			var price float64
-			h.db.Model(&models.TicketCategory{}).Where("zone_id = ?", aggregate.ZoneID).Select("COALESCE(MAX(price), 0)").Scan(&price)
-			revenue := price * float64(aggregate.Sold)
 			row.TicketsSold += aggregate.Sold
-			row.TicketRevenue += revenue
-			row.Zones = append(row.Zones, reportZone{Zone: zoneName, SeatsSold: aggregate.Sold, Revenue: revenue})
+			row.TicketRevenue += aggregate.Revenue
+			row.Zones = append(row.Zones, reportZone{Zone: zoneName, SeatsSold: aggregate.Sold, Revenue: aggregate.Revenue})
 		}
 		result = append(result, row)
 	}

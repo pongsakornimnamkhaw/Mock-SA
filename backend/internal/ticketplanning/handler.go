@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -16,19 +17,22 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type VenueSeatHandler struct {
+type TicketPlanningHandler struct {
 	db *gorm.DB
 }
 
 var (
-	errLayoutHasIssuedTickets = errors.New("layout contains seats referenced by tickets")
-	errLayoutOwnership        = errors.New("layout item belongs to another system")
+	errLayoutHasIssuedTickets = errors.New("ไม่สามารถลบโซนหรือที่นั่งที่ออกบัตรแล้ว")
+	errIssuedSeatImmutable    = errors.New("ไม่สามารถเปลี่ยนโซน แถว หรือเลขที่นั่งที่ออกบัตรแล้ว")
+	errCapacityBelowIssued    = errors.New("ไม่สามารถลดความจุต่ำกว่าจำนวนบัตรที่ออกแล้ว")
+	errSeatItemsOverCapacity  = errors.New("จำนวนที่นั่งมากกว่าความจุของโซน")
+	errLayoutOwnership        = errors.New("ข้อมูลผังเป็นของคอนเสิร์ตอื่น")
 )
 
 const maxLayerOrder = int64(1<<31 - 1)
 
 func RegisterRoutes(app *fiber.App, db *gorm.DB) {
-	handler := &VenueSeatHandler{db: db}
+	handler := &TicketPlanningHandler{db: db}
 	group := app.Group("/api/ticket-planning")
 	group.Get("/concerts", handler.listConcerts)
 	group.Get("/concerts/:id", handler.getConcert)
@@ -66,11 +70,13 @@ type publishingDTO struct {
 }
 
 type seatDTO struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Disabled bool    `json:"disabled"`
+	ID        uint    `json:"id,omitempty"`
+	ClientKey string  `json:"clientKey,omitempty"`
+	Name      string  `json:"name"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Rotation  float64 `json:"rotation,omitempty"`
+	Disabled  bool    `json:"disabled"`
 }
 
 type zoneDTO struct {
@@ -80,7 +86,7 @@ type zoneDTO struct {
 	Color     string    `json:"color"`
 	Seats     int       `json:"seats"`
 	SeatItems []seatDTO `json:"seatItems"`
-	Price     float64   `json:"price"`
+	ZonePrice float64   `json:"zonePrice"`
 	Type      string    `json:"type"`
 	Shape     string    `json:"shape"`
 	X         float64   `json:"x"`
@@ -139,7 +145,7 @@ type ticketDesignDTO struct {
 	Objects []layoutObjectDTO `json:"objects"`
 }
 
-func (h *VenueSeatHandler) getLayout(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) getLayout(c *fiber.Ctx) error {
 	var concert models.Concert
 	if err := h.db.First(&concert, "concert_id = ?", c.Params("id")).Error; err != nil {
 		return apiError(c, fiber.StatusNotFound, "concert not found", err)
@@ -151,7 +157,7 @@ func (h *VenueSeatHandler) getLayout(c *fiber.Ctx) error {
 	return c.JSON(layoutDTO{Zones: result.Zones, LayoutObjects: result.LayoutObjects, TicketLayoutObjects: result.TicketLayoutObjects})
 }
 
-func (h *VenueSeatHandler) getPublication(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) getPublication(c *fiber.Ctx) error {
 	var publication models.Publication
 	if err := h.db.First(&publication, "concert_id = ?", c.Params("id")).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -162,7 +168,7 @@ func (h *VenueSeatHandler) getPublication(c *fiber.Ctx) error {
 	return c.JSON(publicationDTO(publication))
 }
 
-func (h *VenueSeatHandler) putPublication(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) putPublication(c *fiber.Ctx) error {
 	concertID := strings.TrimSpace(c.Params("id"))
 	if err := h.ensureConcert(concertID); err != nil {
 		return apiError(c, fiber.StatusNotFound, "concert not found", err)
@@ -212,7 +218,7 @@ func publicationDTO(publication models.Publication) publishingDTO {
 	}
 }
 
-func (h *VenueSeatHandler) getTicketDesign(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) getTicketDesign(c *fiber.Ctx) error {
 	var concert models.Concert
 	if err := h.db.First(&concert, "concert_id = ?", c.Params("id")).Error; err != nil {
 		return apiError(c, fiber.StatusNotFound, "concert not found", err)
@@ -224,7 +230,7 @@ func (h *VenueSeatHandler) getTicketDesign(c *fiber.Ctx) error {
 	return c.JSON(ticketDesignDTO{Objects: result.TicketLayoutObjects})
 }
 
-func (h *VenueSeatHandler) putTicketDesign(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) putTicketDesign(c *fiber.Ctx) error {
 	concertID := strings.TrimSpace(c.Params("id"))
 	if err := h.ensureConcert(concertID); err != nil {
 		return apiError(c, fiber.StatusNotFound, "concert not found", err)
@@ -272,11 +278,15 @@ func (h *VenueSeatHandler) putTicketDesign(c *fiber.Ctx) error {
 	return c.JSON(payload)
 }
 
-func (h *VenueSeatHandler) storeTicketImage(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) storeTicketImage(c *fiber.Ctx) error {
 	if !isPNGRequest(c) || len(c.Body()) == 0 {
 		return apiError(c, fiber.StatusBadRequest, "a non-empty image/png body is required", nil)
 	}
-	result := h.db.Model(&models.Ticket{}).Where("ticket_id = ?", strings.TrimSpace(c.Params("ticketID"))).Update("image_ticket", append([]byte(nil), c.Body()...))
+	ticketID, err := parseNumericID(c.Params("ticketID"))
+	if err != nil {
+		return apiError(c, fiber.StatusBadRequest, "invalid ticket id", err)
+	}
+	result := h.db.Model(&models.Ticket{}).Where("ticket_id = ?", ticketID).Update("image_ticket", append([]byte(nil), c.Body()...))
 	if result.Error != nil {
 		return apiError(c, fiber.StatusInternalServerError, "store ticket image", result.Error)
 	}
@@ -286,9 +296,13 @@ func (h *VenueSeatHandler) storeTicketImage(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func (h *VenueSeatHandler) getTicketImage(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) getTicketImage(c *fiber.Ctx) error {
+	ticketID, parseErr := parseNumericID(c.Params("ticketID"))
+	if parseErr != nil {
+		return apiError(c, fiber.StatusBadRequest, "invalid ticket id", parseErr)
+	}
 	var ticket models.Ticket
-	if err := h.db.Select("ticket_id", "image_ticket").First(&ticket, "ticket_id = ?", strings.TrimSpace(c.Params("ticketID"))).Error; err != nil {
+	if err := h.db.Select("ticket_id", "image_ticket").First(&ticket, "ticket_id = ?", ticketID).Error; err != nil {
 		return apiError(c, fiber.StatusNotFound, "ticket image not found", err)
 	}
 	if len(ticket.ImageTicket) == 0 {
@@ -298,7 +312,7 @@ func (h *VenueSeatHandler) getTicketImage(c *fiber.Ctx) error {
 	return c.Send(ticket.ImageTicket)
 }
 
-func (h *VenueSeatHandler) listConcerts(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) listConcerts(c *fiber.Ctx) error {
 	var concerts []models.Concert
 	if err := h.db.Order("start_date DESC").Find(&concerts).Error; err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "load concerts", err)
@@ -315,7 +329,7 @@ func (h *VenueSeatHandler) listConcerts(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *VenueSeatHandler) getConcert(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) getConcert(c *fiber.Ctx) error {
 	var concert models.Concert
 	if err := h.db.First(&concert, "concert_id = ?", c.Params("id")).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -330,7 +344,7 @@ func (h *VenueSeatHandler) getConcert(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (h *VenueSeatHandler) storeSeatLayoutImage(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) storeSeatLayoutImage(c *fiber.Ctx) error {
 	if !isPNGRequest(c) || len(c.Body()) == 0 {
 		return apiError(c, fiber.StatusBadRequest, "a non-empty image/png body is required", nil)
 	}
@@ -344,7 +358,7 @@ func (h *VenueSeatHandler) storeSeatLayoutImage(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func (h *VenueSeatHandler) getSeatLayoutImage(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) getSeatLayoutImage(c *fiber.Ctx) error {
 	var concert models.Concert
 	if err := h.db.Select("concert_id", "seat_layout_image").First(&concert, "concert_id = ?", strings.TrimSpace(c.Params("id"))).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -359,7 +373,7 @@ func (h *VenueSeatHandler) getSeatLayoutImage(c *fiber.Ctx) error {
 	return c.Send(concert.SeatLayoutImage)
 }
 
-func (h *VenueSeatHandler) createConcert(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) createConcert(c *fiber.Ctx) error {
 	var payload concertPlanDTO
 	if err := c.BodyParser(&payload); err != nil {
 		return apiError(c, fiber.StatusBadRequest, "invalid request body", err)
@@ -370,7 +384,7 @@ func (h *VenueSeatHandler) createConcert(c *fiber.Ctx) error {
 	return h.persistConcert(c, payload.ID, payload)
 }
 
-func (h *VenueSeatHandler) updateConcert(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) updateConcert(c *fiber.Ctx) error {
 	var payload concertPlanDTO
 	if err := c.BodyParser(&payload); err != nil {
 		return apiError(c, fiber.StatusBadRequest, "invalid request body", err)
@@ -378,7 +392,7 @@ func (h *VenueSeatHandler) updateConcert(c *fiber.Ctx) error {
 	return h.persistConcert(c, c.Params("id"), payload)
 }
 
-func (h *VenueSeatHandler) persistConcert(c *fiber.Ctx, concertID string, payload concertPlanDTO) error {
+func (h *TicketPlanningHandler) persistConcert(c *fiber.Ctx, concertID string, payload concertPlanDTO) error {
 	if strings.TrimSpace(payload.Name) == "" {
 		return apiError(c, fiber.StatusBadRequest, "concert name is required", nil)
 	}
@@ -490,7 +504,7 @@ func (h *VenueSeatHandler) persistConcert(c *fiber.Ctx, concertID string, payloa
 	return c.JSON(result)
 }
 
-func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) saveLayout(c *fiber.Ctx) error {
 	concertID := c.Params("id")
 	var payload layoutDTO
 	if err := c.BodyParser(&payload); err != nil {
@@ -500,11 +514,8 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 		if item.Seats < 0 {
 			return apiError(c, fiber.StatusBadRequest, "zone capacity must not be negative", nil)
 		}
-		if item.Price < 0 {
+		if item.ZonePrice < 0 {
 			return apiError(c, fiber.StatusBadRequest, "zone price must not be negative", nil)
-		}
-		if item.Seats > 0 && len(item.SeatItems) > item.Seats {
-			return apiError(c, fiber.StatusBadRequest, "seat items exceed zone capacity", nil)
 		}
 		if item.Layer < 0 || item.Layer > maxLayerOrder {
 			return apiError(c, fiber.StatusBadRequest, "zone layer order is out of range", nil)
@@ -555,8 +566,11 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return apiError(c, fiber.StatusNotFound, "concert not found", err)
 		}
-		if errors.Is(err, errLayoutHasIssuedTickets) || errors.Is(err, errLayoutOwnership) {
+		if errors.Is(err, errLayoutHasIssuedTickets) || errors.Is(err, errIssuedSeatImmutable) || errors.Is(err, errCapacityBelowIssued) || errors.Is(err, errLayoutOwnership) {
 			return apiError(c, fiber.StatusConflict, err.Error(), nil)
+		}
+		if errors.Is(err, errSeatItemsOverCapacity) {
+			return apiError(c, fiber.StatusBadRequest, err.Error(), nil)
 		}
 		return apiError(c, fiber.StatusInternalServerError, "save layout", err)
 	}
@@ -571,7 +585,7 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 	return c.JSON(layoutDTO{Zones: result.Zones, LayoutObjects: result.LayoutObjects, TicketLayoutObjects: result.TicketLayoutObjects})
 }
 
-func (h *VenueSeatHandler) clearLayout(c *fiber.Ctx) error {
+func (h *TicketPlanningHandler) clearLayout(c *fiber.Ctx) error {
 	concertID := c.Params("id")
 	if err := h.ensureConcert(concertID); err != nil {
 		return apiError(c, fiber.StatusNotFound, "concert not found", err)
@@ -591,7 +605,7 @@ func clearLayoutRecords(tx *gorm.DB, concertID string) error {
 		return err
 	}
 	if len(zoneIDs) > 0 {
-		var seatIDs []string
+		var seatIDs []uint
 		if err := tx.Model(&models.Seat{}).Where("zone_id IN ?", zoneIDs).Pluck("seat_id", &seatIDs).Error; err != nil {
 			return err
 		}
@@ -624,7 +638,7 @@ func syncPlanningZones(tx *gorm.DB, concertID string, items []zoneDTO) error {
 		if _, keep := incoming[zone.ZoneID]; keep {
 			continue
 		}
-		var seatIDs []string
+		var seatIDs []uint
 		if err := tx.Model(&models.Seat{}).Where("zone_id = ?", zone.ZoneID).Pluck("seat_id", &seatIDs).Error; err != nil {
 			return err
 		}
@@ -641,28 +655,37 @@ func syncPlanningZones(tx *gorm.DB, concertID string, items []zoneDTO) error {
 
 	for _, item := range items {
 		var conflictCount int64
-		if err := tx.Model(&models.Zone{}).Where("zone_id = ? AND (concert_id IS NULL OR concert_id <> ?)", item.ID, concertID).Count(&conflictCount).Error; err != nil {
+		if err := tx.Model(&models.Zone{}).Where("zone_id = ? AND concert_id <> ?", item.ID, concertID).Count(&conflictCount).Error; err != nil {
 			return err
 		}
 		if conflictCount > 0 {
 			return errLayoutOwnership
 		}
-		capacity := item.Seats
-		if capacity == 0 {
-			capacity = len(item.SeatItems)
+		var issuedCount int64
+		if err := tx.Model(&models.Ticket{}).
+			Joins("JOIN seats ON seats.seat_id = tickets.seat_id").
+			Where("seats.zone_id = ?", item.ID).
+			Count(&issuedCount).Error; err != nil {
+			return err
+		}
+		if int64(item.Seats) < issuedCount {
+			return errCapacityBelowIssued
+		}
+		if len(item.SeatItems) > item.Seats {
+			return errSeatItemsOverCapacity
 		}
 		zoneName := strings.TrimSpace(item.Name)
 		if zoneName == "" {
 			zoneName = strings.TrimSpace(item.Type)
 		}
 		zone := models.Zone{
-			ZoneID: item.ID, ConcertID: &concertID, ZoneType: zoneName, Capacity: capacity,
+			ZoneID: item.ID, ConcertID: concertID, ZoneType: zoneName, Capacity: item.Seats, ZonePrice: item.ZonePrice,
 			Shape: item.Shape, Color: item.Color, PositionX: item.X, PositionY: item.Y,
 			Width: item.Width, Height: item.Height, Rotation: item.Rotation, LayerOrder: int(item.Layer),
 		}
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "zone_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"concert_id", "zone_type", "capacity", "shape", "color", "position_x", "position_y", "width", "height", "rotation", "layer_order"}),
+			DoUpdates: clause.AssignmentColumns([]string{"concert_id", "zone_type", "capacity", "zone_price", "shape", "color", "position_x", "position_y", "width", "height", "rotation", "layer_order"}),
 		}).Create(&zone).Error; err != nil {
 			return err
 		}
@@ -678,15 +701,15 @@ func syncPlanningSeats(tx *gorm.DB, concertID, zoneID string, items []seatDTO) e
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("zone_id = ?", zoneID).Find(&existing).Error; err != nil {
 		return err
 	}
-	existingByID := make(map[string]models.Seat, len(existing))
-	existingIDs := make([]string, 0, len(existing))
+	existingByID := make(map[uint]models.Seat, len(existing))
+	existingIDs := make([]uint, 0, len(existing))
 	for _, seat := range existing {
 		existingByID[seat.SeatID] = seat
 		existingIDs = append(existingIDs, seat.SeatID)
 	}
-	issued := make(map[string]bool, len(existing))
+	issued := make(map[uint]bool, len(existing))
 	if len(existingIDs) > 0 {
-		var issuedIDs []string
+		var issuedIDs []uint
 		if err := tx.Model(&models.Ticket{}).Where("seat_id IN ?", existingIDs).Pluck("seat_id", &issuedIDs).Error; err != nil {
 			return err
 		}
@@ -694,38 +717,60 @@ func syncPlanningSeats(tx *gorm.DB, concertID, zoneID string, items []seatDTO) e
 			issued[seatID] = true
 		}
 	}
-	incoming := make(map[string]struct{}, len(items))
-	for index := range items {
-		if strings.TrimSpace(items[index].ID) == "" {
-			items[index].ID = uuid.NewString()
+	incoming := make(map[uint]struct{}, len(items))
+	for _, item := range items {
+		if item.ID > 0 {
+			incoming[item.ID] = struct{}{}
 		}
-		incoming[items[index].ID] = struct{}{}
 	}
 	for _, seat := range existing {
 		if _, keep := incoming[seat.SeatID]; keep {
 			continue
 		}
-		if err := ensureSeatsHaveNoTickets(tx, []string{seat.SeatID}); err != nil {
+		if err := ensureSeatsHaveNoTickets(tx, []uint{seat.SeatID}); err != nil {
 			return err
 		}
 		if err := tx.Delete(&models.Seat{}, "seat_id = ?", seat.SeatID).Error; err != nil {
 			return err
 		}
 	}
-	for _, item := range items {
-		var conflictCount int64
-		if err := tx.Model(&models.Seat{}).Where("seat_id = ? AND zone_id <> ?", item.ID, zoneID).Count(&conflictCount).Error; err != nil {
-			return err
+	for index, item := range items {
+		if item.ID == 0 {
+			seat := models.Seat{
+				ZoneID: zoneID, SeatLabel: item.Name, SeatRow: 1, SeatColumn: index + 1,
+				StatusSeat: layoutSeatStatus(item.Disabled, "", false), PositionX: item.X,
+				PositionY: item.Y, Rotation: item.Rotation,
+			}
+			if err := tx.Create(&seat).Error; err != nil {
+				return err
+			}
+			continue
 		}
-		if conflictCount > 0 {
+
+		current, exists := existingByID[item.ID]
+		if !exists {
+			var conflictCount int64
+			if err := tx.Model(&models.Seat{}).Where("seat_id = ?", item.ID).Count(&conflictCount).Error; err != nil {
+				return err
+			}
+			if conflictCount > 0 {
+				return errLayoutOwnership
+			}
 			return errLayoutOwnership
 		}
-		status := layoutSeatStatus(item.Disabled, existingByID[item.ID].StatusSeat, issued[item.ID])
-		seat := models.Seat{SeatID: item.ID, ZoneID: zoneID, ConcertID: concertID, SeatLabel: item.Name, StatusSeat: status, PositionX: item.X, PositionY: item.Y}
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "seat_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"zone_id", "concert_id", "seat_label", "status_seat", "position_x", "position_y"}),
-		}).Create(&seat).Error; err != nil {
+		if issued[item.ID] && strings.TrimSpace(current.SeatLabel) != strings.TrimSpace(item.Name) {
+			return errIssuedSeatImmutable
+		}
+		updates := map[string]any{
+			"status_seat": layoutSeatStatus(item.Disabled, current.StatusSeat, issued[item.ID]),
+			"position_x":  item.X, "position_y": item.Y, "rotation": item.Rotation,
+		}
+		if !issued[item.ID] {
+			updates["seat_label"] = item.Name
+			updates["seat_row"] = 1
+			updates["seat_column"] = index + 1
+		}
+		if err := tx.Model(&models.Seat{}).Where("seat_id = ? AND zone_id = ?", item.ID, zoneID).Updates(updates).Error; err != nil {
 			return err
 		}
 	}
@@ -742,7 +787,7 @@ func layoutSeatStatus(disabled bool, existingStatus string, issued bool) string 
 	return "AVAILABLE"
 }
 
-func ensureSeatsHaveNoTickets(tx *gorm.DB, seatIDs []string) error {
+func ensureSeatsHaveNoTickets(tx *gorm.DB, seatIDs []uint) error {
 	if len(seatIDs) == 0 {
 		return nil
 	}
@@ -770,7 +815,7 @@ type venueObjectStyle struct {
 	FontSize  float64 `json:"fontSize,omitempty"`
 }
 
-func (h *VenueSeatHandler) ensureConcert(concertID string) error {
+func (h *TicketPlanningHandler) ensureConcert(concertID string) error {
 	var count int64
 	if err := h.db.Model(&models.Concert{}).Where("concert_id = ?", concertID).Count(&count).Error; err != nil {
 		return err
@@ -781,7 +826,7 @@ func (h *VenueSeatHandler) ensureConcert(concertID string) error {
 	return nil
 }
 
-func (h *VenueSeatHandler) buildConcertDTO(concert models.Concert) (concertPlanDTO, error) {
+func (h *TicketPlanningHandler) buildConcertDTO(concert models.Concert) (concertPlanDTO, error) {
 	result := concertPlanDTO{
 		ID: concert.ConcertID, Name: concert.ConcertName, Date: concert.StartDate,
 		EndDate: concert.EndDate, Location: concert.Location, Status: concert.Status,
@@ -816,12 +861,7 @@ func (h *VenueSeatHandler) buildConcertDTO(concert models.Concert) (concertPlanD
 		return result, err
 	}
 	for _, item := range zones {
-		zone := zoneDTO{ID: item.ZoneID, Kind: "zone", Color: item.Color, Seats: item.Capacity, Type: item.ZoneType, Shape: item.Shape, X: item.PositionX, Y: item.PositionY, Width: item.Width, Height: item.Height, Rotation: item.Rotation, Layer: int64(item.LayerOrder), SeatItems: []seatDTO{}}
-		price, err := loadZoneStartingPrice(h.db, item.ZoneID)
-		if err != nil {
-			return result, err
-		}
-		zone.Price = price
+		zone := zoneDTO{ID: item.ZoneID, Kind: "zone", Color: item.Color, Seats: item.Capacity, ZonePrice: item.ZonePrice, Type: item.ZoneType, Shape: item.Shape, X: item.PositionX, Y: item.PositionY, Width: item.Width, Height: item.Height, Rotation: item.Rotation, Layer: int64(item.LayerOrder), SeatItems: []seatDTO{}}
 		if zone.Name == "" {
 			zone.Name = item.ZoneType
 		}
@@ -830,7 +870,7 @@ func (h *VenueSeatHandler) buildConcertDTO(concert models.Concert) (concertPlanD
 			return result, err
 		}
 		for _, seat := range seats {
-			zone.SeatItems = append(zone.SeatItems, seatDTO{ID: seat.SeatID, Name: seatName(seat), X: seat.PositionX, Y: seat.PositionY, Disabled: strings.EqualFold(seat.StatusSeat, "DISABLED")})
+			zone.SeatItems = append(zone.SeatItems, seatDTO{ID: seat.SeatID, ClientKey: fmt.Sprintf("seat-%d", seat.SeatID), Name: seatName(seat), X: seat.PositionX, Y: seat.PositionY, Rotation: seat.Rotation, Disabled: strings.EqualFold(seat.StatusSeat, "DISABLED")})
 		}
 		result.Zones = append(result.Zones, zone)
 	}
@@ -960,14 +1000,12 @@ func isPNGRequest(c *fiber.Ctx) bool {
 	return strings.EqualFold(strings.TrimSpace(strings.Split(c.Get(fiber.HeaderContentType), ";")[0]), "image/png")
 }
 
-func loadZoneStartingPrice(db *gorm.DB, zoneID string) (float64, error) {
-	var price float64
-	err := db.Table("tickets AS t").
-		Select("COALESCE(MIN(t.price_ticket), 0)").
-		Joins("JOIN seats AS s ON s.seat_id = t.seat_id").
-		Where("s.zone_id = ?", zoneID).
-		Scan(&price).Error
-	return price, err
+func parseNumericID(value string) (uint, error) {
+	parsed, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
+	if err != nil || parsed == 0 {
+		return 0, fmt.Errorf("invalid numeric id %q", value)
+	}
+	return uint(parsed), nil
 }
 
 func apiError(c *fiber.Ctx, status int, message string, err error) error {

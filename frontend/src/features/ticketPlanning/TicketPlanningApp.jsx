@@ -3,6 +3,7 @@ import { ArrowLeftIcon, CheckIcon, CloseIcon, PlusIcon, SaveIcon, SearchIcon, Tr
 import { blankConcert, initialConcerts } from './seed'
 import { clearConcertLayout, loadConcerts, saveConcertLayout, saveConcertPlan, saveTicketDesign } from './api'
 import { nextLayerOrder } from './layerOrder'
+import { normalizeZoneForEditor, seatKey } from './zoneData'
 
 const STORAGE_KEY = 'octavia-concerts-v1'
 
@@ -35,7 +36,7 @@ const hydrateConcert = concert => ({
   endDate: normalizeDateOnly(concert.endDate),
   rounds: concert.rounds || [],
   publishing: { ...blankConcert().publishing, ...(concert.publishing || {}) },
-  zones: concert.zones || [],
+  zones: (concert.zones || []).map(normalizeZoneForEditor),
   layoutObjects: concert.layoutObjects || [],
   ticketLayoutObjects: concert.ticketLayoutObjects || [],
 })
@@ -254,13 +255,13 @@ function OverviewTab({ draft, update }) {
     </div>
     <div className="overview-grid">
       <section className="overview-map-card"><div className="section-title"><div><h3>แผนผังที่นั่งในสถานที่</h3><p>ภาพรวมโซนและจำนวนที่นั่ง</p></div><strong>{totalSeats.toLocaleString('th-TH')} ที่นั่ง</strong></div>
-        <div className="overview-map"><div className="overview-stage">เวที</div>{zones.map(zone => <div key={zone.id} className={`overview-zone ${zone.shape || 'rectangle'}`} style={{ left:`${zone.x}%`,top:`${zone.y}%`,width:`${zone.width || 14}%`,height:`${zone.height || 14}%`,background:zone.color,transform:`translate(-50%,-50%) rotate(${zone.rotation || 0}deg)`,...shapeStyle(zone.shape) }}><b>{zone.name || zone.type}</b><span>{zone.seatItems?.length ?? zone.seats ?? 0} ที่นั่ง</span><small>{Number(zone.price || 0).toLocaleString()} ฿</small></div>)}</div>
+        <div className="overview-map"><div className="overview-stage">เวที</div>{zones.map(zone => <div key={zone.id} className={`overview-zone ${zone.shape || 'rectangle'}`} style={{ left:`${zone.x}%`,top:`${zone.y}%`,width:`${zone.width || 14}%`,height:`${zone.height || 14}%`,background:zone.color,transform:`translate(-50%,-50%) rotate(${zone.rotation || 0}deg)`,...shapeStyle(zone.shape) }}><b>{zone.name || zone.type}</b><span>{zone.seatItems?.length ?? zone.seats ?? 0} ที่นั่ง</span><small>{Number(zone.zonePrice || 0).toLocaleString()} ฿</small></div>)}</div>
       </section>
       <section className="overview-form"><h3>ข้อมูลคอนเสิร์ต</h3><GeneralTab draft={draft} update={update}/></section>
     </div>
-    <section className="overview-zones"><div className="section-title"><div><h3>สรุปโซนจำหน่ายบัตร</h3><p>ราคาอ่านจากบัตรจริงเมื่อเชื่อมฐานข้อมูล</p></div></div>
+    <section className="overview-zones"><div className="section-title"><div><h3>สรุปโซนจำหน่ายบัตร</h3><p>ราคาแผนอ่านจาก Zone.ZonePrice</p></div></div>
       <div className="zone-summary-row zone-summary-head"><span>โซน</span><span>ราคา</span><span>ความจุ</span><span>สัดส่วน</span></div>
-      {zones.map(zone => <div className="zone-summary-row" key={zone.id}><span><i style={{background:zone.color}}></i><b>{zone.name || zone.type}</b></span><span>{Number(zone.price || 0).toLocaleString()} บาท</span><span>{Number(zone.seatItems?.length ?? zone.seats ?? 0).toLocaleString()} ที่นั่ง</span><span>{totalSeats ? ((Number(zone.seatItems?.length ?? zone.seats ?? 0) / totalSeats) * 100).toFixed(1) : '0.0'}%</span></div>)}
+      {zones.map(zone => <div className="zone-summary-row" key={zone.id}><span><i style={{background:zone.color}}></i><b>{zone.name || zone.type}</b></span><span>{Number(zone.zonePrice || 0).toLocaleString()} บาท</span><span>{Number(zone.seatItems?.length ?? zone.seats ?? 0).toLocaleString()} ที่นั่ง</span><span>{totalSeats ? ((Number(zone.seatItems?.length ?? zone.seats ?? 0) / totalSeats) * 100).toFixed(1) : '0.0'}%</span></div>)}
       {!zones.length && <div className="empty">ยังไม่มีโซน กรุณาสร้างในแท็บ “ออกแบบผังและที่นั่ง”</div>}
     </section>
     <RoundsTab rounds={draft.rounds || []}/>
@@ -316,20 +317,20 @@ function arrangeSeats(count, shape, oldSeats = []) {
       y = 9 + Math.floor(index / columns) * (82 / Math.max(rows - 1, 1))
     }
     const existing = oldSeats[index]
-    return existing ? { ...existing, x, y } : { id: `seat-${Date.now()}-${index}`, name: `${String.fromCharCode(65 + Math.floor(index / 26))}${index + 1}`, x, y, disabled: false }
+    return existing ? { ...existing, x, y } : { clientKey: `seat-${Date.now()}-${index}`, name: `${String.fromCharCode(65 + Math.floor(index / 26))}${index + 1}`, x, y, disabled: false }
   })
 }
 
 function ItemModal({ kind, shape, onClose, onSave }) {
   const isZone = kind === 'zone'
-  const [item, setItem] = useState({ id: `${kind}-${Date.now()}`, kind, shape, name: isZone ? '' : 'วัตถุ', color: isZone ? '#e72d70' : '#777b91', textColor: '#ffffff', seats: 0, seatItems: [], price: 0, type: '', x: 50, y: 50, width: 13, height: 15, rotation: 0, z: 0 })
+  const [item, setItem] = useState({ id: `${kind}-${Date.now()}`, kind, shape, name: isZone ? '' : 'วัตถุ', color: isZone ? '#e72d70' : '#777b91', textColor: '#ffffff', seats: 0, seatItems: [], zonePrice: 0, type: '', x: 50, y: 50, width: 13, height: 15, rotation: 0, z: 0 })
   const update = (key, value) => setItem(current => ({ ...current, [key]: value }))
   return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="modal zone-modal">
     <div className="modal-title"><div><span className="eyebrow">LAYOUT ITEM</span><h2>สร้าง{isZone ? 'โซนที่นั่ง' : 'วัตถุปกติ'}รูป{shapeNames[shape]}</h2></div><button className="icon-button" onClick={onClose}><CloseIcon/></button></div>
     <div className="form-grid">
       <FormField label={isZone ? 'ชื่อโซน' : 'ชื่อวัตถุ'} required><input value={item.name} onChange={e => update('name', e.target.value)} placeholder={isZone ? 'เช่น A1' : 'เช่น เวที หรือ ทางเข้า'}/></FormField>
       <FormField label="สี" required><input className="color-input" type="color" value={item.color} onChange={e => update('color', e.target.value)}/></FormField>
-      {isZone && <p className="form-note">ราคาของโซนจะอ่านจาก <b>Ticket.PriceTicket</b> เมื่อมีการออกบัตรแล้ว</p>}
+      {isZone && <FormField label="ราคาโซน (บาท)" required><input type="number" min="0" step="0.01" value={item.zonePrice} onChange={e => update('zonePrice', Number(e.target.value))}/></FormField>}
     </div>
     <div className="modal-actions"><button className="btn ghost" onClick={onClose}>ยกเลิก</button><button disabled={!item.name} className="btn primary" onClick={() => onSave(item)}><PlusIcon/>สร้าง{isZone ? 'โซน' : 'วัตถุ'}</button></div>
   </div></div>
@@ -343,7 +344,7 @@ function ZoneDetail({ zone, onBack, onSave, onDelete }) {
   const update = (key, value) => setWorking(current => ({ ...current, [key]: value }))
   const changeShape = shape => setWorking(current => ({ ...current, shape, seatItems: arrangeSeats(current.seatItems.length, shape, current.seatItems) }))
   const addSeats = () => setWorking(current => { const count = current.seatItems.length + Math.max(1, addCount); return { ...current, seats: count, seatItems: arrangeSeats(count, current.shape, current.seatItems) } })
-  const updateSeat = next => { setWorking(current => ({ ...current, seatItems: current.seatItems.map(seat => seat.id === next.id ? next : seat) })); setSelectedSeat(next) }
+  const updateSeat = next => { setWorking(current => ({ ...current, seatItems: current.seatItems.map(seat => seatKey(seat) === seatKey(next) ? next : seat) })); setSelectedSeat(next) }
   const dragSeat = (event, seat) => {
     event.stopPropagation(); setSelectedSeat(seat)
     const rect = seatCanvas.current.getBoundingClientRect()
@@ -351,16 +352,16 @@ function ZoneDetail({ zone, onBack, onSave, onDelete }) {
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
   }
-  const activeSeat = working.seatItems.find(seat => seat.id === selectedSeat?.id)
+  const activeSeat = working.seatItems.find(seat => seatKey(seat) === seatKey(selectedSeat))
   const disabledCount = working.seatItems.filter(seat => seat.disabled).length
   return <div className="zone-detail">
     <div className="section-bar"><button className="back-link" onClick={onBack}><ArrowLeftIcon/>กลับไปยังผังรวม</button><div className="detail-actions"><button className="btn danger small" onClick={onDelete}><TrashIcon/>ลบโซน</button><button className="btn success small" onClick={() => onSave({ ...working, seats: working.seatItems.length })}><SaveIcon/>บันทึกผังที่นั่ง</button></div></div>
     <div className="seat-editor-toolbar"><div className="shape-switch"><b>รูปทรงโซน</b>{Object.keys(shapeNames).map(shape => <button key={shape} className={working.shape === shape ? 'active' : ''} onClick={() => changeShape(shape)}><i className={`shape-icon ${shape}`}></i>{shapeNames[shape]}</button>)}</div><div className="add-seat-control"><input type="number" min="1" value={addCount} onChange={e => setAddCount(+e.target.value)}/><button className="btn primary small" onClick={addSeats}><PlusIcon/>เพิ่มเก้าอี้</button></div></div>
     <div className="zone-detail-grid">
-      <div className="seat-shape-frame"><div ref={seatCanvas} className={`free-seat-canvas ${working.shape}`} style={{ '--zone-color': working.color }} onClick={() => setSelectedSeat(null)}>{working.seatItems.map(seat => <button key={seat.id} className={`free-seat ${seat.disabled ? 'disabled' : ''} ${activeSeat?.id === seat.id ? 'selected' : ''}`} style={{ left: `${seat.x}%`, top: `${seat.y}%` }} onPointerDown={e => dragSeat(e, seat)} onClick={e => { e.stopPropagation(); setSelectedSeat(seat) }}>{seat.name}</button>)}</div><p className="seat-hint">ลากเก้าอี้ได้อย่างอิสระ และคลิกเพื่อแก้ชื่อรายตัว</p></div>
+      <div className="seat-shape-frame"><div ref={seatCanvas} className={`free-seat-canvas ${working.shape}`} style={{ '--zone-color': working.color }} onClick={() => setSelectedSeat(null)}>{working.seatItems.map(seat => <button key={seatKey(seat)} className={`free-seat ${seat.disabled ? 'disabled' : ''} ${seatKey(activeSeat) === seatKey(seat) ? 'selected' : ''}`} style={{ left: `${seat.x}%`, top: `${seat.y}%` }} onPointerDown={e => dragSeat(e, seat)} onClick={e => { e.stopPropagation(); setSelectedSeat(seat) }}>{seat.name}</button>)}</div><p className="seat-hint">ลากเก้าอี้ได้อย่างอิสระ และคลิกเพื่อแก้ชื่อรายตัว</p></div>
       <aside className="zone-form"><div className="zone-badge" style={{ background: working.color, ...shapeStyle(working.shape) }}>{working.name}<small>{working.seatItems.length} ที่นั่ง</small></div>
-        <FormField label="ชื่อโซน"><input value={working.name} onChange={e => update('name', e.target.value)}/></FormField><FormField label="สีโซน"><input className="color-input" type="color" value={working.color} onChange={e => update('color', e.target.value)}/></FormField><div className="zone-stat"><span>ราคาเริ่มต้นจาก Ticket</span><b>{Number(working.price || 0).toLocaleString('th-TH')} ฿</b></div>
-        {activeSeat && <div className="seat-inspector"><b>เก้าอี้ที่เลือก</b><FormField label="ชื่อเก้าอี้"><input value={activeSeat.name} onChange={e => updateSeat({ ...activeSeat, name: e.target.value })}/></FormField><button className={`btn small ${activeSeat.disabled ? 'success' : 'ghost'}`} onClick={() => updateSeat({ ...activeSeat, disabled: !activeSeat.disabled })}>{activeSeat.disabled ? 'เปิดใช้งานเก้าอี้' : 'ปิดใช้งานเก้าอี้'}</button><button className="btn danger small" onClick={() => { setWorking(current => ({ ...current, seatItems: current.seatItems.filter(seat => seat.id !== activeSeat.id) })); setSelectedSeat(null) }}><TrashIcon/>ลบเก้าอี้</button></div>}
+        <FormField label="ชื่อโซน"><input value={working.name} onChange={e => update('name', e.target.value)}/></FormField><FormField label="สีโซน"><input className="color-input" type="color" value={working.color} onChange={e => update('color', e.target.value)}/></FormField><FormField label="ราคาโซน (บาท)"><input type="number" min="0" step="0.01" value={working.zonePrice || 0} onChange={e => update('zonePrice', Number(e.target.value))}/></FormField>
+        {activeSeat && <div className="seat-inspector"><b>เก้าอี้ที่เลือก</b><FormField label="ชื่อเก้าอี้"><input value={activeSeat.name} onChange={e => updateSeat({ ...activeSeat, name: e.target.value })}/></FormField><button className={`btn small ${activeSeat.disabled ? 'success' : 'ghost'}`} onClick={() => updateSeat({ ...activeSeat, disabled: !activeSeat.disabled })}>{activeSeat.disabled ? 'เปิดใช้งานเก้าอี้' : 'ปิดใช้งานเก้าอี้'}</button><button className="btn danger small" onClick={() => { setWorking(current => ({ ...current, seatItems: current.seatItems.filter(seat => seatKey(seat) !== seatKey(activeSeat)) })); setSelectedSeat(null) }}><TrashIcon/>ลบเก้าอี้</button></div>}
         <div className="zone-stat"><span>ที่นั่งพร้อมใช้</span><b>{working.seatItems.length - disabledCount}</b></div><div className="zone-stat"><span>ปิดใช้งาน</span><b>{disabledCount}</b></div>
       </aside>
     </div>
@@ -378,7 +379,7 @@ function SeatPlanner({ zones, setZones, objects, setObjects, onSeatSave }) {
   const total = zones.reduce((sum, zone) => sum + Number(zone.seatItems?.length ?? zone.seats ?? 0), 0)
   const updateItem = next => next.kind === 'object' ? setObjects(objects.map(item => item.id === next.id ? next : item)) : setZones(zones.map(item => item.id === next.id ? next : item))
   const removeSelected = () => { if (!selectedItem) return; if (selectedItem.kind === 'object') setObjects(objects.filter(item => item.id !== selectedItem.id)); else setZones(zones.filter(item => item.id !== selectedItem.id)); setSelected(null) }
-  const duplicate = () => { if (!selectedItem) return; const copy = { ...selectedItem, id: `${selectedItem.kind}-${Date.now()}`, name: `${selectedItem.name} สำเนา`, x: Math.min(94, selectedItem.x + 4), y: Math.min(94, selectedItem.y + 4), z: nextLayerOrder([...objects, ...zones]), seatItems: selectedItem.seatItems?.map(seat => ({ ...seat, id: `seat-${Date.now()}-${seat.id}` })) }; if (copy.kind === 'object') setObjects([...objects, copy]); else setZones([...zones, copy]); setSelected({ kind: copy.kind || 'zone', id: copy.id }) }
+  const duplicate = () => { if (!selectedItem) return; const copy = { ...selectedItem, id: `${selectedItem.kind}-${Date.now()}`, name: `${selectedItem.name} สำเนา`, x: Math.min(94, selectedItem.x + 4), y: Math.min(94, selectedItem.y + 4), z: nextLayerOrder([...objects, ...zones]), seatItems: selectedItem.seatItems?.map((seat, index) => ({ ...seat, id: undefined, clientKey: `seat-${Date.now()}-${index}` })) }; if (copy.kind === 'object') setObjects([...objects, copy]); else setZones([...zones, copy]); setSelected({ kind: copy.kind || 'zone', id: copy.id }) }
   const moveLayer = direction => {
     if (!selectedItem) return
     const ordered = [...objects, ...zones].sort((a, b) => Number(a.z || 0) - Number(b.z || 0))
@@ -404,7 +405,7 @@ function SeatPlanner({ zones, setZones, objects, setObjects, onSeatSave }) {
     {selectedItem && <div className="item-inspector"><span className={`kind-pill ${selectedItem.kind || 'zone'}`}>{selectedItem.kind === 'object' ? 'วัตถุปกติ' : 'โซนที่นั่ง'}</span><input aria-label="ชื่อวัตถุ" value={selectedItem.name} onChange={e => updateItem({ ...selectedItem, name: e.target.value })}/><label>สี <input type="color" value={selectedItem.color} onChange={e => updateItem({ ...selectedItem, color: e.target.value })}/></label><RangeControl label="กว้าง" min={selectedItem.shape === 'line' ? 2 : 4} value={selectedItem.width || 12} onChange={width => updateItem({ ...selectedItem, width })}/><RangeControl label="สูง" min={selectedItem.shape === 'line' ? 0.6 : 4} step={selectedItem.shape === 'line' ? 0.2 : 1} value={selectedItem.height || 12} onChange={height => updateItem({ ...selectedItem, height })}/><label>หมุน <input type="number" value={selectedItem.rotation || 0} onChange={e => updateItem({ ...selectedItem, rotation: +e.target.value })}/></label><button onClick={() => moveLayer(1)}>ขึ้นหน้า</button><button onClick={() => moveLayer(-1)}>ลงหลัง</button><button onClick={duplicate}>คัดลอก</button><button className="danger-tool" onClick={removeSelected}><TrashIcon size={16}/></button></div>}
     <div className="map-toolbar"><span><b>ผังที่นั่ง</b> ลากวัตถุได้อิสระทุกตำแหน่ง</span><span className="legend"><i></i>ดับเบิลคลิกโซนเพื่อจัดเก้าอี้</span></div>
     <div className="zone-map designer-map" ref={mapRef} onPointerDown={() => setSelected(null)}>
-      {[...objects, ...zones].sort((a,b) => Number(a.z || 0) - Number(b.z || 0)).map((item, index) => <div key={item.id} className={`layout-node ${selected?.id === item.id ? 'selected' : ''}`} style={{ left:`${item.x}%`,top:`${item.y}%`,width:`${item.width || 12}%`,height:`${item.height || 12}%`,transform:`translate(-50%,-50%) rotate(${item.rotation || 0}deg)`,zIndex:index + 1 }} onPointerDown={e => dragItem(e,item)} onDoubleClick={() => item.kind !== 'object' && setDetailId(item.id)}><div className={`layout-item ${item.kind || 'zone'} ${item.shape || 'rectangle'}`} style={{background:item.color,color:item.textColor || '#fff',...shapeStyle(item.shape)}}>{item.shape === 'line' ? '' : <><strong>{item.name}</strong>{item.kind !== 'object' && <><span>{item.seatItems?.length ?? item.seats ?? 0}</span><small>{Number(item.price || 0).toLocaleString()} ฿</small></>}</>}</div>{selected?.id === item.id && <TransformHandles item={item} canvasRef={mapRef} onChange={updateItem}/>}</div>)}
+      {[...objects, ...zones].sort((a,b) => Number(a.z || 0) - Number(b.z || 0)).map((item, index) => <div key={item.id} className={`layout-node ${selected?.id === item.id ? 'selected' : ''}`} style={{ left:`${item.x}%`,top:`${item.y}%`,width:`${item.width || 12}%`,height:`${item.height || 12}%`,transform:`translate(-50%,-50%) rotate(${item.rotation || 0}deg)`,zIndex:index + 1 }} onPointerDown={e => dragItem(e,item)} onDoubleClick={() => item.kind !== 'object' && setDetailId(item.id)}><div className={`layout-item ${item.kind || 'zone'} ${item.shape || 'rectangle'}`} style={{background:item.color,color:item.textColor || '#fff',...shapeStyle(item.shape)}}>{item.shape === 'line' ? '' : <><strong>{item.name}</strong>{item.kind !== 'object' && <><span>{item.seatItems?.length ?? item.seats ?? 0}</span><small>{Number(item.zonePrice || 0).toLocaleString()} ฿</small></>}</>}</div>{selected?.id === item.id && <TransformHandles item={item} canvasRef={mapRef} onChange={updateItem}/>}</div>)}
       {!zones.length && !objects.length && <div className="empty-map"><UsersIcon size={38}/><b>ผังยังว่างอยู่</b><span>เลือกเครื่องมือด้านบนเพื่อสร้างโซนหรือวัตถุ</span></div>}
     </div>
     {createConfig && (
@@ -499,10 +500,17 @@ function Editor({ source, onCancel, onSave, onSeatSave, onTicketSave }) {
   const [draft, setDraft] = useState(() => structuredClone(source))
   const [tab, setTab] = useState('overview')
   const update = (key, value) => setDraft(current => ({ ...current, [key]: value }))
-  const saveSeatLayout = (zones, layoutObjects) => {
+  const saveSeatLayout = async (zones, layoutObjects) => {
     const next = { ...draft, zones, layoutObjects }
     setDraft(next)
-    onSeatSave(next)
+    const persisted = await onSeatSave(next)
+    if (persisted) {
+      setDraft(current => ({
+        ...current,
+        zones: (persisted.zones || []).map(normalizeZoneForEditor),
+        layoutObjects: persisted.layoutObjects || [],
+      }))
+    }
   }
   const saveTicketLayout = ticketLayoutObjects => {
     const next = { ...draft, ticketLayoutObjects }
@@ -558,10 +566,13 @@ export default function App() {
   const saveSeats = async draft => {
     try {
       const layout = await saveConcertLayout(draft.id, draft.zones || [], draft.layoutObjects || [])
-      setConcerts(current => current.map(c => c.id === draft.id ? { ...c, zones: layout.zones, layoutObjects: layout.layoutObjects } : c))
+      const normalizedLayout = { ...layout, zones: (layout.zones || []).map(normalizeZoneForEditor) }
+      setConcerts(current => current.map(c => c.id === draft.id ? { ...c, zones: normalizedLayout.zones, layoutObjects: normalizedLayout.layoutObjects } : c))
       setToast('บันทึกผังและตำแหน่งที่นั่งเรียบร้อยแล้ว')
+      return normalizedLayout
     } catch {
       setToast('บันทึกผังไม่สำเร็จ อาจมีบัตรอ้างอิงที่นั่งอยู่หรือ API ไม่พร้อมใช้งาน')
+      return null
     }
   }
   const saveTickets = async draft => {

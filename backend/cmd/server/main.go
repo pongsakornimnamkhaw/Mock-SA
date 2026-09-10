@@ -46,7 +46,6 @@ func main() {
 			"status":  "success",
 		})
 	})
-	handlers.RegisterVenueSeatRoutes(app, config.DB)
 	ticketplanning.RegisterRoutes(app, config.DB)
 	eventregistration.RegisterRoutes(app, config.DB)
 	handlers.RegisterConcertRoutes(app, config.DB)

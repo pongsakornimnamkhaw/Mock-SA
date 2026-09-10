@@ -4,7 +4,17 @@ import "gorm.io/gorm"
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
-	if err := db.AutoMigrate(
+	if err := db.AutoMigrate(allModels()...); err != nil {
+		return err
+	}
+	if err := ensureTicketPlanningConstraints(db); err != nil {
+		return err
+	}
+	return normalizeOperationalDateTimeColumns(db)
+}
+
+func allModels() []any {
+	return []any{
 		// User & Access
 		&User{},
 		&CusActivityLogs{},
@@ -18,6 +28,10 @@ func MigrateAllModels(db *gorm.DB) error {
 		&ConcertDocument{},
 		&ModifiedHistory{},
 		&SummaryReport{},
+		&PerformanceSchedule{},
+		&PerformanceDetail{},
+		&Publication{},
+		&LayoutObject{},
 
 		// Artist
 		&Artist{},
@@ -43,31 +57,11 @@ func MigrateAllModels(db *gorm.DB) error {
 		&GateCheckIn{},
 		&SalesReport{},
 
-		// Performance
-		&PerformanceSchedule{},
-		&PerformanceDetail{},
-
 		// Work
 		&WorkPlan{},
 		&SponsorshipRequest{},
 		&Task{},
-
-		// Venue Seat Plan
-		&VenueSeatPlan{},
-		&VenueSeatRound{},
-		&VenueSeatZone{},
-		&VenueSeat{},
-		&VenueLayoutObject{},
-		&VenueSeatPublication{},
-		&Publication{},
-		&LayoutObject{},
-	); err != nil {
-		return err
 	}
-	if err := ensureTicketPlanningConstraints(db); err != nil {
-		return err
-	}
-	return normalizeOperationalDateTimeColumns(db)
 }
 
 func ensureTicketPlanningConstraints(db *gorm.DB) error {
@@ -81,9 +75,9 @@ func ensureTicketPlanningConstraints(db *gorm.DB) error {
 
 func ticketPlanningConstraintStatements() []string {
 	return []string{
-		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_zones_concert') THEN ALTER TABLE zones ADD CONSTRAINT fk_zones_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
-		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert') THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
-		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert') THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_zones_concert' AND conrelid = 'zones'::regclass) THEN ALTER TABLE zones ADD CONSTRAINT fk_zones_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE RESTRICT; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert' AND conrelid = 'layout_objects'::regclass) THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert' AND conrelid = 'publications'::regclass) THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
 	}
 }
 
@@ -99,7 +93,6 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE performance_schedules ALTER COLUMN end_show TYPE time without time zone USING end_show::time`,
 		`ALTER TABLE artist_requirements ALTER COLUMN start_req TYPE time without time zone USING start_req::time`,
 		`ALTER TABLE artist_requirements ALTER COLUMN end_req TYPE time without time zone USING end_req::time`,
-		`ALTER TABLE venue_seat_rounds ALTER COLUMN door_time TYPE time without time zone USING door_time::time`,
 		`ALTER TABLE work_plans ALTER COLUMN update_date TYPE date USING update_date::date`,
 		`ALTER TABLE sponsorship_requests ALTER COLUMN submit_date TYPE date USING submit_date::date`,
 		`ALTER TABLE ticket_sales_infos ALTER COLUMN publish_date TYPE date USING publish_date::date`,
@@ -118,10 +111,6 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE promotions ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
 		`ALTER TABLE promotions ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 		`ALTER TABLE promotion_usage_logs ALTER COLUMN used_at TYPE timestamp without time zone USING used_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_plans ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_plans ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_publications ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_publications ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		for _, statement := range statements {
@@ -131,18 +120,4 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		}
 		return nil
 	})
-}
-
-// MigrateVenueSeatModels รัน AutoMigrate เฉพาะตาราง Venue/Seat
-// (ถูกเรียกใช้จาก main.go)
-func MigrateVenueSeatModels(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&Concert{},
-		&VenueSeatPlan{},
-		&VenueSeatRound{},
-		&VenueSeatZone{},
-		&VenueSeat{},
-		&VenueLayoutObject{},
-		&VenueSeatPublication{},
-	)
 }

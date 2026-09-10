@@ -9,9 +9,10 @@ import (
 // Zone - โซนในงานคอนเสิร์ต
 type Zone struct {
 	ZoneID     string  `gorm:"primaryKey;type:varchar(50);not null" json:"zone_id"`
-	ConcertID  *string `gorm:"type:varchar(50);index" json:"concert_id,omitempty"`
+	ConcertID  string  `gorm:"type:varchar(50);not null;index" json:"concert_id"`
 	ZoneType   string  `gorm:"type:varchar(100);not null" json:"zone_type"`
 	Capacity   int     `gorm:"type:int;not null" json:"capacity"`
+	ZonePrice  float64 `gorm:"column:zone_price;type:double precision;not null;default:0;check:zone_price >= 0" json:"zone_price"`
 	PositionX  float64 `gorm:"type:double precision;not null;default:0" json:"position_x"`
 	PositionY  float64 `gorm:"type:double precision;not null;default:0" json:"position_y"`
 	Width      float64 `gorm:"type:double precision;not null;default:0" json:"width"`
@@ -22,7 +23,7 @@ type Zone struct {
 	LayerOrder int     `gorm:"type:int;not null;default:0" json:"layer_order"`
 
 	// Relations
-	Seats            []Seat           `gorm:"foreignKey:ZoneID" json:"seats,omitempty"`
+	Seats            []Seat           `gorm:"foreignKey:ZoneID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"seats,omitempty"`
 	TicketCategories []TicketCategory `gorm:"foreignKey:ZoneID" json:"ticket_categories,omitempty"`
 }
 
@@ -35,7 +36,7 @@ func (z *Zone) BeforeCreate(tx *gorm.DB) (err error) {
 
 // Seat - ที่นั่ง
 type Seat struct {
-	SeatID     string  `gorm:"primaryKey;type:varchar(50);not null" json:"seat_id"`
+	SeatID     uint    `gorm:"primaryKey;autoIncrement" json:"seat_id"`
 	SeatLabel  string  `gorm:"type:varchar(50)" json:"seat_label,omitempty"`
 	SeatColumn int     `gorm:"type:int;not null" json:"seat_column"`
 	SeatRow    int     `gorm:"type:int;not null" json:"seat_row"`
@@ -44,18 +45,10 @@ type Seat struct {
 	PositionX  float64 `gorm:"type:double precision;not null;default:0" json:"position_x"`
 	PositionY  float64 `gorm:"type:double precision;not null;default:0" json:"position_y"`
 	Rotation   float64 `gorm:"type:double precision;not null;default:0" json:"rotation"`
-	ConcertID  string  `gorm:"type:varchar(50);not null" json:"concert_id"`
 	ZoneID     string  `gorm:"type:varchar(50);not null" json:"zone_id"`
 
 	// Relations
-	Tickets []Ticket `gorm:"foreignKey:SeatID" json:"tickets,omitempty"`
-}
-
-func (s *Seat) BeforeCreate(tx *gorm.DB) (err error) {
-	if s.SeatID == "" {
-		s.SeatID = GenerateID("ST")
-	}
-	return
+	Tickets []Ticket `gorm:"foreignKey:SeatID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"tickets,omitempty"`
 }
 
 // TicketCategory - หมวดหมู่ตั๋ว
@@ -94,25 +87,18 @@ func (t *TicketSalesInfo) BeforeCreate(tx *gorm.DB) (err error) {
 
 // Ticket - ตั๋ว
 type Ticket struct {
-	TicketID       string    `gorm:"primaryKey;type:varchar(50);not null" json:"ticket_id"`
+	TicketID       uint      `gorm:"primaryKey;autoIncrement" json:"ticket_id"`
 	NameConcert    string    `gorm:"type:varchar(255);not null" json:"name_concert"`
 	TicketDateTime time.Time `gorm:"type:timestamp;not null" json:"ticket_datetime"`
 	ImageTicket    []byte    `gorm:"column:image_ticket;type:bytea" json:"-"`
 	PriceTicket    float64   `gorm:"column:price_ticket;type:double precision;not null;default:0;check:price_ticket >= 0" json:"price_ticket"`
 	StatusTicket   string    `gorm:"type:varchar(50);not null" json:"status_ticket"`
-	SeatID         string    `gorm:"type:varchar(50);not null" json:"seat_id"`
+	SeatID         uint      `gorm:"uniqueIndex;not null" json:"seat_id"`
 	SeatLabel      string    `gorm:"type:varchar(50)" json:"seat_label,omitempty"`
 	BookingID      string    `gorm:"type:varchar(50);not null" json:"booking_id"`
 	QrCodeData     string    `gorm:"type:text" json:"qr_code_data,omitempty"`
 
 	CheckIn *GateCheckIn `gorm:"foreignKey:TicketID;references:TicketID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"-"`
-}
-
-func (t *Ticket) BeforeCreate(tx *gorm.DB) (err error) {
-	if t.TicketID == "" {
-		t.TicketID = GenerateID("TK")
-	}
-	return
 }
 
 // Booking - การจองตั๋ว
@@ -168,7 +154,7 @@ func (p *Payment) BeforeCreate(tx *gorm.DB) (err error) {
 // GateCheckIn - ประตูเช็คอิน
 type GateCheckIn struct {
 	CheckInID     string    `gorm:"primaryKey;type:varchar(50);not null" json:"check_in_id"`
-	TicketID      string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"ticket_id"`
+	TicketID      uint      `gorm:"uniqueIndex;not null" json:"ticket_id"`
 	GateID        int       `gorm:"type:int;not null;check:gate_id > 0" json:"gate_id"`
 	GateDateTime  time.Time `gorm:"type:timestamp;not null" json:"gate_datetime"`
 	CheckInStatus string    `gorm:"type:varchar(50);not null" json:"check_in_status"`

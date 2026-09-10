@@ -478,6 +478,13 @@ func (h *ConcertHandler) deleteConcert(c *fiber.Ctx) error {
 	}
 
 	concertName := concert.ConcertName
+	var planningZoneCount int64
+	if err := h.db.Model(&models.Zone{}).Where("concert_id = ?", id).Count(&planningZoneCount).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "ตรวจสอบผังคอนเสิร์ตไม่สำเร็จ"})
+	}
+	if planningZoneCount > 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "กรุณาล้างผังและตรวจสอบบัตรที่ออกแล้วก่อนลบคอนเสิร์ต"})
+	}
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var scheduleIDs []string
 		if err := tx.Model(&models.PerformanceSchedule{}).Where("concert_id = ?", id).Pluck("schedule_id", &scheduleIDs).Error; err != nil {
@@ -487,29 +494,6 @@ func (h *ConcertHandler) deleteConcert(c *fiber.Ctx) error {
 			if err := tx.Where("schedule_id IN ?", scheduleIDs).Delete(&models.PerformanceDetail{}).Error; err != nil {
 				return err
 			}
-		}
-
-		var venueZoneIDs []string
-		if err := tx.Model(&models.VenueSeatZone{}).Where("concert_id = ?", id).Pluck("zone_id", &venueZoneIDs).Error; err != nil {
-			return err
-		}
-		if len(venueZoneIDs) > 0 {
-			if err := tx.Where("zone_id IN ?", venueZoneIDs).Delete(&models.VenueSeat{}).Error; err != nil {
-				return err
-			}
-		}
-
-		var seatIDs []string
-		if err := tx.Model(&models.Seat{}).Where("concert_id = ?", id).Pluck("seat_id", &seatIDs).Error; err != nil {
-			return err
-		}
-		if len(seatIDs) > 0 {
-			if err := tx.Where("seat_id IN ?", seatIDs).Delete(&models.Ticket{}).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Where("concert_id = ?", id).Delete(&models.Seat{}).Error; err != nil {
-			return err
 		}
 
 		var promotionIDs []string
@@ -537,8 +521,6 @@ func (h *ConcertHandler) deleteConcert(c *fiber.Ctx) error {
 			&models.PerformanceSchedule{}, &models.ArtistRequirement{},
 			&models.ConcertArtist{}, &models.ConcertDocument{}, &models.Task{},
 			&models.WorkPlan{}, &models.SponsorshipRequest{}, &models.SummaryReport{},
-			&models.VenueSeatRound{}, &models.VenueSeatZone{}, &models.VenueLayoutObject{},
-			&models.VenueSeatPlan{}, &models.VenueSeatPublication{},
 		} {
 			if err := deleteByConcert(model); err != nil {
 				return err

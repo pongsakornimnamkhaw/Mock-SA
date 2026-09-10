@@ -1,7 +1,10 @@
 package eventregistration
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,20 +24,39 @@ type RegistrationHandler struct {
 	db *gorm.DB
 }
 
+type ticketIDInput uint
+
+func (value *ticketIDInput) UnmarshalJSON(data []byte) error {
+	var raw string
+	if len(data) > 0 && data[0] == '"' {
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return err
+		}
+	} else {
+		raw = string(data)
+	}
+	parsed, err := parseTicketID(raw)
+	if err != nil {
+		return err
+	}
+	*value = ticketIDInput(parsed)
+	return nil
+}
+
 type checkInRequest struct {
-	TicketID  string `json:"ticketId"`
-	GateID    int    `json:"gateId"`
-	ConcertID string `json:"concertId"`
+	TicketID  ticketIDInput `json:"ticketId"`
+	GateID    int           `json:"gateId"`
+	ConcertID string        `json:"concertId"`
 }
 
 type registrationTicketDTO struct {
-	TicketID       string     `json:"ticketId"`
+	TicketID       uint       `json:"ticketId"`
 	ConcertID      string     `json:"concertId"`
 	ConcertName    string     `json:"concertName"`
 	TicketDateTime time.Time  `json:"ticketDateTime"`
 	TicketImageURL string     `json:"ticketImageUrl"`
 	TicketStatus   string     `json:"ticketStatus"`
-	SeatID         string     `json:"seatId"`
+	SeatID         uint       `json:"seatId"`
 	SeatRow        int        `json:"seatRow"`
 	SeatColumn     int        `json:"seatColumn"`
 	ZoneID         string     `json:"zoneId"`
@@ -53,7 +75,7 @@ type registrationGateDTO struct {
 
 type registrationRecentDTO struct {
 	CheckedInAt time.Time `json:"checkedInAt"`
-	TicketID    string    `json:"ticketId"`
+	TicketID    uint      `json:"ticketId"`
 	ZoneType    string    `json:"zoneType"`
 	SeatRow     int       `json:"seatRow"`
 	SeatColumn  int       `json:"seatColumn"`
@@ -72,9 +94,19 @@ type registrationDashboardDTO struct {
 	Recent       []registrationRecentDTO `json:"recent"`
 }
 
+type registrationConcertDTO struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Date     string `json:"date"`
+	EndDate  string `json:"endDate"`
+	Location string `json:"location"`
+	Status   string `json:"status"`
+}
+
 func RegisterRoutes(app *fiber.App, db *gorm.DB) {
 	handler := &RegistrationHandler{db: db}
 	group := app.Group("/api/event-registration")
+	group.Get("/concerts", handler.listConcerts)
 	group.Get("/tickets/:ticketID", handler.lookupTicket)
 	group.Get("/tickets/:ticketID/image", handler.getTicketImage)
 	group.Put("/tickets/:ticketID/image", handler.storeTicketImage)
@@ -82,11 +114,30 @@ func RegisterRoutes(app *fiber.App, db *gorm.DB) {
 	group.Post("/check-ins", handler.checkIn)
 }
 
+func (h *RegistrationHandler) listConcerts(c *fiber.Ctx) error {
+	var concerts []models.Concert
+	if err := h.db.Order("start_date DESC").Find(&concerts).Error; err != nil {
+		return apiError(c, fiber.StatusInternalServerError, "load concerts", err)
+	}
+	result := make([]registrationConcertDTO, 0, len(concerts))
+	for _, concert := range concerts {
+		result = append(result, registrationConcertDTO{
+			ID: concert.ConcertID, Name: concert.ConcertName, Date: concert.StartDate,
+			EndDate: concert.EndDate, Location: concert.Location, Status: concert.Status,
+		})
+	}
+	return c.JSON(result)
+}
+
 func (h *RegistrationHandler) storeTicketImage(c *fiber.Ctx) error {
 	if !isPNGRequest(c) || len(c.Body()) == 0 {
 		return apiError(c, fiber.StatusBadRequest, "a non-empty image/png body is required", nil)
 	}
-	result := h.db.Model(&models.Ticket{}).Where("ticket_id = ?", strings.TrimSpace(c.Params("ticketID"))).Update("image_ticket", append([]byte(nil), c.Body()...))
+	ticketID, err := parseTicketID(c.Params("ticketID"))
+	if err != nil {
+		return apiError(c, fiber.StatusBadRequest, "invalid ticket id", err)
+	}
+	result := h.db.Model(&models.Ticket{}).Where("ticket_id = ?", ticketID).Update("image_ticket", append([]byte(nil), c.Body()...))
 	if result.Error != nil {
 		return apiError(c, fiber.StatusInternalServerError, "store ticket image", result.Error)
 	}
@@ -97,8 +148,12 @@ func (h *RegistrationHandler) storeTicketImage(c *fiber.Ctx) error {
 }
 
 func (h *RegistrationHandler) getTicketImage(c *fiber.Ctx) error {
+	ticketID, parseErr := parseTicketID(c.Params("ticketID"))
+	if parseErr != nil {
+		return apiError(c, fiber.StatusBadRequest, "invalid ticket id", parseErr)
+	}
 	var ticket models.Ticket
-	if err := h.db.Select("ticket_id", "image_ticket").First(&ticket, "ticket_id = ?", strings.TrimSpace(c.Params("ticketID"))).Error; err != nil {
+	if err := h.db.Select("ticket_id", "image_ticket").First(&ticket, "ticket_id = ?", ticketID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return apiError(c, fiber.StatusNotFound, "ticket not found", nil)
 		}
@@ -116,7 +171,11 @@ func isPNGRequest(c *fiber.Ctx) bool {
 }
 
 func (h *RegistrationHandler) lookupTicket(c *fiber.Ctx) error {
-	ticket, err := h.loadTicket(c.Params("ticketID"))
+	ticketID, parseErr := parseTicketID(c.Params("ticketID"))
+	if parseErr != nil {
+		return apiError(c, fiber.StatusBadRequest, "invalid ticket id", parseErr)
+	}
+	ticket, err := h.loadTicket(ticketID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return apiError(c, fiber.StatusNotFound, "ticket not found", nil)
@@ -147,11 +206,11 @@ func (h *RegistrationHandler) dashboard(c *fiber.Ctx) error {
 	}
 
 	result := registrationDashboardDTO{ConcertID: concert.ConcertID, ConcertName: concert.ConcertName, ConcertDate: concert.StartDate, Gates: make([]registrationGateDTO, 4), Recent: []registrationRecentDTO{}}
-	tickets := h.db.Table(`tickets AS t`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Where("s.concert_id = ?", concertID)
+	tickets := h.db.Table(`tickets AS t`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Joins(`JOIN zones AS z ON z.zone_id = s.zone_id`).Where("z.concert_id = ?", concertID)
 	if err := tickets.Count(&result.TotalTickets).Error; err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "count concert tickets", err)
 	}
-	if err := h.db.Table(`gate_check_ins AS g`).Joins(`JOIN tickets AS t ON t.ticket_id = g.ticket_id`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Where("s.concert_id = ?", concertID).Count(&result.CheckedIn).Error; err != nil {
+	if err := h.db.Table(`gate_check_ins AS g`).Joins(`JOIN tickets AS t ON t.ticket_id = g.ticket_id`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Joins(`JOIN zones AS z ON z.zone_id = s.zone_id`).Where("z.concert_id = ?", concertID).Count(&result.CheckedIn).Error; err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "count concert check-ins", err)
 	}
 	result.Remaining = result.TotalTickets - result.CheckedIn
@@ -165,7 +224,7 @@ func (h *RegistrationHandler) dashboard(c *fiber.Ctx) error {
 		LastCheckIn *time.Time
 	}
 	var aggregates []gateAggregate
-	if err := h.db.Table(`gate_check_ins AS g`).Select("g.gate_id, COUNT(*) AS checked_in, MAX(g.gate_date_time) AS last_check_in").Joins(`JOIN tickets AS t ON t.ticket_id = g.ticket_id`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Where("s.concert_id = ?", concertID).Group("g.gate_id").Scan(&aggregates).Error; err != nil {
+	if err := h.db.Table(`gate_check_ins AS g`).Select("g.gate_id, COUNT(*) AS checked_in, MAX(g.gate_date_time) AS last_check_in").Joins(`JOIN tickets AS t ON t.ticket_id = g.ticket_id`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Joins(`JOIN zones AS z ON z.zone_id = s.zone_id`).Where("z.concert_id = ?", concertID).Group("g.gate_id").Scan(&aggregates).Error; err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "aggregate gates", err)
 	}
 	for index := range result.Gates {
@@ -183,7 +242,7 @@ func (h *RegistrationHandler) dashboard(c *fiber.Ctx) error {
 		}
 	}
 
-	if err := h.db.Table(`gate_check_ins AS g`).Select("g.gate_date_time AS checked_in_at, g.ticket_id, z.zone_type, s.seat_row, s.seat_column, g.gate_id, g.check_in_status AS status").Joins(`JOIN tickets AS t ON t.ticket_id = g.ticket_id`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Joins(`JOIN zones AS z ON z.zone_id = s.zone_id`).Where("s.concert_id = ?", concertID).Order("g.gate_date_time DESC").Limit(10).Scan(&result.Recent).Error; err != nil {
+	if err := h.db.Table(`gate_check_ins AS g`).Select("g.gate_date_time AS checked_in_at, g.ticket_id, z.zone_type, s.seat_row, s.seat_column, g.gate_id, g.check_in_status AS status").Joins(`JOIN tickets AS t ON t.ticket_id = g.ticket_id`).Joins(`JOIN seats AS s ON s.seat_id = t.seat_id`).Joins(`JOIN zones AS z ON z.zone_id = s.zone_id`).Where("z.concert_id = ?", concertID).Order("g.gate_date_time DESC").Limit(10).Scan(&result.Recent).Error; err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "load recent check-ins", err)
 	}
 	return c.JSON(result)
@@ -194,15 +253,15 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return apiError(c, fiber.StatusBadRequest, "invalid request body", err)
 	}
-	request.TicketID = strings.TrimSpace(request.TicketID)
 	request.ConcertID = strings.TrimSpace(request.ConcertID)
-	if request.TicketID == "" || request.GateID <= 0 || request.ConcertID == "" {
+	ticketID := uint(request.TicketID)
+	if ticketID == 0 || request.GateID <= 0 || request.ConcertID == "" {
 		return apiError(c, fiber.StatusBadRequest, "ticketId, concertId and a positive gateId are required", nil)
 	}
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var ticket models.Ticket
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&ticket, "ticket_id = ?", request.TicketID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&ticket, "ticket_id = ?", ticketID).Error; err != nil {
 			return err
 		}
 		if !CanCheckIn(ticket.StatusTicket) {
@@ -212,18 +271,22 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		if err := tx.First(&seat, "seat_id = ?", ticket.SeatID).Error; err != nil {
 			return err
 		}
-		if !ticketBelongsToConcert(seat, request.ConcertID) {
+		var zone models.Zone
+		if err := tx.First(&zone, "zone_id = ?", seat.ZoneID).Error; err != nil {
+			return err
+		}
+		if !ticketBelongsToConcert(zone, request.ConcertID) {
 			return errTicketWrongConcert
 		}
 		var existing models.GateCheckIn
-		if err := tx.First(&existing, "ticket_id = ?", request.TicketID).Error; err == nil {
+		if err := tx.First(&existing, "ticket_id = ?", ticketID).Error; err == nil {
 			return errTicketConflict
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 
 		entry := models.GateCheckIn{
-			TicketID: request.TicketID, GateID: request.GateID,
+			TicketID: ticketID, GateID: request.GateID,
 			GateDateTime: time.Now(), CheckInStatus: "SUCCESS",
 		}
 		if err := tx.Create(&entry).Error; err != nil {
@@ -232,7 +295,7 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 			}
 			return err
 		}
-		return tx.Model(&models.Ticket{}).Where("ticket_id = ?", request.TicketID).Update("status_ticket", "USED").Error
+		return tx.Model(&models.Ticket{}).Where("ticket_id = ?", ticketID).Update("status_ticket", "USED").Error
 	})
 	if err != nil {
 		switch {
@@ -247,15 +310,15 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		}
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"ticketId": request.TicketID,
+		"ticketId": ticketID,
 		"gateId":   request.GateID,
 		"status":   "SUCCESS",
 	})
 }
 
-func (h *RegistrationHandler) loadTicket(ticketID string) (models.Ticket, error) {
+func (h *RegistrationHandler) loadTicket(ticketID uint) (models.Ticket, error) {
 	var ticket models.Ticket
-	err := h.db.First(&ticket, "ticket_id = ?", strings.TrimSpace(ticketID)).Error
+	err := h.db.First(&ticket, "ticket_id = ?", ticketID).Error
 	return ticket, err
 }
 
@@ -274,7 +337,7 @@ func (h *RegistrationHandler) registrationTicket(ticket models.Ticket) (registra
 		return registrationTicketDTO{}, checkInErr
 	}
 	result := registrationTicketDTO{
-		TicketID: ticket.TicketID, ConcertID: seat.ConcertID, ConcertName: ticket.NameConcert, TicketDateTime: ticket.TicketDateTime,
+		TicketID: ticket.TicketID, ConcertID: zone.ConcertID, ConcertName: ticket.NameConcert, TicketDateTime: ticket.TicketDateTime,
 		TicketImageURL: ticketImageURL(ticket), TicketStatus: ticket.StatusTicket,
 		SeatID: ticket.SeatID, SeatRow: seat.SeatRow, SeatColumn: seat.SeatColumn,
 		ZoneID: seat.ZoneID, ZoneType: zone.ZoneType, CheckedIn: checkInErr == nil,
@@ -286,15 +349,26 @@ func (h *RegistrationHandler) registrationTicket(ticket models.Ticket) (registra
 	return result, nil
 }
 
-func ticketBelongsToConcert(seat models.Seat, concertID string) bool {
-	return strings.TrimSpace(concertID) != "" && seat.ConcertID == strings.TrimSpace(concertID)
+func ticketBelongsToConcert(zone models.Zone, concertID string) bool {
+	return strings.TrimSpace(concertID) != "" && zone.ConcertID == strings.TrimSpace(concertID)
 }
 
 func ticketImageURL(ticket models.Ticket) string {
 	if len(ticket.ImageTicket) == 0 {
 		return ""
 	}
-	return "/api/event-registration/tickets/" + ticket.TicketID + "/image"
+	return fmt.Sprintf("/api/event-registration/tickets/%d/image", ticket.TicketID)
+}
+
+func parseTicketID(value string) (uint, error) {
+	normalized := strings.TrimSpace(strings.ToUpper(value))
+	normalized = strings.TrimPrefix(normalized, "#")
+	normalized = strings.TrimPrefix(normalized, "TK-")
+	parsed, err := strconv.ParseUint(normalized, 10, 64)
+	if err != nil || parsed == 0 {
+		return 0, fmt.Errorf("invalid ticket id %q", value)
+	}
+	return uint(parsed), nil
 }
 
 func CanCheckIn(status string) bool {

@@ -10,7 +10,6 @@ import (
 	"backend/internal/models"
 
 	"github.com/google/uuid"
-	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -21,11 +20,10 @@ func TestSeedManagementPostgres(t *testing.T) {
 	if os.Getenv("MANAGEMENT_SEED_TEST") != "1" {
 		t.Skip("set MANAGEMENT_SEED_TEST=1 for isolated PostgreSQL seed verification")
 	}
-	values, err := godotenv.Read("../../.env")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", values["DB_HOST"], values["DB_PORT"], values["DB_USER"], values["DB_PASSWORD"], values["DB_NAME"], values["DB_SSLMODE"])
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		seedTestEnv("DB_HOST", "localhost"), seedTestEnv("DB_PORT", "5432"),
+		seedTestEnv("DB_USER", "admin_T01SA"), seedTestEnv("DB_PASSWORD", "T01SA"),
+		seedTestEnv("DB_NAME", "backend_T01"), seedTestEnv("DB_SSLMODE", "disable"))
 	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +78,7 @@ func TestSeedManagementPostgres(t *testing.T) {
 	// Compare the stored value, after PostgreSQL's microsecond timestamp rounding.
 	must(db.First(&concert, "concert_id = ?", concert.ConcertID).Error)
 	// Force a collision AFTER user inserts: the entire transaction must roll back.
-	zone := models.Zone{ZoneID: prefix + "ZONE_VIP", ZoneType: "Existing zone", Capacity: 10}
+	zone := models.Zone{ZoneID: fmt.Sprintf("%sC%02d_ZONE_VIP", prefix, 1), ConcertID: concert.ConcertID, ZoneType: "Existing zone", Capacity: 10}
 	must(create(db, &zone))
 	if created, err := seed(db, now); err == nil || created {
 		t.Fatal("seed must fail atomically on an existing ID, not upsert it")
@@ -152,4 +150,11 @@ func TestSeedManagementPostgres(t *testing.T) {
 	if reread.ConcertName != concert.ConcertName || !reread.UpdatedAt.Equal(concert.UpdatedAt) {
 		t.Fatal("seed changed an existing concert")
 	}
+}
+
+func seedTestEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }

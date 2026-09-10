@@ -3,18 +3,18 @@
 โมดูลนี้ต่อระบบวางแผนจำหน่ายบัตรและลงทะเบียนเข้างานเข้ากับ `origin/main`
 โดยไม่แทนที่ route หรือ handler ของระบบ Booking, Payment, Promotion และ Account เดิม
 
-## ฐานข้อมูลแยกสำหรับพัฒนา
+## ฐานข้อมูลสำหรับพัฒนา
 
 จากโฟลเดอร์ `backend`:
 
 ```powershell
-docker compose -f compose.gg-clean.yml up -d postgres-gg-clean
+docker compose up -d postgres
 go run ./cmd/server
 ```
 
-ฐานนี้ใช้ PostgreSQL ที่พอร์ต `5434` และ volume `gg_clean_postgres_data` จึงไม่แตะฐานเดิมพอร์ต `5432`
-เมื่อไม่มี `.env` ตัว Backend จะโหลด `.env.gg-clean.example` อัตโนมัติ ส่วนผู้ที่มี `.env` อยู่แล้วจะใช้ค่าจากไฟล์นั้นก่อน
+ระบบใช้ `backend/compose.yml` เดิมและ PostgreSQL พอร์ต `5432` โดยอ่านค่าจาก `.env` หรือ environment variables
 การเริ่ม API ใช้ `AutoMigrate` แบบเพิ่ม schema เท่านั้น ไม่มี `DROP TABLE` หรือ rename legacy
+โครงสร้าง Ticket/Seat รุ่นนี้ต้องเริ่มจากฐานว่าง; การล้าง volume เดิมเป็นงานแยกที่ต้องยืนยันก่อน เพราะข้อมูลเดิมจะสูญหาย
 
 ## ตารางที่ระบบใหม่อ่านและเขียน
 
@@ -22,15 +22,14 @@ go run ./cmd/server
 | --- | --- | --- |
 | `concerts` | เลือกคอนเสิร์ต, ภาพรวม, Dashboard ลงทะเบียน | ข้อมูลคอนเสิร์ตและภาพผังสำเร็จใน `seat_layout_image` (`bytea`) |
 | `performance_schedules` | แท็บภาพรวม | รอบการแสดงจากระบบศิลปิน ไม่มีปุ่มเพิ่มรอบในระบบวางแผน |
-| `zones` | ออกแบบผัง, สรุปโควตา | รูปทรง สี ตำแหน่ง ความจุ และ FK แบบ nullable ไป `concerts` เพื่อเข้ากับข้อมูลเดิมของระบบเพื่อน |
+| `zones` | ออกแบบผัง, สรุปโควตา | รูปทรง สี ตำแหน่ง ความจุ `zone_price` และ FK แบบบังคับไป `concerts` |
 | `seats` | รายละเอียดที่นั่ง, เช็กอิน | ที่นั่งภายใน Zone; ความสัมพันธ์ `Zone 1 -> 0..* Seat` |
 | `layout_objects` | ออกแบบผังและออกแบบบัตร | JSON ของวัตถุแก้ไขได้ เช่น ข้อความ รูปภาพ รูปทรง ตำแหน่ง ขนาด หมุน และด้านหน้า/หลัง เชื่อม `concerts` จุดเดียว |
 | `publications` | วางขายหน้าเว็บ | คำอธิบาย ภาพปก ช่วงแสดงหน้าเว็บ และช่วงจำหน่าย แบบหนึ่งรายการต่อคอนเสิร์ต |
 | `tickets` | ราคา, ภาพบัตร, ค้นหา/สแกน | ราคาจริงใน `price_ticket`, ภาพบัตรใน `image_ticket` (`bytea`), สถานะ และ FK ไป Seat/Booking |
 | `gate_check_ins` | Dashboard และหน้าสแกน | บันทึกการเข้างาน; `ticket_id` unique ทำให้บัตรหนึ่งใบเข้างานได้ครั้งเดียว |
 
-ตาราง `venue_seat_*` และ API `/api/venue-seat` เดิมยังคงอยู่เพื่อไม่ให้หน้าเก่าของระบบเพื่อนเสีย
-แต่สอง route ใหม่ไม่อ่านหรือเขียนตารางเหล่านั้น
+ตาราง `venue_seat_*`, Models และ API `/api/venue-seat` ถูกถอดออก โดยใช้ `/api/ticket-planning` เพียงชุดเดียว
 
 ## API ใหม่
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { registrationApi } from './api'
 import { classifyLookupConflict, STATUS_EXAMPLES } from './statusExamples'
-import { normalizeTicketCode } from './ticketCode'
+import { formatTicketCode, normalizeTicketCode } from './ticketCode'
 
 const SAMPLE_TICKET = { ticketId:'TK-2026-0459',concertName:'Acoustic Sessions: Bangkok',zoneType:'B',seatRow:'B',seatColumn:'24',ticketStatus:'VALID' }
 const formatDateTime = value => value ? new Intl.DateTimeFormat('th-TH',{dateStyle:'medium',timeStyle:'medium'}).format(new Date(value)) : '-'
@@ -33,11 +33,11 @@ function Dashboard({ concert,gateId,setGateId,onBack,onScan,onExamples }) {
     {error&&<div className="reg-notice">{error}</div>}
     <section className="reg-metric-grid"><article className="pink"><span>ผู้เข้างานแล้ว</span><strong>{checked.toLocaleString('th-TH')} <small>คน</small></strong><p>จาก {total.toLocaleString('th-TH')} คน</p></article><article className="green"><span>คงเหลือ</span><strong>{remaining.toLocaleString('th-TH')} <small>คน</small></strong><p>{total?((remaining/total)*100).toFixed(1):'0.0'}%</p></article>{gates.map(gate=><article key={gate.gateId}><span>ประตู {String.fromCharCode(64+gate.gateId)}</span><strong>{gate.checkedIn.toLocaleString('th-TH')} <small>คน</small></strong><p>{Number(gate.percentage||0).toFixed(1)}%</p></article>)}</section>
     <section className="reg-dashboard-main"><article className="reg-scan-callout"><div className="reg-ticket-visual"><div>ADMISSION TICKET</div><b>{concert.name}</b><span>▦</span></div><div><span className="reg-online">● อุปกรณ์สแกนออนไลน์</span><h2>พร้อมรับผู้เข้าร่วมงาน</h2><p>สแกน QR Code หรือกรอกรหัสบัตรเพื่อตรวจสอบและบันทึกการเข้างาน</p><button className="reg-primary-button" onClick={onScan}>เปิดหน้าสแกนบัตร →</button></div></article><article className="reg-gate-summary"><h2>ประตูที่เลือก</h2><strong>ประตู {String.fromCharCode(64+gateId)}</strong><p>รายการเช็คอินทั้งหมดจะบันทึกด้วยประตูนี้</p><button className="reg-outline-button" onClick={onExamples}>ดูตัวอย่างสถานะทั้ง 4 แบบ</button></article></section>
-    <section className="reg-recent"><div><h2>รายการเข้างานล่าสุด</h2><span>{dashboard?.recent?.length||0} รายการ</span></div><div className="reg-recent-head"><span>เวลาเข้าระบบ</span><span>รหัสบัตร</span><span>โซน / ที่นั่ง</span><span>ประตู</span><span>สถานะ</span></div>{dashboard?.recent?.map(row=><div className="reg-recent-row" key={`${row.ticketId}-${row.checkedInAt}`}><span>{formatDateTime(row.checkedInAt)}</span><b>#{row.ticketId}</b><span>{row.zoneType} · {row.seatRow}-{row.seatColumn}</span><span>ประตู {String.fromCharCode(64+row.gateId)}</span><em>ผ่านการตรวจสอบ</em></div>)}{!dashboard?.recent?.length&&<div className="reg-empty">ยังไม่มีรายการเข้างาน</div>}</section>
+    <section className="reg-recent"><div><h2>รายการเข้างานล่าสุด</h2><span>{dashboard?.recent?.length||0} รายการ</span></div><div className="reg-recent-head"><span>เวลาเข้าระบบ</span><span>รหัสบัตร</span><span>โซน / ที่นั่ง</span><span>ประตู</span><span>สถานะ</span></div>{dashboard?.recent?.map(row=><div className="reg-recent-row" key={`${row.ticketId}-${row.checkedInAt}`}><span>{formatDateTime(row.checkedInAt)}</span><b>#{formatTicketCode(row.ticketId)}</b><span>{row.zoneType} · {row.seatRow}-{row.seatColumn}</span><span>ประตู {String.fromCharCode(64+row.gateId)}</span><em>ผ่านการตรวจสอบ</em></div>)}{!dashboard?.recent?.length&&<div className="reg-empty">ยังไม่มีรายการเข้างาน</div>}</section>
   </main>
 }
 
-function TicketDetails({ ticket }) { return <dl className="reg-ticket-details"><div><dt>งานแสดง</dt><dd>{ticket.concertName||'-'}</dd></div><div><dt>รหัสบัตร</dt><dd>#{ticket.ticketId||'-'}</dd></div><div><dt>โซน / ที่นั่ง</dt><dd>{ticket.zoneType||'-'} · {ticket.seatRow||'-'}-{ticket.seatColumn||'-'}</dd></div><div><dt>สถานะบัตร</dt><dd>{ticket.ticketStatus||'-'}</dd></div></dl> }
+function TicketDetails({ ticket }) { return <dl className="reg-ticket-details"><div><dt>งานแสดง</dt><dd>{ticket.concertName||'-'}</dd></div><div><dt>รหัสบัตร</dt><dd>#{formatTicketCode(ticket.ticketId)}</dd></div><div><dt>โซน / ที่นั่ง</dt><dd>{ticket.zoneType||'-'} · {ticket.seatRow||'-'}-{ticket.seatColumn||'-'}</dd></div><div><dt>สถานะบัตร</dt><dd>{ticket.ticketStatus||'-'}</dd></div></dl> }
 
 function Scanner({ concert,gateId,onBack,onResult }) {
   const videoRef=useRef(null), streamRef=useRef(null), scanLock=useRef(false), lookupBusyRef=useRef(false)
