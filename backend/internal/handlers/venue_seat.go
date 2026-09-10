@@ -342,7 +342,7 @@ func (h *VenueSeatHandler) saveLayout(c *fiber.Ctx) error {
 				return err
 			}
 		}
-		return nil
+		return applyTicketingProjection(tx, concertID, payload.Zones)
 	})
 	if err != nil {
 		return apiError(c, fiber.StatusInternalServerError, "save layout", err)
@@ -389,7 +389,10 @@ func clearLayoutRecords(tx *gorm.DB, concertID string) error {
 	if err := tx.Where("concert_id = ?", concertID).Delete(&models.VenueSeatZone{}).Error; err != nil {
 		return err
 	}
-	return tx.Where("concert_id = ?", concertID).Delete(&models.VenueLayoutObject{}).Error
+	if err := tx.Where("concert_id = ?", concertID).Delete(&models.VenueLayoutObject{}).Error; err != nil {
+		return err
+	}
+	return clearTicketingProjection(tx, concertID, zoneIDs)
 }
 
 func (h *VenueSeatHandler) ensureConcert(concertID string) error {

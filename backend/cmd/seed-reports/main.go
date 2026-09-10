@@ -247,7 +247,7 @@ func seedConcert(tx *gorm.DB, index int, spec concertSpec, poster []byte) error 
 		if err := create(tx, &models.TicketCategory{
 			CategoryID:   fmt.Sprintf("TC_REPORT_%02d_%02d", index+1, zoneIndex+1),
 			CategoryName: zone.name, Price: zone.price, Quantity: zone.sold,
-			PromotionName: promotion.PromotionName, PromotionID: promotionID, ZoneID: zoneID,
+			PromotionName: &promotion.PromotionName, PromotionID: &promotionID, ZoneID: zoneID,
 		}); err != nil {
 			return err
 		}
@@ -256,7 +256,9 @@ func seedConcert(tx *gorm.DB, index int, spec concertSpec, poster []byte) error 
 		for seatIndex := 1; seatIndex <= zone.sold; seatIndex++ {
 			seatID := fmt.Sprintf("ST_R%02d_%s_%04d", index+1, zone.code, seatIndex)
 			seats = append(seats, models.Seat{
-				SeatID: seatID, SeatRow: (seatIndex-1)/50 + 1, SeatColumn: (seatIndex-1)%50 + 1,
+				SeatID:     seatID,
+				SeatRow:    fmt.Sprintf("%d", (seatIndex-1)/50+1),
+				SeatColumn: fmt.Sprintf("%d", (seatIndex-1)%50+1),
 				StatusSeat: "sold", ConcertID: spec.id, ZoneID: zoneID,
 			})
 			tickets = append(tickets, models.Ticket{

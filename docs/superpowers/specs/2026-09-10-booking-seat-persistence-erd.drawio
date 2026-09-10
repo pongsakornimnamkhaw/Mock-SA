@@ -1,0 +1,107 @@
+<mxfile host="app.diagrams.net" modified="2026-09-10T00:00:00.000Z" agent="claude-code" version="24.0.0" type="device">
+  <diagram name="Booking ER - after seat persistence" id="booking-er-updated">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Booking ER — หลังทำ booking-seat-persistence (เขียว = เพิ่มใหม่, ส้ม = เปลี่ยน, เทา = ไม่แตะ)" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="0" width="900" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Zone (unchanged - already matched diagram before this work) -->
+        <mxCell id="zone" value="&lt;b&gt;&lt;u&gt;Zone&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ ZoneID : String , Pk&lt;br&gt;+ ZoneType : String&lt;br&gt;+ Capacity : Integer&lt;br&gt;+ position_x : double&lt;br&gt;+ position_y : double&lt;br&gt;+ width : double&lt;br&gt;+ height : double&lt;br&gt;+ rotation : double&lt;br&gt;+ shape : varchar&lt;br&gt;+ color : varchar&lt;br&gt;+ layer_order : integer" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="240" height="300" as="geometry" />
+        </mxCell>
+
+        <!-- Gate-Check-in (unchanged) -->
+        <mxCell id="gate" value="&lt;b&gt;&lt;u&gt;Gate-Check-in&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ CheckInID : string, Pk&lt;br&gt;+ TicketID : uint, Fk, Unique&lt;br&gt;+ GateID : int, Fk&lt;br&gt;+ GateDateTime : datetime&lt;br&gt;+ CheckInStatus : string" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="440" y="50" width="260" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- Payment (unchanged) -->
+        <mxCell id="payment" value="&lt;b&gt;&lt;u&gt;Payment&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ Payment : String&lt;br&gt;+ EvidenceFile : Image&lt;br&gt;+ PaymentStatus : String&lt;br&gt;+ BookingID : String, Fk" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="820" y="50" width="240" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- Booking (unchanged) -->
+        <mxCell id="booking" value="&lt;b&gt;&lt;u&gt;Booking&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ BookingID : String, Pk&lt;br&gt;+ BookingDate : Date&lt;br&gt;+ Status : String" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="820" y="260" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- TicketCategory (CHANGED: PromotionName/PromotionID -> nullable) -->
+        <mxCell id="ticketcategory" value="&lt;b&gt;&lt;u&gt;TicketCategory&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ CategoryID : String, Pk&lt;br&gt;+ CategoryName : String&lt;br&gt;+ Price : Float&lt;br&gt;+ Quantity : Integer&lt;br&gt;&lt;font color=&quot;#d05a00&quot;&gt;+ PromotionName : String &lt;i&gt;(nullable)&lt;/i&gt;&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#d05a00&quot;&gt;+ PromotionID : String &lt;i&gt;(nullable, Fk)&lt;/i&gt;&lt;/font&gt;&lt;br&gt;+ ZoneID : String, Fk" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#fff3e0;strokeColor=#d05a00;" vertex="1" parent="1">
+          <mxGeometry x="300" y="230" width="260" height="200" as="geometry" />
+        </mxCell>
+
+        <!-- Seat (note: kept string per diagram, was int in old code) -->
+        <mxCell id="seat" value="&lt;b&gt;&lt;u&gt;Seat&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ SeatID : &lt;s&gt;int&lt;/s&gt; &amp;#8594; &lt;font color=&quot;#d05a00&quot;&gt;String&lt;/font&gt;, Pk&lt;br&gt;+ SeatColumn : String&lt;br&gt;+ SeatRow : String&lt;br&gt;+ StatusSeat : String&lt;br&gt;+ Flowchart : bytea&lt;br&gt;+ position_x : double&lt;br&gt;+ position_y : double&lt;br&gt;+ rotation : double&lt;br&gt;+ ConcertID : String, Fk&lt;br&gt;+ ZoneID : String, Fk" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#fff3e0;strokeColor=#d05a00;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="260" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- Ticket (CHANGED: +CategoryID new FK; SeatID/TicketID stay string not int/uint) -->
+        <mxCell id="ticket" value="&lt;b&gt;&lt;u&gt;Ticket&lt;/u&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;+ TicketID : &lt;s&gt;uint&lt;/s&gt; &amp;#8594; &lt;font color=&quot;#d05a00&quot;&gt;String&lt;/font&gt;, Pk&lt;br&gt;+ NameConcert : String&lt;br&gt;+ TicketDateTime : datetime&lt;br&gt;+ ImageTicket : BLOB&lt;br&gt;+ PriceTicket : Float&lt;br&gt;+ StatusTicket : String&lt;br&gt;+ SeatID : &lt;s&gt;int&lt;/s&gt; &amp;#8594; &lt;font color=&quot;#d05a00&quot;&gt;String&lt;/font&gt;, Fk&lt;br&gt;&lt;font color=&quot;#2e7d32&quot;&gt;&lt;b&gt;+ CategoryID : String, Fk (ใหม่)&lt;/b&gt;&lt;/font&gt;&lt;br&gt;+ BookingID : String, Fk" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fontSize=12;fillColor=#e8f5e9;strokeColor=#2e7d32;" vertex="1" parent="1">
+          <mxGeometry x="620" y="380" width="300" height="250" as="geometry" />
+        </mxCell>
+
+        <!-- Note callout -->
+        <mxCell id="note" value="สิ่งที่เปลี่ยนจากไดอะแกรมเดิม:&lt;br&gt;1) &lt;font color=&quot;#2e7d32&quot;&gt;&lt;b&gt;Ticket.CategoryID&lt;/b&gt;&lt;/font&gt; — เพิ่มใหม่ ทำเส้น TicketCategory 1—1..* Ticket ให้มี FK จริง (เดิมมีแค่เส้นในไดอะแกรม ไม่มีคอลัมน์)&lt;br&gt;2) &lt;font color=&quot;#d05a00&quot;&gt;PK/FK ที่เป็น int/uint ในไดอะแกรม (SeatID, TicketID)&lt;/font&gt; ยังคงเป็น String/varchar ตามระบบเดิมที่ใช้ GenerateID() ทั้งหมด — ไม่เปลี่ยนตามไดอะแกรม&lt;br&gt;3) &lt;font color=&quot;#d05a00&quot;&gt;TicketCategory.PromotionName / PromotionID&lt;/font&gt; เปลี่ยนเป็น nullable — หมวดหมู่ที่มาจากผังที่นั่งไม่มีโปรโมชั่นผูกอยู่ (มี FK ไป promotions เดิมเป็น NOT NULL ทำให้ค่าว่างเขียนไม่ได้)&lt;br&gt;4) Seat.SeatRow/SeatColumn เปลี่ยนจาก int → String ตามที่ไดอะแกรมนี้ระบุไว้แล้ว (โค้ดเดิมก่อนหน้ายังเป็น int อยู่)" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontSize=12;fillColor=#fffde7;strokeColor=#f9a825;" vertex="1" parent="1">
+          <mxGeometry x="940" y="420" width="420" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- Relationships -->
+        <mxCell id="e-zone-seat" value="1" style="endArrow=none;html=1;fontSize=11;" edge="1" parent="1" source="zone" target="seat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-zone-seat-label2" value="0...*" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="60" y="400" width="40" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-cat-ticket" value="1" style="endArrow=none;html=1;fontSize=11;strokeColor=#2e7d32;strokeWidth=2;" edge="1" parent="1" source="ticketcategory" target="ticket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-cat-ticket-label2" value="1...*" style="text;html=1;fontSize=11;fontColor=#2e7d32;" vertex="1" parent="1">
+          <mxGeometry x="580" y="470" width="40" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-seat-ticket" value="1" style="endArrow=none;html=1;fontSize=11;" edge="1" parent="1" source="seat" target="ticket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-seat-ticket-label2" value="1" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="580" y="620" width="30" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-gate-ticket" value="1" style="endArrow=none;html=1;fontSize=11;" edge="1" parent="1" source="gate" target="ticket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-gate-ticket-label2" value="1" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="360" width="30" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-payment-booking" value="1" style="endArrow=none;html=1;fontSize=11;" edge="1" parent="1" source="payment" target="booking">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-payment-booking-label2" value="1" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="900" y="220" width="30" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-booking-ticket" value="1" style="endArrow=none;html=1;fontSize=11;" edge="1" parent="1" source="booking" target="ticket">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-booking-ticket-label2" value="*" style="text;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="900" y="440" width="30" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Round 2: payment-booking-ticket-real-data — no schema change, behavior/data-flow fix only -->
+        <mxCell id="round2-title" value="รอบถัดมา: payment-booking-ticket-real-data" style="text;html=1;align=left;verticalAlign=middle;fontStyle=1;fontSize=13;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="940" y="700" width="420" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="round2-note" value="&lt;b&gt;ไม่มีการแก้ schema ในรอบนี้&lt;/b&gt; — Payment/Booking/Ticket มีโครงสร้างครบจากรอบก่อนแล้ว งานรอบนี้เป็นการแก้ &lt;i&gt;data flow / พฤติกรรม&lt;/i&gt; เท่านั้น:&lt;br&gt;&lt;br&gt;1) หน้าเว็บเคยมี fallback &amp;quot;ปั้นตั๋วปลอม&amp;quot; อยู่ 2 ชั้น (mapWireToBooking + หน้า &amp;quot;บัตรของฉัน&amp;quot;) เวลา backend ไม่ส่ง tickets มา — ลบทิ้งแล้ว ตอนนี้การ์ดบัตรที่ผู้ใช้เห็นมาจากแถวจริงในตาราง Ticket เท่านั้น ถ้าไม่มีตั๋วจริงจะโชว์ข้อความบอกตรง ๆ แทน&lt;br&gt;&lt;br&gt;2) &lt;font color=&quot;#2e7d32&quot;&gt;&lt;b&gt;ปุ่ม &amp;quot;ส่งบัตรซ้ำ&amp;quot;&lt;/b&gt;&lt;/font&gt; เดิมเป็น stub ตอบสำเร็จเฉย ๆ ไม่ส่งอีเมลจริง — ตอนนี้เรียก mailer.Send() จริง (แพทเทิร์นเดียวกับฟีเจอร์ลืมรหัสผ่าน) เนื้อหาอีเมลดึงจาก Booking/Ticket จริง (ชื่องาน, เลขที่นั่งแต่ละใบ, รหัสตั๋ว)" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=10;fontSize=12;fillColor=#eef7ff;strokeColor=#5b8def;" vertex="1" parent="1">
+          <mxGeometry x="940" y="726" width="420" height="260" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
