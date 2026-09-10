@@ -253,50 +253,6 @@ func (h *bookingPaymentHandler) getCustomerBookings(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดรายการจองได้"})
 	}
 
-	// Auto-repair: หากรายการจองอนุมัติแล้ว (issued) แต่ยังไม่มี tickets ให้สร้างทันที
-	for idx, b := range bookings {
-		if b.Status == "issued" && len(b.Tickets) == 0 {
-			qty := b.Quantity
-			if qty <= 0 {
-				qty = 1
-			}
-			zoneID := b.ZoneID
-			if zoneID == "" {
-				zoneID = "ZONE-A"
-			}
-			tier := b.TierName
-			if tier == "" {
-				tier = "Standard"
-			}
-			_ = h.db.Where("zone_id = ?", zoneID).FirstOrCreate(&models.Zone{ZoneID: zoneID, ZoneType: tier, Capacity: 1000}).Error
-			concertID := b.ConcertID
-			if concertID == "" {
-				concertID = "C001"
-			}
-			for i := 1; i <= qty; i++ {
-				seatLabel := fmt.Sprintf("%s-%02d", zoneID, i)
-				seatID := fmt.Sprintf("ST-%s-%02d", zoneID, i)
-				_ = h.db.Where("seat_id = ?", seatID).FirstOrCreate(&models.Seat{
-					SeatID: seatID, SeatRow: "A", SeatColumn: fmt.Sprintf("%d", i), StatusSeat: "ไม่ว่าง", ConcertID: concertID, ZoneID: zoneID,
-				}).Error
-				ticketID := fmt.Sprintf("TCK-%s-%s-%02d-%04d", concertID, zoneID, i, rand.Intn(10000))
-				qrCodePayload := fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s", ticketID, b.ConcertTitle, zoneID, seatLabel, b.CustomerName)
-				ticket := models.Ticket{
-					TicketID:       ticketID,
-					NameConcert:    b.ConcertTitle,
-					TicketDateTime: b.BookingDate,
-					StatusTicket:   "พร้อมใช้งาน",
-					SeatID:         seatID,
-					SeatLabel:      seatLabel,
-					BookingID:      b.BookingID,
-					QrCodeData:     qrCodePayload,
-				}
-				_ = h.db.Create(&ticket).Error
-				bookings[idx].Tickets = append(bookings[idx].Tickets, ticket)
-			}
-		}
-	}
-
 	return c.JSON(fiber.Map{"data": bookings})
 }
 
@@ -358,65 +314,13 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 	// อัปเดตสถานะ Payment เป็น อนุมัติ
 	_ = h.db.Model(&models.Payment{}).Where("booking_id = ?", bookingID).Update("payment_status", "อนุมัติ").Error
 
-	// UP3: สร้างตั๋ว E-Ticket พร้อม QR Code (หากยังไม่มี)
-	var existingTickets []models.Ticket
-	h.db.Where("booking_id = ?", bookingID).Find(&existingTickets)
-
-	qty := booking.Quantity
-	if qty <= 0 {
-		qty = 1
-	}
-
-	if len(existingTickets) == 0 {
-		zoneID := booking.ZoneID
-		if zoneID == "" {
-			zoneID = "ZONE-A"
-		}
-		tier := booking.TierName
-		if tier == "" {
-			tier = "Standard"
-		}
-		// ตรวจสอบและสร้าง Zone หากยังไม่มี
-		_ = h.db.Where("zone_id = ?", zoneID).FirstOrCreate(&models.Zone{
-			ZoneID:   zoneID,
-			ZoneType: tier,
-			Capacity: 1000,
-		}).Error
-
-		concertID := booking.ConcertID
-		if concertID == "" {
-			concertID = "C001"
-		}
-
-		for i := 1; i <= qty; i++ {
-			seatLabel := fmt.Sprintf("%s-%02d", zoneID, i)
-			seatID := fmt.Sprintf("ST-%s-%02d", zoneID, i)
-
-			// ตรวจสอบและสร้าง Seat เพื่อให้ตรงตาม Foreign Key ของตาราง tickets
-			_ = h.db.Where("seat_id = ?", seatID).FirstOrCreate(&models.Seat{
-				SeatID:     seatID,
-				SeatRow:    "A",
-				SeatColumn: fmt.Sprintf("%d", i),
-				StatusSeat: "ไม่ว่าง",
-				ConcertID:  concertID,
-				ZoneID:     zoneID,
-			}).Error
-
-			ticketID := fmt.Sprintf("TCK-%s-%s-%02d-%04d", concertID, zoneID, i, rand.Intn(10000))
-			qrCodePayload := fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s", ticketID, booking.ConcertTitle, zoneID, seatLabel, booking.CustomerName)
-
-			ticket := models.Ticket{
-				TicketID:       ticketID,
-				NameConcert:    booking.ConcertTitle,
-				TicketDateTime: now,
-				StatusTicket:   "พร้อมใช้งาน",
-				SeatID:         seatID,
-				SeatLabel:      seatLabel,
-				BookingID:      bookingID,
-				QrCodeData:     qrCodePayload,
-			}
-			_ = h.db.Create(&ticket).Error
-		}
+	// UP3: ออกบัตร E-Ticket — ตั๋วถูกสร้างไว้ตั้งแต่ตอนจองแล้ว ที่นี่แค่เปลี่ยนสถานะ
+	if err := h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Updates(map[string]any{
+			"status_ticket":    ticketStatusIssued,
+			"ticket_date_time": now,
+		}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถออกบัตรได้"})
 	}
 
 	// บันทึกประวัติการตรวจสอบลง emp_activity_logs (Audit Trail)
@@ -465,6 +369,16 @@ func (h *bookingPaymentHandler) rejectBooking(c *fiber.Ctx) error {
 	}
 
 	_ = h.db.Model(&models.Payment{}).Where("booking_id = ?", bookingID).Update("payment_status", "ปฏิเสธ").Error
+
+	// คืนที่นั่งให้ลูกค้าคนอื่นจองต่อได้ และยกเลิกตั๋วของการจองนี้
+	var seatIDs []string
+	if err := h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Pluck("seat_id", &seatIDs).Error; err == nil && len(seatIDs) > 0 {
+		_ = h.db.Model(&models.Seat{}).Where("seat_id IN ?", seatIDs).
+			Update("status_seat", seatStatusAvailable).Error
+	}
+	_ = h.db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).
+		Update("status_ticket", ticketStatusCancelled).Error
 
 	// บันทึก Audit Log
 	_ = h.db.Create(&models.EmpActivityLogs{
