@@ -27,8 +27,8 @@ export default function EmployeeAccountPage() {
   }, []);
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 860, mx: 'auto' }}>
-      <Typography variant="h5" sx={{ color: '#fff', fontWeight: 800, mb: 3 }}>
+    <Box sx={{ maxWidth: 900, mx: 'auto' }}>
+      <Typography variant="h5" sx={{ color: '#1e293b', fontWeight: 800, mb: 3 }}>
         บัญชีของฉัน
       </Typography>
 
@@ -46,20 +46,29 @@ export default function EmployeeAccountPage() {
         <Paper
           elevation={0}
           sx={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            bgcolor: '#ffffff',
+            border: '1px solid #f1f5f9',
             borderRadius: 3,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            overflow: 'hidden',
           }}
         >
           <Tabs
             value={tab}
             onChange={(_, v: number) => setTab(v)}
             sx={{
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
-              px: 2,
-              '& .MuiTab-root': { color: '#94a3b8', textTransform: 'none', fontWeight: 600 },
+              borderBottom: '1px solid #e2e8f0',
+              px: 3,
+              pt: 1,
+              '& .MuiTab-root': {
+                color: '#64748b',
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                minHeight: 48,
+              },
               '& .Mui-selected': { color: '#d63384' },
-              '& .MuiTabs-indicator': { backgroundColor: '#d63384' },
+              '& .MuiTabs-indicator': { backgroundColor: '#d63384', height: 3 },
             }}
           >
             <Tab label="โปรไฟล์" />
@@ -67,7 +76,7 @@ export default function EmployeeAccountPage() {
             <Tab label="ประวัติการทำงานของฉัน" />
           </Tabs>
 
-          <Box sx={{ p: { xs: 2, md: 3 } }}>
+          <Box sx={{ p: { xs: 2.5, md: 4 } }}>
             {tab === 0 && (
               <ProfileTab profile={profile} onProfileUpdated={setProfile} />
             )}

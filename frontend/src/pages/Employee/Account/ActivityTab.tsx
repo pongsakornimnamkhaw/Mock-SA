@@ -62,7 +62,7 @@ export default function ActivityTab() {
 
   return (
     <Box>
-      <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', mb: 2 }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', mb: 2 }}>
         ประวัติการทำงานของฉัน
       </Typography>
 
@@ -73,23 +73,23 @@ export default function ActivityTab() {
       )}
 
       {!loading && error && (
-        <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>
+        <Alert severity="error" sx={{ borderRadius: 2, mb: 2 }}>{error}</Alert>
       )}
 
       {!loading && !error && activities.length === 0 && (
-        <Typography sx={{ color: '#94a3b8', textAlign: 'center', py: 6 }}>
+        <Typography sx={{ color: '#64748b', textAlign: 'center', py: 6 }}>
           ไม่พบประวัติการทำงาน
         </Typography>
       )}
 
       {!loading && !error && activities.length > 0 && (
         <>
-          <TableContainer sx={{ borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }}>
+          <TableContainer sx={{ borderRadius: 2, border: '1px solid #f1f5f9', bgcolor: '#fff' }}>
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ background: 'rgba(255,255,255,0.04)' }}>
+                <TableRow sx={{ bgcolor: '#f8fafc' }}>
                   {['เวลา', 'การกระทำ', 'โมดูล', 'เป้าหมาย'].map((h) => (
-                    <TableCell key={h} sx={{ color: '#94a3b8', fontWeight: 700, fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.08)' }}>
+                    <TableCell key={h} sx={{ color: '#475569', fontWeight: 700, fontSize: '0.85rem', borderColor: '#f1f5f9', py: 1.5 }}>
                       {h}
                     </TableCell>
                   ))}
@@ -97,17 +97,17 @@ export default function ActivityTab() {
               </TableHead>
               <TableBody>
                 {activities.map((a) => (
-                  <TableRow key={a.logId} sx={{ '&:hover': { background: 'rgba(255,255,255,0.04)' } }}>
-                    <TableCell sx={{ color: '#cbd5e1', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>
+                  <TableRow key={a.logId} sx={{ '&:hover': { bgcolor: '#f8fafc' } }}>
+                    <TableCell sx={{ color: '#334155', fontSize: '0.85rem', borderColor: '#f1f5f9', whiteSpace: 'nowrap' }}>
                       {formatBangkok(a.createdAt)}
                     </TableCell>
-                    <TableCell sx={{ color: '#fff', fontSize: '0.85rem', borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <TableCell sx={{ color: '#0f172a', fontWeight: 600, fontSize: '0.85rem', borderColor: '#f1f5f9' }}>
                       {a.action}
                     </TableCell>
-                    <TableCell sx={{ color: '#cbd5e1', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <TableCell sx={{ color: '#475569', fontSize: '0.85rem', borderColor: '#f1f5f9' }}>
                       {a.module}
                     </TableCell>
-                    <TableCell sx={{ color: '#94a3b8', fontSize: '0.78rem', borderColor: 'rgba(255,255,255,0.06)' }}>
+                    <TableCell sx={{ color: '#64748b', fontSize: '0.82rem', borderColor: '#f1f5f9' }}>
                       {a.targetId ?? '-'}
                     </TableCell>
                   </TableRow>
@@ -115,7 +115,7 @@ export default function ActivityTab() {
               </TableBody>
             </Table>
           </TableContainer>
-          <Box sx={{ mt: 1 }}>
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
             <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
           </Box>
         </>

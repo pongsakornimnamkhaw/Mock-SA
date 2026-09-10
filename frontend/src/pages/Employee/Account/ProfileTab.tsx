@@ -53,8 +53,8 @@ export default function ProfileTab({ profile, onProfileUpdated }: Props) {
   };
 
   return (
-    <Box sx={{ maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', mb: 0.5 }}>
+    <Box sx={{ maxWidth: 540, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+      <Typography variant="h6" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
         ข้อมูลโปรไฟล์
       </Typography>
 
@@ -135,10 +135,14 @@ export default function ProfileTab({ profile, onProfileUpdated }: Props) {
         disabled={saving}
         sx={{
           alignSelf: 'flex-start',
-          background: 'linear-gradient(135deg, #d63384, #b5206a)',
+          background: 'linear-gradient(135deg, #d63384, #7c3aed)',
+          '&:hover': { background: 'linear-gradient(135deg, #b5206a, #6d28d9)' },
           fontWeight: 700,
           borderRadius: 2,
           textTransform: 'none',
+          px: 3,
+          py: 1,
+          boxShadow: '0 4px 12px rgba(214,51,132,0.3)',
         }}
       >
         {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'บันทึก'}
@@ -149,13 +153,19 @@ export default function ProfileTab({ profile, onProfileUpdated }: Props) {
 
 const fieldSx = {
   '& .MuiOutlinedInput-root': {
-    color: '#fff',
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.15)' },
-    '&:hover fieldset': { borderColor: '#d63384' },
+    color: '#1e293b',
+    bgcolor: '#fff',
+    borderRadius: 2,
+    '& fieldset': { borderColor: '#e2e8f0' },
+    '&:hover fieldset': { borderColor: '#cbd5e1' },
     '&.Mui-focused fieldset': { borderColor: '#d63384' },
-    '&.Mui-disabled': { color: 'rgba(255,255,255,0.4)' },
+    '&.Mui-disabled': {
+      bgcolor: '#f8fafc',
+      color: '#64748b',
+      '& fieldset': { borderColor: '#e2e8f0' },
+    },
   },
-  '& .MuiInputLabel-root': { color: '#94a3b8' },
+  '& .MuiInputLabel-root': { color: '#64748b', fontWeight: 500 },
   '& .MuiInputLabel-root.Mui-focused': { color: '#d63384' },
-  '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: 'rgba(255,255,255,0.4)' },
+  '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: '#64748b' },
 };
