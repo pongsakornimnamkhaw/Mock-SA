@@ -217,7 +217,7 @@ func (h *bookingPaymentHandler) getCustomerBookings(c *fiber.Ctx) error {
 				seatLabel := fmt.Sprintf("%s-%02d", zoneID, i)
 				seatID := fmt.Sprintf("ST-%s-%02d", zoneID, i)
 				_ = h.db.Where("seat_id = ?", seatID).FirstOrCreate(&models.Seat{
-					SeatID: seatID, SeatRow: 1, SeatColumn: i, StatusSeat: "ไม่ว่าง", ConcertID: concertID, ZoneID: zoneID,
+					SeatID: seatID, SeatRow: "A", SeatColumn: fmt.Sprintf("%d", i), StatusSeat: "ไม่ว่าง", ConcertID: concertID, ZoneID: zoneID,
 				}).Error
 				ticketID := fmt.Sprintf("TCK-%s-%s-%02d-%04d", concertID, zoneID, i, rand.Intn(10000))
 				qrCodePayload := fmt.Sprintf("OCTAVIA|%s|%s|%s|%s|%s", ticketID, b.ConcertTitle, zoneID, seatLabel, b.CustomerName)
@@ -335,8 +335,8 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 			// ตรวจสอบและสร้าง Seat เพื่อให้ตรงตาม Foreign Key ของตาราง tickets
 			_ = h.db.Where("seat_id = ?", seatID).FirstOrCreate(&models.Seat{
 				SeatID:     seatID,
-				SeatRow:    1,
-				SeatColumn: i,
+				SeatRow:    "A",
+				SeatColumn: fmt.Sprintf("%d", i),
 				StatusSeat: "ไม่ว่าง",
 				ConcertID:  concertID,
 				ZoneID:     zoneID,

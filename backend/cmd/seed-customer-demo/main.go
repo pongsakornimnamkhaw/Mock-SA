@@ -203,7 +203,9 @@ func seedCustomerDemo(db *gorm.DB, now time.Time) (bool, error) {
 			for ticketIndex := 0; ticketIndex < spec.ticketCount; ticketIndex++ {
 				seatID := fmt.Sprintf("%sSEAT_%02d_%02d", demoPrefix, sequence, ticketIndex+1)
 				if err := createDemoRow(tx, &models.Seat{
-					SeatID: seatID, SeatRow: sequence, SeatColumn: ticketIndex + 1,
+					SeatID:     seatID,
+					SeatRow:    fmt.Sprintf("%d", sequence),
+					SeatColumn: fmt.Sprintf("%d", ticketIndex+1),
 					StatusSeat: "ไม่ว่าง", ConcertID: concert.ConcertID, ZoneID: zoneID,
 				}); err != nil {
 					return err

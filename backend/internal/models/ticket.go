@@ -6,11 +6,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// Zone - โซนในงานคอนเสิร์ต
+// Zone - โซนในงานคอนเสิร์ต (ตำแหน่ง/รูปทรงมาจากผังที่นั่งที่พนักงานวาด)
 type Zone struct {
-	ZoneID   string `gorm:"primaryKey;type:varchar(50);not null" json:"zone_id"`
-	ZoneType string `gorm:"type:varchar(100);not null" json:"zone_type"`
-	Capacity int    `gorm:"type:int;not null" json:"capacity"`
+	ZoneID     string  `gorm:"primaryKey;type:varchar(50);not null" json:"zone_id"`
+	ZoneType   string  `gorm:"type:varchar(100);not null" json:"zone_type"`
+	Capacity   int     `gorm:"type:int;not null" json:"capacity"`
+	PositionX  float64 `gorm:"column:position_x;type:double precision;not null;default:0" json:"position_x"`
+	PositionY  float64 `gorm:"column:position_y;type:double precision;not null;default:0" json:"position_y"`
+	Width      float64 `gorm:"type:double precision;not null;default:0" json:"width"`
+	Height     float64 `gorm:"type:double precision;not null;default:0" json:"height"`
+	Rotation   float64 `gorm:"type:double precision;not null;default:0" json:"rotation"`
+	Shape      string  `gorm:"type:varchar(50);not null;default:''" json:"shape"`
+	Color      string  `gorm:"type:varchar(20);not null;default:''" json:"color"`
+	LayerOrder int64   `gorm:"column:layer_order;type:bigint;not null;default:0" json:"layer_order"`
 
 	// Relations
 	Seats            []Seat           `gorm:"foreignKey:ZoneID" json:"seats,omitempty"`
@@ -24,14 +32,18 @@ func (z *Zone) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-// Seat - ที่นั่ง
+// Seat - ที่นั่ง (status_seat เป็นตัวชี้ขาดว่าที่นั่งใบนี้ขายไปแล้วหรือยัง)
 type Seat struct {
-	SeatID     string `gorm:"primaryKey;type:varchar(50);not null" json:"seat_id"`
-	SeatColumn int    `gorm:"type:int;not null" json:"seat_column"`
-	SeatRow    int    `gorm:"type:int;not null" json:"seat_row"`
-	StatusSeat string `gorm:"type:varchar(50);not null" json:"status_seat"`
-	ConcertID  string `gorm:"type:varchar(50);not null" json:"concert_id"`
-	ZoneID     string `gorm:"type:varchar(50);not null" json:"zone_id"`
+	SeatID     string  `gorm:"primaryKey;type:varchar(50);not null" json:"seat_id"`
+	SeatColumn string  `gorm:"type:varchar(50);not null" json:"seat_column"`
+	SeatRow    string  `gorm:"type:varchar(50);not null" json:"seat_row"`
+	StatusSeat string  `gorm:"type:varchar(50);not null" json:"status_seat"`
+	Flowchart  []byte  `gorm:"type:bytea" json:"flowchart,omitempty"`
+	PositionX  float64 `gorm:"column:position_x;type:double precision;not null;default:0" json:"position_x"`
+	PositionY  float64 `gorm:"column:position_y;type:double precision;not null;default:0" json:"position_y"`
+	Rotation   float64 `gorm:"type:double precision;not null;default:0" json:"rotation"`
+	ConcertID  string  `gorm:"type:varchar(50);not null;index" json:"concert_id"`
+	ZoneID     string  `gorm:"type:varchar(50);not null;index" json:"zone_id"`
 
 	// Relations
 	Tickets []Ticket `gorm:"foreignKey:SeatID" json:"tickets,omitempty"`
@@ -42,6 +54,11 @@ func (s *Seat) BeforeCreate(tx *gorm.DB) (err error) {
 		s.SeatID = GenerateID("ST")
 	}
 	return
+}
+
+// Label คืนป้ายที่นั่งที่หน้าเว็บใช้ เช่น "A12" (แถว A คอลัมน์ 12)
+func (s *Seat) Label() string {
+	return s.SeatRow + s.SeatColumn
 }
 
 // TicketCategory - หมวดหมู่ตั๋ว
@@ -78,15 +95,18 @@ func (t *TicketSalesInfo) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-// Ticket - ตั๋ว
+// Ticket - ตั๋ว (ผูกกับที่นั่งจริงและหมวดหมู่ราคาที่ซื้อ ณ ตอนจอง)
 type Ticket struct {
 	TicketID       string    `gorm:"primaryKey;type:varchar(50);not null" json:"ticket_id"`
 	NameConcert    string    `gorm:"type:varchar(255);not null" json:"name_concert"`
 	TicketDateTime time.Time `gorm:"type:timestamp;not null" json:"ticket_datetime"`
+	ImageTicket    []byte    `gorm:"type:bytea" json:"image_ticket,omitempty"`
+	PriceTicket    float64   `gorm:"type:double precision;not null;default:0" json:"price_ticket"`
 	StatusTicket   string    `gorm:"type:varchar(50);not null" json:"status_ticket"`
-	SeatID         string    `gorm:"type:varchar(50);not null" json:"seat_id"`
+	SeatID         string    `gorm:"type:varchar(50);not null;index" json:"seat_id"`
 	SeatLabel      string    `gorm:"type:varchar(50)" json:"seat_label,omitempty"`
-	BookingID      string    `gorm:"type:varchar(50);not null" json:"booking_id"`
+	CategoryID     string    `gorm:"type:varchar(50);index" json:"category_id,omitempty"`
+	BookingID      string    `gorm:"type:varchar(50);not null;index" json:"booking_id"`
 	QrCodeData     string    `gorm:"type:text" json:"qr_code_data,omitempty"`
 }
 

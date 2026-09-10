@@ -4,6 +4,9 @@ import "gorm.io/gorm"
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
+	if err := prepareSeatColumnTypes(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(
 		// User & Access
 		&User{},
@@ -128,4 +131,25 @@ func MigrateVenueSeatModels(db *gorm.DB) error {
 		&VenueLayoutObject{},
 		&VenueSeatPublication{},
 	)
+}
+
+// prepareSeatColumnTypes แปลง seats.seat_row / seat_column จาก integer เป็น varchar
+// ต้องรันก่อน AutoMigrate เพราะ PostgreSQL แปลง integer → varchar ให้เองไม่ได้ ต้องระบุ USING
+// ฟังก์ชันนี้ idempotent: ติดตั้งใหม่ (ยังไม่มีตาราง) หรือแปลงไปแล้ว จะไม่ทำอะไร
+func prepareSeatColumnTypes(db *gorm.DB) error {
+	var dataType string
+	if err := db.Raw(
+		`SELECT data_type FROM information_schema.columns
+		 WHERE table_schema = current_schema() AND table_name = 'seats' AND column_name = 'seat_row'`,
+	).Scan(&dataType).Error; err != nil {
+		return err
+	}
+	if dataType == "" || dataType == "character varying" {
+		return nil
+	}
+	return db.Exec(
+		`ALTER TABLE seats
+		   ALTER COLUMN seat_row TYPE varchar(50) USING seat_row::varchar,
+		   ALTER COLUMN seat_column TYPE varchar(50) USING seat_column::varchar`,
+	).Error
 }
