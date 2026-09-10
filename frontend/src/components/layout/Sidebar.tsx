@@ -46,7 +46,8 @@ const SidebarRoot = styled(Box)({
 const Logo = styled(Box)({
   display: 'flex',
   alignItems: 'center',
-  gap: 10,
+  justifyContent: 'center',
+  width: '100%',
   padding: '22px 18px 18px',
   cursor: 'pointer',
 });
