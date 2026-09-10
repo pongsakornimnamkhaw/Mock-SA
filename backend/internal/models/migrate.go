@@ -73,6 +73,12 @@ func MigrateAllModels(db *gorm.DB) error {
 // columns to timestamp without time zone so every table is consistent.
 func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 	statements := []string{
+		// ticket_categories.promotion_name/promotion_id becomes nullable: a category
+		// projected from a seat layout (seat_inventory.go) has no promotion attached.
+		// AutoMigrate does not reliably drop an existing NOT NULL, so do it explicitly.
+		`ALTER TABLE ticket_categories ALTER COLUMN promotion_name DROP NOT NULL`,
+		`ALTER TABLE ticket_categories ALTER COLUMN promotion_id DROP NOT NULL`,
+
 		// operational time/date columns
 		`ALTER TABLE concerts ALTER COLUMN start_time TYPE time without time zone USING start_time::time`,
 		`ALTER TABLE concerts ALTER COLUMN end_time TYPE time without time zone USING end_time::time`,

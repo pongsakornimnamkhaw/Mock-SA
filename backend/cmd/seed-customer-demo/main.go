@@ -178,10 +178,11 @@ func seedCustomerDemo(db *gorm.DB, now time.Time) (bool, error) {
 			if err := createDemoRow(tx, &zone); err != nil {
 				return err
 			}
+			noPromotionName := "ไม่มีโปรโมชั่น"
 			if err := createDemoRow(tx, &models.TicketCategory{
 				CategoryID:   fmt.Sprintf("%sCATEGORY_%02d", demoPrefix, sequence),
 				CategoryName: spec.zoneName, Price: spec.price, Quantity: 100,
-				PromotionName: "ไม่มีโปรโมชั่น", PromotionID: demoPromotionID, ZoneID: zoneID,
+				PromotionName: &noPromotionName, PromotionID: &demoPromotionID, ZoneID: zoneID,
 			}); err != nil {
 				return err
 			}

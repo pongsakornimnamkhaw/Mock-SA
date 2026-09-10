@@ -247,7 +247,7 @@ func seedConcert(tx *gorm.DB, index int, spec concertSpec, poster []byte) error 
 		if err := create(tx, &models.TicketCategory{
 			CategoryID:   fmt.Sprintf("TC_REPORT_%02d_%02d", index+1, zoneIndex+1),
 			CategoryName: zone.name, Price: zone.price, Quantity: zone.sold,
-			PromotionName: promotion.PromotionName, PromotionID: promotionID, ZoneID: zoneID,
+			PromotionName: &promotion.PromotionName, PromotionID: &promotionID, ZoneID: zoneID,
 		}); err != nil {
 			return err
 		}

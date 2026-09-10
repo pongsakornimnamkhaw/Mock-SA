@@ -62,13 +62,17 @@ func (s *Seat) Label() string {
 }
 
 // TicketCategory - หมวดหมู่ตั๋ว
+// PromotionName/PromotionID เป็น nullable โดยตั้งใจ: หมวดหมู่ที่ project มาจากผังที่นั่ง
+// (ดู seat_inventory.go) ไม่ได้ผูกกับโปรโมชั่นใด ๆ — โปรโมชั่นคิดที่ระดับ booking แทน
+// ต้องเป็น *string ไม่ใช่ string เพราะมี FK ไปยัง promotions.promotion_id ค่าว่าง ""
+// จะชน FK (ไม่มีแถวโปรโมชั่นที่ id เป็นค่าว่าง) มีแต่ NULL เท่านั้นที่ผ่าน FK ได้เมื่อไม่มีโปรโมชั่น
 type TicketCategory struct {
 	CategoryID    string  `gorm:"primaryKey;type:varchar(50);not null" json:"category_id"`
 	CategoryName  string  `gorm:"type:varchar(255);not null" json:"category_name"`
 	Price         float64 `gorm:"type:float;not null" json:"price"`
 	Quantity      int     `gorm:"type:int;not null" json:"quantity"`
-	PromotionName string  `gorm:"type:varchar(255);not null" json:"promotion_name"`
-	PromotionID   string  `gorm:"type:varchar(50);not null" json:"promotion_id"`
+	PromotionName *string `gorm:"type:varchar(255)" json:"promotion_name,omitempty"`
+	PromotionID   *string `gorm:"type:varchar(50)" json:"promotion_id,omitempty"`
 	ZoneID        string  `gorm:"type:varchar(50);not null" json:"zone_id"`
 }
 

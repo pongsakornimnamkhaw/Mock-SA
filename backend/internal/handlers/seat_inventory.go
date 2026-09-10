@@ -4,6 +4,9 @@ import (
 	"strings"
 
 	"backend/internal/models"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // สถานะที่นั่ง — status_seat เป็นตัวชี้ขาดว่าที่นั่งใบนี้ขายไปแล้วหรือยัง
@@ -127,4 +130,63 @@ func missingSeatLabels(requested []string, found []models.Seat) []string {
 		}
 	}
 	return missing
+}
+
+// applyTicketingProjection เขียนผังที่นั่งลงตารางขายบัตร
+// ที่นั่งที่ถูกจองไปแล้วจะไม่ถูกแตะ (OnConflict DoNothing) เพื่อไม่ให้บัตรที่ขายแล้วกำพร้า
+func applyTicketingProjection(tx *gorm.DB, concertID string, zones []zoneDTO) error {
+	projection := projectLayoutToTicketing(concertID, zones)
+
+	if len(projection.Zones) > 0 {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "zone_id"}},
+			UpdateAll: true,
+		}).Create(&projection.Zones).Error; err != nil {
+			return err
+		}
+	}
+	if len(projection.Categories) > 0 {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "category_id"}},
+			UpdateAll: true,
+		}).Create(&projection.Categories).Error; err != nil {
+			return err
+		}
+	}
+	if len(projection.Seats) > 0 {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "seat_id"}},
+			DoNothing: true,
+		}).Create(&projection.Seats).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// clearTicketingProjection ลบผังเดิมของคอนเสิร์ตออกจากตารางขายบัตร
+// ลบเฉพาะที่นั่งที่ยังว่าง และลบโซน/หมวดหมู่เฉพาะโซนที่ไม่มีที่นั่งเหลือแล้ว
+func clearTicketingProjection(tx *gorm.DB, concertID string, zoneIDs []string) error {
+	if err := tx.Where("concert_id = ? AND status_seat = ?", concertID, seatStatusAvailable).
+		Delete(&models.Seat{}).Error; err != nil {
+		return err
+	}
+	if len(zoneIDs) == 0 {
+		return nil
+	}
+
+	var stillUsed []string
+	if err := tx.Model(&models.Seat{}).Where("zone_id IN ?", zoneIDs).
+		Distinct().Pluck("zone_id", &stillUsed).Error; err != nil {
+		return err
+	}
+
+	removable := zoneIDsWithoutSeats(zoneIDs, stillUsed)
+	if len(removable) == 0 {
+		return nil
+	}
+	if err := tx.Where("zone_id IN ?", removable).Delete(&models.TicketCategory{}).Error; err != nil {
+		return err
+	}
+	return tx.Where("zone_id IN ?", removable).Delete(&models.Zone{}).Error
 }

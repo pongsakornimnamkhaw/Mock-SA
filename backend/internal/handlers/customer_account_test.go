@@ -149,7 +149,7 @@ func TestCustomerAccountPostgreSQLFlow(t *testing.T) {
 		&concert,
 		&zone,
 		&promotion,
-		&models.TicketCategory{CategoryID: "CUSTOMER_TEST_CATEGORY", CategoryName: "VIP", Price: 2500, Quantity: 10, PromotionName: promotion.PromotionName, PromotionID: promotion.PromotionID, ZoneID: zone.ZoneID},
+		&models.TicketCategory{CategoryID: "CUSTOMER_TEST_CATEGORY", CategoryName: "VIP", Price: 2500, Quantity: 10, PromotionName: &promotion.PromotionName, PromotionID: &promotion.PromotionID, ZoneID: zone.ZoneID},
 		&seat,
 		&booking,
 		&models.Payment{PaymentID: "CUSTOMER_TEST_PAYMENT", EvidenceFile: []byte{}, PaymentStatus: "ชำระเงินแล้ว", BookingID: booking.BookingID},
