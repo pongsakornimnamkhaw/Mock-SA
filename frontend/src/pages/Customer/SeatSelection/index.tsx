@@ -11,7 +11,7 @@ import type { CustomerPromotion } from '@/types/customerPromotion';
 import { calculateDiscount, filterEligiblePromotions, type PromotionOrder } from '@/utils/seatPromotion';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
 import { getCustomerSession } from '@/utils/customerSession';
-import { pulse } from '@/assets/Poster';
+import { pulse } from '@/assets/poster';
 
 // Sub-components
 import TopNavbar from '@/components/SeatSelection/TopNavbar';

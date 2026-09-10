@@ -1,4 +1,4 @@
-import { Logo1, Logo2 } from '@/assets/LOGO'
+import { Logo1, Logo2 } from '@/assets/logo'
 
 const LogoMap = {
     OC1: Logo1,

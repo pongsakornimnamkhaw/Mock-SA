@@ -1,4 +1,4 @@
-import { pulse, flux, celestial, starlight } from '@/assets/Poster';
+import { pulse, flux, celestial, starlight } from '@/assets/poster';
 import type { EventData, ZoneInfo, SeatData } from './types';
 
 // ข้อมูลคอนเสิร์ต (Mock)

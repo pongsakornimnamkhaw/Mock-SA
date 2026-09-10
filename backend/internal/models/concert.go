@@ -8,17 +8,18 @@ import (
 
 // Concert - ข้อมูลงานคอนเสิร์ต
 type Concert struct {
-	ConcertID     string `gorm:"primaryKey;type:varchar(50);not null" json:"concert_id"`
-	ConcertName   string `gorm:"type:varchar(255);not null" json:"concert_name"`
-	StartDate     string `gorm:"type:date;not null" json:"start_date"`
-	EndDate       string `gorm:"type:date;not null" json:"end_date"`
-	StartTime     string `gorm:"type:time without time zone;not null" json:"start_time"`
-	EndTime       string `gorm:"type:time without time zone;not null" json:"end_time"`
-	Location      string `gorm:"type:varchar(255);not null" json:"location"`
-	Status        string `gorm:"type:varchar(50);not null" json:"status"`
-	ConcertPoster []byte `gorm:"type:bytea" json:"concert_poster,omitempty"`
-	Poster        []byte `gorm:"type:bytea" json:"poster,omitempty"`
-	MoreInfo      string `gorm:"type:text;not null" json:"more_info"`
+	ConcertID       string `gorm:"primaryKey;type:varchar(50);not null" json:"concert_id"`
+	ConcertName     string `gorm:"type:varchar(255);not null" json:"concert_name"`
+	StartDate       string `gorm:"type:date;not null" json:"start_date"`
+	EndDate         string `gorm:"type:date;not null" json:"end_date"`
+	StartTime       string `gorm:"type:time without time zone;not null" json:"start_time"`
+	EndTime         string `gorm:"type:time without time zone;not null" json:"end_time"`
+	Location        string `gorm:"type:varchar(255);not null" json:"location"`
+	Status          string `gorm:"type:varchar(50);not null" json:"status"`
+	ConcertPoster   []byte `gorm:"type:bytea" json:"concert_poster,omitempty"`
+	Poster          []byte `gorm:"type:bytea" json:"poster,omitempty"`
+	SeatLayoutImage []byte `gorm:"column:seat_layout_image;type:bytea" json:"-"`
+	MoreInfo        string `gorm:"type:text;not null" json:"more_info"`
 
 	BaseModel
 }

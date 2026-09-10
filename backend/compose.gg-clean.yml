@@ -1,0 +1,37 @@
+services:
+  postgres-gg-clean:
+    image: postgres:16-alpine
+    container_name: backend-postgres-gg-clean
+    environment:
+      POSTGRES_DB: backend_T01_gg_clean
+      POSTGRES_USER: admin_T01SA
+      POSTGRES_PASSWORD: T01SA
+    ports:
+      - "5434:5432"
+    volumes:
+      - gg_clean_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin_T01SA -d backend_T01_gg_clean"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  pgadmin-gg-clean:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-gg-clean
+    environment:
+      PGADMIN_DEFAULT_EMAIL: gg-clean@example.com
+      PGADMIN_DEFAULT_PASSWORD: T01SA
+    ports:
+      - "8082:80"
+    volumes:
+      - gg_clean_pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres-gg-clean:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  gg_clean_postgres_data:
+  gg_clean_pgadmin_data:

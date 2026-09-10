@@ -59,10 +59,32 @@ func MigrateAllModels(db *gorm.DB) error {
 		&VenueSeat{},
 		&VenueLayoutObject{},
 		&VenueSeatPublication{},
+		&Publication{},
+		&LayoutObject{},
 	); err != nil {
 		return err
 	}
+	if err := ensureTicketPlanningConstraints(db); err != nil {
+		return err
+	}
 	return normalizeOperationalDateTimeColumns(db)
+}
+
+func ensureTicketPlanningConstraints(db *gorm.DB) error {
+	for _, statement := range ticketPlanningConstraintStatements() {
+		if err := db.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ticketPlanningConstraintStatements() []string {
+	return []string{
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_zones_concert') THEN ALTER TABLE zones ADD CONSTRAINT fk_zones_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert') THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert') THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+	}
 }
 
 // normalizeOperationalDateTimeColumns keeps business dates and clock values
@@ -102,11 +124,6 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE venue_seat_publications ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		// Customer sessions now reuse cus_activity_logs. Remove the obsolete table
-		// that an earlier version of the customer login feature created.
-		if err := tx.Exec(`DROP TABLE IF EXISTS customer_auth_sessions`).Error; err != nil {
-			return err
-		}
 		for _, statement := range statements {
 			if err := tx.Exec(statement).Error; err != nil {
 				return err

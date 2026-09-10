@@ -5,8 +5,10 @@ import (
 	"os"
 
 	"backend/internal/config"
+	"backend/internal/eventregistration"
 	"backend/internal/handlers"
 	"backend/internal/models"
+	"backend/internal/ticketplanning"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -45,6 +47,8 @@ func main() {
 		})
 	})
 	handlers.RegisterVenueSeatRoutes(app, config.DB)
+	ticketplanning.RegisterRoutes(app, config.DB)
+	eventregistration.RegisterRoutes(app, config.DB)
 	handlers.RegisterConcertRoutes(app, config.DB)
 	handlers.RegisterArtistRoutes(app, config.DB)
 	handlers.RegisterManagementRoutes(app, config.DB)
