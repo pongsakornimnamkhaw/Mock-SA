@@ -36,6 +36,7 @@ func main() {
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}))
+	handlers.RegisterEmployeeAuditMiddleware(app, config.DB)
 
 	// Routes
 	app.Get("/", func(c *fiber.Ctx) error {

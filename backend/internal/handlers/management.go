@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"log"
 	"strings"
@@ -17,8 +18,7 @@ type managementHandler struct{ db *gorm.DB }
 
 var accountHistoryLocation = time.FixedZone("Asia/Bangkok", 7*60*60)
 
-// Authentication is not implemented by this application yet. Do not trust a
-// browser-supplied employee ID or invent an actor for audit/approval records.
+// Preserve the legacy fallback when an employee session is absent.
 const unidentifiedActor = "ไม่ระบุตัวตน (ยังไม่มีระบบเข้าสู่ระบบ)"
 
 func RegisterManagementRoutes(app *fiber.App, db *gorm.DB) {
@@ -26,17 +26,17 @@ func RegisterManagementRoutes(app *fiber.App, db *gorm.DB) {
 	r := app.Group("/api")
 	r.Get("/promotions/options", h.promotionOptions)
 	r.Get("/promotions", h.listPromotions)
-	r.Post("/promotions", h.savePromotion)
+	r.Post("/promotions", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).savePromotion))
 	r.Get("/promotions/:id", h.getPromotion)
-	r.Put("/promotions/:id", h.savePromotion)
-	r.Delete("/promotions/:id", h.deletePromotion)
+	r.Put("/promotions/:id", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).savePromotion))
+	r.Delete("/promotions/:id", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).deletePromotion))
 	r.Get("/promotion-approvals", h.listApprovals)
-	r.Patch("/promotion-approvals/:id", h.decideApproval)
+	r.Patch("/promotion-approvals/:id", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).decideApproval))
 	r.Get("/employees", h.listEmployees)
-	r.Post("/employees", h.saveEmployee)
+	r.Post("/employees", h.withEmployeeAudit("พนักงาน", (*managementHandler).saveEmployee))
 	r.Get("/employees/:id", h.getEmployee)
-	r.Put("/employees/:id", h.saveEmployee)
-	r.Delete("/employees/:id", h.deleteEmployee)
+	r.Put("/employees/:id", h.withEmployeeAudit("พนักงาน", (*managementHandler).saveEmployee))
+	r.Delete("/employees/:id", h.withEmployeeAudit("พนักงาน", (*managementHandler).deleteEmployee))
 	r.Get("/activity-logs", h.listActivityLogs)
 }
 
@@ -61,8 +61,34 @@ func managementError(c *fiber.Ctx, err error) error {
 	return c.Status(500).JSON(fiber.Map{"message": "ไม่สามารถบันทึกหรืออ่านข้อมูลจากฐานข้อมูลได้"})
 }
 
+type managementAuditContextKey struct{}
+
+type managementAuditActor struct {
+	userID *string
+	module string
+	name   string
+}
+
+// A request-scoped DB keeps the actor available inside existing transactions
+// without changing shared handler state or adding a second activity row.
+func (h *managementHandler) withEmployeeAudit(module string, handler func(*managementHandler, *fiber.Ctx) error) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		actor := managementAuditActor{module: module}
+		if user, err := loadEmployeeFromRequest(c, h.db); err == nil {
+			actor.userID = &user.UserID
+			actor.name = strings.TrimSpace(user.FirstName + " " + user.LastName)
+		}
+		ctx := context.WithValue(c.UserContext(), managementAuditContextKey{}, actor)
+		return handler(&managementHandler{db: h.db.WithContext(ctx)}, c)
+	}
+}
+
 func auditManagement(tx *gorm.DB, action, target, detail string) error {
-	return tx.Create(&models.EmpActivityLogs{EmpLogID: "EL" + uuid.NewString(), ActionType: action, TargetID: target, Description: detail}).Error
+	actor, _ := tx.Statement.Context.Value(managementAuditContextKey{}).(managementAuditActor)
+	if actor.userID != nil {
+		detail = strings.ReplaceAll(detail, unidentifiedActor, actor.name)
+	}
+	return tx.Create(&models.EmpActivityLogs{EmpLogID: "EL" + uuid.NewString(), UserID: actor.userID, Module: actor.module, ActionType: action, TargetID: target, Description: detail}).Error
 }
 
 var accountActivityLabels = map[string]map[string]string{

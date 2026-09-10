@@ -269,6 +269,7 @@ func (h *bookingPaymentHandler) getSalesBookings(c *fiber.Ctx) error {
 
 // 4. Approve Booking & Auto-issue E-Tickets with QR Code (UP2 <<include>> UP3)
 func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
+	actorID := optionalEmployeeAuditUserID(c, h.db)
 	bookingID := c.Params("id")
 	var input approveBookingInput
 	_ = c.BodyParser(&input)
@@ -363,6 +364,8 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
 		ActionType:  "อนุมัติการชำระเงิน",
+		UserID:      actorID,
+		Module:      "การจอง",
 		Description: fmt.Sprintf("อนุมัติการจอง %s และออกบัตรเข้าชม E-Ticket พร้อม QR Code (ผู้ตรวจสอบ: %s)", bookingID, officerName),
 		TargetID:    bookingID,
 		CreatedAt:   now,
@@ -378,6 +381,7 @@ func (h *bookingPaymentHandler) approveBooking(c *fiber.Ctx) error {
 
 // 5. Reject Booking (UP4)
 func (h *bookingPaymentHandler) rejectBooking(c *fiber.Ctx) error {
+	actorID := optionalEmployeeAuditUserID(c, h.db)
 	bookingID := c.Params("id")
 	var input rejectBookingInput
 	if err := c.BodyParser(&input); err != nil || input.Reason == "" {
@@ -410,6 +414,8 @@ func (h *bookingPaymentHandler) rejectBooking(c *fiber.Ctx) error {
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
 		ActionType:  "ปฏิเสธการชำระเงิน",
+		UserID:      actorID,
+		Module:      "การจอง",
 		Description: fmt.Sprintf("ปฏิเสธการจอง %s เหตุผล: %s (ผู้ตรวจสอบ: %s)", bookingID, input.Reason, officerName),
 		TargetID:    bookingID,
 		CreatedAt:   now,
@@ -474,6 +480,10 @@ func (h *bookingPaymentHandler) reuploadSlip(c *fiber.Ctx) error {
 
 // 7. Resend Ticket via Email with identical QR code (UP5)
 func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
+	var actorID *string
+	if c.Route().Path == "/api/sales/bookings/:id/resend" {
+		actorID = optionalEmployeeAuditUserID(c, h.db)
+	}
 	bookingID := c.Params("id")
 	var booking models.Booking
 	if err := h.db.Preload("Tickets").Where("booking_id = ?", bookingID).First(&booking).Error; err != nil {
@@ -488,6 +498,8 @@ func (h *bookingPaymentHandler) resendTickets(c *fiber.Ctx) error {
 	_ = h.db.Create(&models.EmpActivityLogs{
 		EmpLogID:    "EL" + uuid.NewString(),
 		ActionType:  "ขอส่งบัตรซ้ำ",
+		UserID:      actorID,
+		Module:      "การจอง",
 		Description: fmt.Sprintf("ส่งบัตร E-Ticket ซ้ำทางอีเมล (%s) สำหรับการจอง %s", booking.CustomerEmail, bookingID),
 		TargetID:    bookingID,
 		CreatedAt:   time.Now().UTC(),
