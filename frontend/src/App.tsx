@@ -111,7 +111,7 @@ function App() {
       <Route path="/dashboard" element={<EmployeeRouteGuard module="dashboard"><Layout title="ข้อมูลงานคอนเสิร์ตทั้งหมด" showBack={false}><DashboardPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/add-concert" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><AddConcertPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/edit-concert" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/responsibility" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/responsibility" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต" subtitle=""><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/concert-status" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ConcertStatusPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/documents" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/edit-history" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />

@@ -122,7 +122,7 @@ const ResponsibilityPage = () => {
   return (
     <Box sx={{ p: 4, fontFamily: "'Noto Sans Thai'" }}>
       <Typography sx={{ fontWeight: 'bold', color: '#1a237e', mb: 3, fontSize: '38px' }}>
-        ผู้รับผิดชอบคอนเสิร์ต
+        มอบหมายงาน
       </Typography>
 
       {/* Input Form Paper */}
