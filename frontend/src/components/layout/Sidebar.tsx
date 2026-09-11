@@ -24,6 +24,7 @@ import logoImage from '../../assets/octavia-logo.png';
 import { getEmployeeSession, clearEmployeeSession, EMPLOYEE_SESSION_EVENT } from '@/utils/employeeSession';
 import { effectiveModulePermissions, hasModuleAccess, type BackofficeModule } from '@/access/backofficeAccess';
 import { employeeAccountApi } from '@/api/employeeAccountApi';
+import { employeeAuthApi } from '@/api/employeeAuthApi';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -167,9 +168,13 @@ export default function Sidebar() {
     };
   }, [employee?.role]);
 
-  const handleSignOut = () => {
-    clearEmployeeSession();
-    navigate('/employee/login', { replace: true });
+  const handleSignOut = async () => {
+    try {
+      await employeeAuthApi.logout();
+    } finally {
+      clearEmployeeSession();
+      navigate('/employee/login', { replace: true });
+    }
   };
 
   // Expandable state

@@ -13,6 +13,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const artistApi = {
   getArtists: (search = '') => request<ArtistData[]>(`/artists${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getArtist: (id: string) => request<ArtistData>(`/artists/${encodeURIComponent(id)}`),
   createArtist: (data: Omit<ArtistData, 'artist_id'>) => request<ArtistData>('/artists', { method: 'POST', body: JSON.stringify(data) }),
   updateArtist: (id: string, data: Partial<ArtistData>) => request<ArtistData>(`/artists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteArtist: (id: string) => request<{ message: string }>(`/artists/${id}`, { method: 'DELETE' }),

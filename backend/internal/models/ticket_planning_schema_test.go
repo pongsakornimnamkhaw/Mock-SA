@@ -131,6 +131,13 @@ func TestTicketPlanningConstraintsIncludeZoneToConcert(t *testing.T) {
 	}
 }
 
+func TestTicketSalesInfoIsOneToOneWithSeat(t *testing.T) {
+	field, ok := reflect.TypeOf(TicketSalesInfo{}).FieldByName("SeatID")
+	if !ok || field.Type != reflect.TypeOf((*uint)(nil)) || !containsAll(field.Tag.Get("gorm"), "uniqueIndex") {
+		t.Fatal("TicketSalesInfo.SeatID must be a nullable unique foreign key to Seat")
+	}
+}
+
 func TestAutoMigrateModelSetExcludesLegacyVenueSeatTables(t *testing.T) {
 	legacyTables := map[string]bool{
 		"venue_seat_plans": true, "venue_seat_rounds": true, "venue_seat_zones": true,

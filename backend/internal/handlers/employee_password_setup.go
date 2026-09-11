@@ -36,7 +36,7 @@ func createEmployeePasswordSetupToken(db *gorm.DB, userID string, now time.Time)
 	}
 	raw := hex.EncodeToString(bytes)
 	hash, _ := employeePasswordSetupTokenHash(raw)
-	if err := db.Where("user_id = ? AND used_at IS NULL", userID).Delete(&models.EmployeePasswordSetupToken{}).Error; err != nil {
+	if err := db.Where("user_id = ?", userID).Delete(&models.EmployeePasswordSetupToken{}).Error; err != nil {
 		return "", err
 	}
 	token := models.EmployeePasswordSetupToken{UserID: userID, TokenHash: hash, ExpiresAt: now.Add(employeePasswordSetupTTL), CreatedAt: now}

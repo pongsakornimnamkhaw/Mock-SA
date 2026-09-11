@@ -28,12 +28,13 @@ type User struct {
 	PersonnelType      string    `gorm:"type:varchar(20)" json:"personnel_type"`
 
 	// Relations
-	Permissions        []Permission        `gorm:"foreignKey:UserID;references:UserID" json:"permissions,omitempty"`
-	CusActivityLogs    []CusActivityLogs   `gorm:"foreignKey:UserID;references:UserID" json:"cus_activity_logs,omitempty"`
-	EmpActivityLogs    []EmpActivityLogs   `gorm:"foreignKey:UserID;references:UserID" json:"emp_activity_logs,omitempty"`
-	Inquiries          []Inquiry           `gorm:"foreignKey:UserID;references:UserID" json:"inquiries,omitempty"`
-	SalesReports       []SalesReport       `gorm:"foreignKey:UserID;references:UserID" json:"sales_reports,omitempty"`
-	PromotionApprovals []PromotionApproval `gorm:"foreignKey:UserID;references:UserID" json:"promotion_approvals,omitempty"`
+	Permissions        []Permission                `gorm:"foreignKey:UserID;references:UserID" json:"permissions,omitempty"`
+	CusActivityLogs    []CusActivityLogs           `gorm:"foreignKey:UserID;references:UserID" json:"cus_activity_logs,omitempty"`
+	EmpActivityLogs    []EmpActivityLogs           `gorm:"foreignKey:UserID;references:UserID" json:"emp_activity_logs,omitempty"`
+	Inquiries          []Inquiry                   `gorm:"foreignKey:UserID;references:UserID" json:"inquiries,omitempty"`
+	SalesReports       []SalesReport               `gorm:"foreignKey:UserID;references:UserID" json:"sales_reports,omitempty"`
+	PromotionApprovals []PromotionApproval         `gorm:"foreignKey:UserID;references:UserID" json:"promotion_approvals,omitempty"`
+	PasswordSetupToken *EmployeePasswordSetupToken `gorm:"foreignKey:UserID;references:UserID" json:"password_setup_token,omitempty"`
 
 	BaseModel
 }

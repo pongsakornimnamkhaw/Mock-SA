@@ -10,7 +10,7 @@ import (
 // Zone - โซนในงานคอนเสิร์ต (ตำแหน่ง/รูปทรงมาจากผังที่นั่งที่พนักงานวาด)
 type Zone struct {
 	ZoneID     string  `gorm:"primaryKey;type:varchar(50);not null" json:"zone_id"`
-	ConcertID  string  `gorm:"type:varchar(50);not null;index" json:"concert_id"`
+	ConcertID  string  `gorm:"type:varchar(50);index" json:"concert_id"`
 	ZoneType   string  `gorm:"type:varchar(100);not null" json:"zone_type"`
 	Capacity   int     `gorm:"type:int;not null" json:"capacity"`
 	ZonePrice  float64 `gorm:"column:zone_price;type:double precision;not null;default:0;check:zone_price >= 0" json:"zone_price"`
@@ -52,8 +52,9 @@ type Seat struct {
 	ReservedBookingID *string `gorm:"type:varchar(50);index" json:"reserved_booking_id,omitempty"`
 
 	// Relations
-	Tickets         []Ticket `gorm:"foreignKey:SeatID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"tickets,omitempty"`
-	ReservedBooking *Booking `gorm:"foreignKey:ReservedBookingID;references:BookingID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"-"`
+	Tickets         []Ticket         `gorm:"foreignKey:SeatID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"tickets,omitempty"`
+	ReservedBooking *Booking         `gorm:"foreignKey:ReservedBookingID;references:BookingID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"-"`
+	SalesInfo       *TicketSalesInfo `gorm:"foreignKey:SeatID;references:SeatID" json:"sales_info,omitempty"`
 }
 
 // Label คืนป้ายที่นั่งที่หน้าเว็บใช้ เช่น "A12" (แถว A คอลัมน์ 12)
@@ -89,10 +90,12 @@ func (t *TicketCategory) BeforeCreate(tx *gorm.DB) (err error) {
 // TicketSalesInfo - ข้อมูลการขายตั๋ว
 type TicketSalesInfo struct {
 	InfoSID         string    `gorm:"primaryKey;type:varchar(50);not null" json:"info_sid"`
+	SeatID          *uint     `gorm:"uniqueIndex:ux_ticket_sales_infos_seat_id" json:"seat_id,omitempty"`
 	SaleRound       string    `gorm:"type:varchar(100);not null" json:"sale_round"`
 	PriceTicket     float64   `gorm:"type:float;not null" json:"price_ticket"`
 	ReturnCondition string    `gorm:"type:text;not null" json:"return_condition"`
 	PublishDate     time.Time `gorm:"type:date;not null" json:"publish_date"`
+	Seat            *Seat     `gorm:"foreignKey:SeatID;references:SeatID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"seat,omitempty"`
 }
 
 func (t *TicketSalesInfo) BeforeCreate(tx *gorm.DB) (err error) {

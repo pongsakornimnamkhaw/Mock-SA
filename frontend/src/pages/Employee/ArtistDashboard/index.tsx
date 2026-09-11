@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Grid, Card, CardContent, Button, TextField, InputAdornment, Paper, Stack, Link as MuiLink } from '@mui/material';
+import { Box, Typography, Grid, Card, CardContent, Button, Paper, Stack, Link as MuiLink } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import { Link } from 'react-router-dom';
@@ -14,20 +14,15 @@ const ArtistDashboardPage: React.FC = () => {
     <Box sx={{ p: 3, bgcolor: '#f8f9fa', minHeight: '100vh', fontFamily: "'Noto Sans Thai', 'Inter', sans-serif" }}>
       {/* Header section with Search, Notifications and Action Button */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 4, gap: 2 }}>
-        <TextField
-          placeholder="ค้นหาข้อมูลศิลปิน หรือตารางการแสดง"
-          size="small"
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-              sx: { borderRadius: 5, bgcolor: '#fff', width: '300px' }
-            }
-          }}
-        />
+        <Button
+          component={Link}
+          to="/artist-search"
+          variant="outlined"
+          startIcon={<SearchIcon />}
+          sx={{ minWidth: 300, minHeight: 52, px: 3, borderRadius: 5, borderWidth: 2, borderColor: '#1a237e', color: '#1a237e', bgcolor: '#fff', textTransform: 'none', fontWeight: 'bold', fontSize: '18px', '&:hover': { borderWidth: 2, bgcolor: '#f5f3ff', borderColor: '#1a237e' } }}
+        >
+          ค้นหาศิลปินและการแสดง
+        </Button>
         <NotificationBell />
         <Button
           component={Link}
