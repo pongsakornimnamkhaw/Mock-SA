@@ -20,7 +20,7 @@ import (
 func RegisterReportRoutes(app *fiber.App, db *gorm.DB) {
 	h := &reportHandler{db: db}
 	api := app.Group("/api")
-	api.Get("/reports/concerts", requireEmployeeModule(db, access.Reports, access.View), h.listConcertReports)
+	api.Get("/reports/concerts", requireEmployeeFeature(db, access.ReportView, access.View), h.listConcertReports)
 	api.Get("/concerts/:id/poster", h.getConcertPoster)
 	// Current work plans belong to concert operations, not completed-concert
 	// reporting. This keeps report-only finance accounts out of active plans.

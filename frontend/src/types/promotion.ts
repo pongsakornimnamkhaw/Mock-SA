@@ -112,7 +112,7 @@ export type ApprovalTab = 'all' | ApprovalStatus;
 // ============================================================
 
 export type EmployeePermission = 'view_only' | 'edit' | 'admin';
-export type EmployeeJobRole = 'staff' | 'organizer' | 'co_organizer' | 'event_staff' | 'approver' | 'sales';
+export type EmployeeJobRole = 'staff' | 'organizer' | 'co_organizer' | 'production_staff' | 'venue_staff' | 'sales' | 'marketing' | 'finance' | 'technical_staff' | 'artist' | 'artist_manager' | 'executive' | 'event_staff' | 'approver';
 export type EmployeeModuleAccess = 'none' | 'view' | 'edit';
 
 export interface EmployeeModulePermission {

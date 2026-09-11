@@ -30,6 +30,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { concertApi, ConcertData } from '@/api/concertApi';
 import { artistApi, type ArtistData } from '@/api/artistApi';
 import { concertDateOptions, validateScheduleRows } from '@/utils/scheduleRules';
+import { useFeatureAccess } from '@/access/useFeatureAccess';
 
 export interface ScheduleRow {
   id: number | string;
@@ -56,7 +57,8 @@ const parseTimeString = (timeStr?: string): Dayjs | null => {
 };
 
 const PerformanceSchedulePage = () => {
-  const [activeTab, setActiveTab] = useState<'add' | 'view'>('add');
+  const { canEdit } = useFeatureAccess('artist.schedule.create');
+  const [activeTab, setActiveTab] = useState<'add' | 'view'>(() => canEdit ? 'add' : 'view');
   const [concerts, setConcerts] = useState<ConcertData[]>([]);
   const [artists, setArtists] = useState<ArtistData[]>([]);
 
@@ -193,7 +195,7 @@ const PerformanceSchedulePage = () => {
 
         {/* Tab Navigation */}
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-          <Button
+          {canEdit && <Button
             variant={activeTab === 'add' ? 'contained' : 'outlined'}
             onClick={() => setActiveTab('add')}
             sx={{
@@ -212,7 +214,7 @@ const PerformanceSchedulePage = () => {
             }}
           >
             สร้างตารางแสดง
-          </Button>
+          </Button>}
           <Button
             variant={activeTab === 'view' ? 'contained' : 'outlined'}
             onClick={() => setActiveTab('view')}
@@ -236,7 +238,7 @@ const PerformanceSchedulePage = () => {
         </Box>
 
         {/* Tab 1: สร้างตารางแสดง */}
-        {activeTab === 'add' && (
+        {canEdit && activeTab === 'add' && (
           <Paper sx={{ p: 4, borderRadius: 3, backgroundColor: '#b2dfdb' }}>
             {/* Header Form */}
             <Grid container spacing={2.5} sx={{ alignItems: 'center', mb: 3 }}>

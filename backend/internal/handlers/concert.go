@@ -50,36 +50,35 @@ func RegisterConcertRoutes(app *fiber.App, db *gorm.DB) {
 	// Auto seed default concerts if empty
 	handler.seedDefaultData()
 
-	view := requireEmployeeModule(db, access.Concerts, access.View)
-	edit := requireEmployeeModule(db, access.Concerts, access.Edit)
 	api := app.Group("/api")
+	searchView := requireEmployeeFeature(db, access.ConcertSearch, access.View)
 
 	// Concerts
-	api.Get("/concerts", view, handler.listConcerts)
-	api.Get("/concerts/:id", view, handler.getConcert)
-	api.Post("/concerts", edit, handler.createConcert)
-	api.Put("/concerts/:id", edit, handler.updateConcert)
-	api.Delete("/concerts/:id", edit, handler.deleteConcert)
-	api.Put("/concerts/:id/status", edit, handler.updateConcertStatus)
-	api.Patch("/concerts/:id/status", edit, handler.updateConcertStatus)
+	api.Get("/concerts", searchView, handler.listConcerts)
+	api.Get("/concerts/:id", searchView, handler.getConcert)
+	api.Post("/concerts", requireEmployeeFeature(db, access.ConcertCreate, access.Edit), handler.createConcert)
+	api.Put("/concerts/:id", requireEmployeeFeature(db, access.ConcertEdit, access.Edit), handler.updateConcert)
+	api.Delete("/concerts/:id", requireEmployeeFeature(db, access.ConcertEdit, access.Edit), handler.deleteConcert)
+	api.Put("/concerts/:id/status", requireEmployeeFeature(db, access.ConcertStatus, access.Edit), handler.updateConcertStatus)
+	api.Patch("/concerts/:id/status", requireEmployeeFeature(db, access.ConcertStatus, access.Edit), handler.updateConcertStatus)
 
 	// Tasks / Responsibility
-	api.Get("/concerts/:id/tasks", view, handler.listTasks)
-	api.Post("/concerts/:id/tasks", edit, handler.createTask)
-	api.Put("/tasks/:taskId/status", edit, handler.updateTaskStatus)
-	api.Patch("/tasks/:taskId/status", edit, handler.updateTaskStatus)
-	api.Put("/concerts/:id/tasks/:taskId/status", edit, handler.updateTaskStatus)
+	api.Get("/concerts/:id/tasks", requireEmployeeFeature(db, access.ConcertAssignment, access.View), handler.listTasks)
+	api.Post("/concerts/:id/tasks", requireEmployeeFeature(db, access.ConcertAssignment, access.Edit), handler.createTask)
+	api.Put("/tasks/:taskId/status", requireEmployeeFeature(db, access.ConcertAssignment, access.Edit), handler.updateTaskStatus)
+	api.Patch("/tasks/:taskId/status", requireEmployeeFeature(db, access.ConcertAssignment, access.Edit), handler.updateTaskStatus)
+	api.Put("/concerts/:id/tasks/:taskId/status", requireEmployeeFeature(db, access.ConcertAssignment, access.Edit), handler.updateTaskStatus)
 
 	// Documents
-	api.Get("/concerts/:id/documents", view, handler.listDocuments)
-	api.Post("/concerts/:id/documents", edit, handler.createDocument)
-	api.Get("/documents/:docId/file", view, handler.getDocumentFile)
-	api.Get("/documents/:docId/view", view, handler.getDocumentFile)
-	api.Delete("/documents/:docId", edit, handler.deleteDocument)
+	api.Get("/concerts/:id/documents", requireEmployeeFeature(db, access.ConcertDocuments, access.View), handler.listDocuments)
+	api.Post("/concerts/:id/documents", requireEmployeeFeature(db, access.ConcertDocuments, access.Edit), handler.createDocument)
+	api.Get("/documents/:docId/file", requireEmployeeFeature(db, access.ConcertDocuments, access.View), handler.getDocumentFile)
+	api.Get("/documents/:docId/view", requireEmployeeFeature(db, access.ConcertDocuments, access.View), handler.getDocumentFile)
+	api.Delete("/documents/:docId", requireEmployeeFeature(db, access.ConcertDocuments, access.Edit), handler.deleteDocument)
 
 	// Edit History
-	api.Get("/history", view, handler.listHistory)
-	api.Get("/concerts/:id/history", view, handler.listHistoryByConcert)
+	api.Get("/history", requireEmployeeFeature(db, access.ConcertHistory, access.View), handler.listHistory)
+	api.Get("/concerts/:id/history", requireEmployeeFeature(db, access.ConcertHistory, access.View), handler.listHistoryByConcert)
 }
 
 func (h *ConcertHandler) seedDefaultData() {

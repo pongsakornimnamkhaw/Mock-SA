@@ -36,6 +36,13 @@ export const BACKOFFICE_MODULES: readonly BackofficeModuleDefinition[] = [
 
 export type ModulePermissions = Partial<Record<BackofficeModule, AccessLevel>>;
 
+export type BackofficeFeature =
+  | 'concert.dashboard' | 'concert.create' | 'concert.edit' | 'concert.assignment'
+  | 'concert.status' | 'concert.documents' | 'concert.history' | 'concert.search'
+  | 'artist.dashboard' | 'artist.search' | 'artist.manage' | 'artist.invitation'
+  | 'artist.schedule.create' | 'artist.schedule.view' | 'artist.performance.manage'
+  | 'artist.history' | 'report.view' | 'report.manage';
+
 export interface ModulePermissionInput {
   module: BackofficeModule;
   level: AccessLevel;
@@ -77,15 +84,75 @@ export function defaultModuleAccess(role: string, department: string, module: Ba
   if (normalizedRole === 'view_only') return 'none';
   if (module === 'dashboard') return 'view';
   if (module === 'audit' || module === 'employees') return 'none';
-  if (module === 'concerts' && ['organizer', 'co_organizer', 'ผู้จัดงาน', 'ผู้จัดงานร่วม'].includes(normalizedRole)) return 'edit';
-  if (module === 'artists' && ['organizer', 'ผู้จัดงาน'].includes(normalizedRole)) return 'edit';
+  if (module === 'concerts') {
+    return canAccessBackofficeFeature(normalizedRole, normalizedDepartment, 'concert.create') === 'edit'
+      ? 'edit' : canAccessBackofficeFeature(normalizedRole, normalizedDepartment, 'concert.dashboard');
+  }
+  if (module === 'artists') return canAccessBackofficeFeature(normalizedRole, normalizedDepartment, 'artist.search');
   if (module === 'venues' && normalizedDepartment.includes('สถานที่')) return 'edit';
   if (module === 'registration' && (['event_staff', 'สตาฟงาน'].includes(normalizedRole) || normalizedDepartment.includes('สตาฟ'))) return 'edit';
   if ((module === 'concert_catalog' || module === 'promotions') && (normalizedDepartment.includes('การตลาด') || normalizedDepartment === 'marketing')) return 'edit';
   if (module === 'promotion_approvals' && ['approver', 'ผู้มีอำนาจอนุมัติ'].includes(normalizedRole)) return 'edit';
   if (module === 'promotion_approvals' && (normalizedDepartment.includes('การตลาด') || normalizedDepartment === 'marketing')) return 'view';
-  if (module === 'reports' && (normalizedDepartment.includes('การเงิน') || normalizedDepartment === 'finance')) return 'view';
+  if (module === 'reports') return canAccessBackofficeFeature(normalizedRole, normalizedDepartment, 'report.view');
   return 'none';
+}
+
+const concertActors = new Set(['organizer', 'co_organizer', 'production_staff', 'venue_staff', 'sales', 'marketing', 'finance', 'executive']);
+const artistActors = new Set(['organizer', 'co_organizer', 'production_staff', 'technical_staff', 'artist', 'artist_manager', 'executive']);
+
+function resolvedOperationalRole(role: string, department: string): string {
+  const normalizedRole = role.trim().toLowerCase();
+  const normalizedDepartment = department.trim().toLowerCase();
+  if (['admin', 'administrator', 'ผู้ดูแลระบบ'].includes(normalizedRole)) return 'admin';
+  if (normalizedRole !== '' && normalizedRole !== 'staff' && normalizedRole !== 'edit' && normalizedRole !== 'view_only') return normalizedRole;
+  if (normalizedDepartment.includes('โปรดักชั่น')) return 'production_staff';
+  if (normalizedDepartment.includes('สถานที่')) return 'venue_staff';
+  if (normalizedDepartment.includes('ขาย')) return 'sales';
+  if (normalizedDepartment.includes('การตลาด')) return 'marketing';
+  if (normalizedDepartment.includes('การเงิน')) return 'finance';
+  if (normalizedDepartment.includes('เทคนิค')) return 'technical_staff';
+  if (normalizedDepartment.includes('ผู้บริหาร')) return 'executive';
+  return normalizedRole;
+}
+
+export function canAccessBackofficeFeature(role: string, department: string, feature: BackofficeFeature): AccessLevel {
+  const actor = resolvedOperationalRole(role, department);
+  if (actor === 'admin') return 'edit';
+  if (feature === 'concert.dashboard' || feature === 'concert.search' || feature === 'concert.history') {
+    return concertActors.has(actor) ? 'view' : 'none';
+  }
+  if (feature === 'concert.assignment' || feature === 'concert.documents') {
+    return actor === 'organizer' ? 'edit' : concertActors.has(actor) ? 'view' : 'none';
+  }
+  if (feature === 'concert.create' || feature === 'concert.edit' || feature === 'concert.status') {
+    return actor === 'organizer' ? 'edit' : 'none';
+  }
+  if (feature === 'artist.dashboard' || feature === 'artist.schedule.view' || feature === 'artist.history') {
+    return artistActors.has(actor) ? 'view' : 'none';
+  }
+  if (feature === 'artist.search') {
+    return actor === 'organizer' ? 'edit' : artistActors.has(actor) ? 'view' : 'none';
+  }
+  if (feature === 'artist.manage' || feature === 'artist.performance.manage') {
+    return actor === 'artist_manager' ? 'edit' : 'none';
+  }
+  if (feature === 'artist.invitation') {
+    if (actor === 'organizer') return 'edit';
+    return actor === 'artist' || actor === 'artist_manager' ? 'view' : 'none';
+  }
+  if (feature === 'artist.schedule.create') return actor === 'organizer' ? 'edit' : 'none';
+  if (feature === 'report.view') return actor ? 'view' : 'none';
+  if (feature === 'report.manage') return actor === 'organizer' ? 'edit' : 'none';
+  return 'none';
+}
+
+export function effectiveFeatureAccess(accountRole: string, jobRole: string | undefined, department: string, feature: BackofficeFeature): AccessLevel {
+  const normalizedAccountRole = accountRole.trim().toLowerCase();
+  const authorizationRole = ['admin', 'administrator'].includes(normalizedAccountRole)
+    ? normalizedAccountRole : (jobRole || accountRole);
+  const level = canAccessBackofficeFeature(authorizationRole, department, feature);
+  return normalizedAccountRole === 'view_only' && level === 'edit' ? 'view' : level;
 }
 
 export function effectiveModulePermissions(accountRole: string, department: string, overrides: ModulePermissions = {}, jobRole?: string): Record<BackofficeModule, AccessLevel> {

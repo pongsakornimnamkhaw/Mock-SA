@@ -16,7 +16,7 @@ func TestResolveDefaultsAndOverrides(t *testing.T) {
 		{"marketing edits promotions", "staff", "ฝ่ายการตลาด", Promotions, nil, Edit},
 		{"unrelated view-only account is locked", "view_only", "ฝ่ายการเงิน", Promotions, nil, None},
 		{"finance can view reports", "staff", "ฝ่ายการเงิน", Reports, nil, View},
-		{"finance cannot open concerts", "staff", "ฝ่ายการเงิน", Concerts, nil, None},
+		{"finance can open concert views", "staff", "ฝ่ายการเงิน", Concerts, nil, View},
 		{"marketing can view approvals", "staff", "ฝ่ายการตลาด", PromotionApprovals, nil, View},
 		{"venue department edits seats", "staff", "ฝ่ายสถานที่", Venues, nil, Edit},
 		{"event staff edits registration", "staff", "สตาฟงาน", Registration, nil, Edit},
@@ -43,5 +43,35 @@ func TestValidRejectsUnknownValues(t *testing.T) {
 	}
 	if Level("owner").Valid() {
 		t.Fatal("unknown level accepted")
+	}
+}
+
+func TestResolveFeaturePermissions(t *testing.T) {
+	tests := []struct {
+		name, role, department string
+		feature                Feature
+		want                   Level
+	}{
+		{"organizer creates concert", "organizer", "", ConcertCreate, Edit},
+		{"finance cannot create concert", "finance", "", ConcertCreate, None},
+		{"finance views concert assignment", "finance", "", ConcertAssignment, View},
+		{"legacy marketing views documents", "staff", "ฝ่ายการตลาด", ConcertDocuments, View},
+		{"artist manager edits artists", "artist_manager", "", ArtistManage, Edit},
+		{"organizer cannot edit artist profile", "organizer", "", ArtistManage, None},
+		{"organizer edits artist search result", "organizer", "", ArtistSearch, Edit},
+		{"artist views invitations", "artist", "", ArtistInvitation, View},
+		{"production cannot view invitations", "production_staff", "", ArtistInvitation, None},
+		{"production views shared schedule", "production_staff", "", ArtistScheduleView, View},
+		{"manager edits performance", "artist_manager", "", ArtistPerformanceManage, Edit},
+		{"finance views reports", "finance", "", ReportView, View},
+		{"finance cannot confirm reports", "finance", "", ReportManage, None},
+		{"organizer confirms reports", "organizer", "", ReportManage, Edit},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ResolveFeature(tc.role, tc.department, tc.feature); got != tc.want {
+				t.Fatalf("ResolveFeature()=%q want %q", got, tc.want)
+			}
+		})
 	}
 }

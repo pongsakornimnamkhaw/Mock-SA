@@ -160,7 +160,7 @@ func validateEmployee(e *employeeDTO) error {
 	if e.JobRole == "" {
 		e.JobRole = "staff"
 	}
-	validJobRoles := map[string]bool{"staff": true, "organizer": true, "co_organizer": true, "event_staff": true, "approver": true, "sales": true}
+	validJobRoles := map[string]bool{"staff": true, "organizer": true, "co_organizer": true, "production_staff": true, "venue_staff": true, "sales": true, "marketing": true, "finance": true, "technical_staff": true, "artist": true, "artist_manager": true, "executive": true, "event_staff": true, "approver": true}
 	if !validJobRoles[e.JobRole] {
 		return fiber.NewError(400, "บทบาทงานไม่ถูกต้อง")
 	}

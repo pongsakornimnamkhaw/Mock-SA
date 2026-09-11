@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultModuleAccess, effectiveModulePermissions, hasModuleAccess, moduleOverridesForSave, normalizeModulePermissions } from './backofficeAccess';
+import { canAccessBackofficeFeature, defaultModuleAccess, effectiveFeatureAccess, effectiveModulePermissions, hasModuleAccess, moduleOverridesForSave, normalizeModulePermissions } from './backofficeAccess';
 
 describe('back-office access', () => {
   it('allows view but not edit when access is view', () => {
@@ -41,9 +41,40 @@ describe('back-office access', () => {
     expect(defaultModuleAccess('staff', 'ฝ่ายการตลาด', 'promotions')).toBe('edit');
     expect(defaultModuleAccess('view_only', 'ฝ่ายการเงิน', 'promotions')).toBe('none');
     expect(defaultModuleAccess('staff', 'ฝ่ายการเงิน', 'reports')).toBe('view');
-    expect(defaultModuleAccess('staff', 'ฝ่ายการเงิน', 'concerts')).toBe('none');
+    expect(defaultModuleAccess('staff', 'ฝ่ายการเงิน', 'concerts')).toBe('view');
     expect(defaultModuleAccess('staff', 'ฝ่ายการตลาด', 'audit')).toBe('none');
     const permissions = normalizeModulePermissions({ promotions: 'none' });
     expect(hasModuleAccess(permissions, 'promotions', 'view')).toBe(false);
+  });
+
+  it('enforces concert page and action permissions by job role', () => {
+    expect(canAccessBackofficeFeature('organizer', '', 'concert.create')).toBe('edit');
+    expect(canAccessBackofficeFeature('finance', '', 'concert.create')).toBe('none');
+    expect(canAccessBackofficeFeature('finance', '', 'concert.assignment')).toBe('view');
+    expect(canAccessBackofficeFeature('staff', 'ฝ่ายการตลาด', 'concert.documents')).toBe('view');
+    expect(canAccessBackofficeFeature('executive', '', 'concert.history')).toBe('view');
+  });
+
+  it('enforces artist manager, organizer, artist and shared-view pages', () => {
+    expect(canAccessBackofficeFeature('artist_manager', '', 'artist.manage')).toBe('edit');
+    expect(canAccessBackofficeFeature('organizer', '', 'artist.manage')).toBe('none');
+    expect(canAccessBackofficeFeature('organizer', '', 'artist.search')).toBe('edit');
+    expect(canAccessBackofficeFeature('artist', '', 'artist.invitation')).toBe('view');
+    expect(canAccessBackofficeFeature('production_staff', '', 'artist.invitation')).toBe('none');
+    expect(canAccessBackofficeFeature('production_staff', '', 'artist.schedule.view')).toBe('view');
+    expect(canAccessBackofficeFeature('artist_manager', '', 'artist.performance.manage')).toBe('edit');
+  });
+
+  it('uses department fallback for legacy accounts and keeps report confirmation organizer-only', () => {
+    expect(canAccessBackofficeFeature('staff', 'ฝ่ายโปรดักชั่น', 'artist.dashboard')).toBe('view');
+    expect(canAccessBackofficeFeature('staff', 'ฝ่ายการเงิน', 'report.view')).toBe('view');
+    expect(canAccessBackofficeFeature('staff', 'ฝ่ายการเงิน', 'report.manage')).toBe('none');
+    expect(canAccessBackofficeFeature('organizer', '', 'report.manage')).toBe('edit');
+  });
+
+  it('caps feature mutations for view-only accounts without removing readable pages', () => {
+    expect(effectiveFeatureAccess('view_only', 'organizer', '', 'concert.create')).toBe('view');
+    expect(effectiveFeatureAccess('view_only', 'finance', '', 'concert.documents')).toBe('view');
+    expect(effectiveFeatureAccess('edit', 'organizer', '', 'concert.create')).toBe('edit');
   });
 });

@@ -26,6 +26,14 @@ func employeeEffectiveAccess(user models.User) map[access.Module]access.Level {
 	return result
 }
 
+func employeeFeatureAccessLevel(user models.User, feature access.Feature) access.Level {
+	level := access.ResolveFeature(employeeAuthorizationRole(user), user.Department, feature)
+	if strings.EqualFold(strings.TrimSpace(user.Role), "view_only") && level == access.Edit {
+		return access.View
+	}
+	return level
+}
+
 func employeeAuthorizationRole(user models.User) string {
 	if strings.EqualFold(strings.TrimSpace(user.Role), "admin") {
 		return "admin"
@@ -74,6 +82,20 @@ func requireEmployeeModule(db *gorm.DB, module access.Module, required access.Le
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "กรุณาเข้าสู่ระบบพนักงาน"})
 		}
 		if !employeeAccessLevel(user, module).Allows(required) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "ไม่มีสิทธิ์ดำเนินการในส่วนนี้"})
+		}
+		c.Locals("employeeUser", user)
+		return c.Next()
+	}
+}
+
+func requireEmployeeFeature(db *gorm.DB, feature access.Feature, required access.Level) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		user, err := loadEmployeeFromRequest(c, db)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"message": "กรุณาเข้าสู่ระบบพนักงาน"})
+		}
+		if !employeeFeatureAccessLevel(user, feature).Allows(required) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"message": "ไม่มีสิทธิ์ดำเนินการในส่วนนี้"})
 		}
 		c.Locals("employeeUser", user)
