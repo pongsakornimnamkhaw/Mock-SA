@@ -13,7 +13,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ 
   children, 
   title = "ข้อมูลงานคอนเสิร์ต", 
-  subtitle = "ข้อมูลทุกฝ่ายเชื่อมโยงกันแบบเรียลไทม์ · อัปเดตล่าสุด 22 ก.ค. 2569, 09:41 น.",
+  subtitle = "",
   showBack = true
 }) => {
   return (
