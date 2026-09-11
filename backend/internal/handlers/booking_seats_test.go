@@ -19,7 +19,7 @@ func bookingInput(seats []string) map[string]any {
 	}
 }
 
-func TestCreateBookingPersistsSelectedSeatsAsTickets(t *testing.T) {
+func TestCreateBookingReservesSelectedSeatsWithoutIssuingTickets(t *testing.T) {
 	db := managementTestDB(t)
 	app := fiber.New()
 	RegisterBookingPaymentRoutes(app, db)
@@ -28,30 +28,23 @@ func TestCreateBookingPersistsSelectedSeatsAsTickets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	managementRequest(t, app, "POST", "/api/bookings", bookingInput([]string{"A1", "B2"}), fiber.StatusCreated)
+	created := managementRequest(t, app, "POST", "/api/bookings", bookingInput([]string{"A1", "B2"}), fiber.StatusCreated)
+	bookingID := created["data"].(map[string]interface{})["booking_id"].(string)
 
 	var tickets []models.Ticket
 	if err := db.Order("seat_label").Find(&tickets).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(tickets) != 2 {
-		t.Fatalf("ต้องได้ตั๋ว 2 ใบ แต่ได้ %d", len(tickets))
-	}
-	if tickets[0].SeatLabel != "A1" || tickets[1].SeatLabel != "B2" {
-		t.Fatalf("เลขที่นั่งบนตั๋วต้องตรงกับที่ลูกค้าเลือก: %q, %q", tickets[0].SeatLabel, tickets[1].SeatLabel)
-	}
-	if tickets[0].PriceTicket != 2000 {
-		t.Fatalf("ราคาบนตั๋วต้องเป็น 2000 แต่ได้ %v", tickets[0].PriceTicket)
-	}
-	if tickets[0].StatusTicket != ticketStatusPending {
-		t.Fatalf("ตั๋วที่เพิ่งจองต้องเป็น %q แต่ได้ %q", ticketStatusPending, tickets[0].StatusTicket)
-	}
-	if tickets[0].SeatID == "" || tickets[0].CategoryID == "" {
-		t.Fatalf("ตั๋วต้องผูกกับที่นั่งและหมวดหมู่จริง: %+v", tickets[0])
+	if len(tickets) != 0 {
+		t.Fatalf("ก่อนอนุมัติยังต้องไม่มีตั๋ว แต่ได้ %d", len(tickets))
 	}
 
 	var taken int64
-	db.Model(&models.Seat{}).Where("concert_id = ? AND status_seat = ?", "CCBOOK", seatStatusTaken).Count(&taken)
+	if err := db.Table("seats").
+		Where("zone_id = ? AND status_seat = ? AND reserved_booking_id = ?", "A1", seatStatusTaken, bookingID).
+		Count(&taken).Error; err != nil {
+		t.Fatal(err)
+	}
 	if taken != 2 {
 		t.Fatalf("ที่นั่งที่จองแล้วต้องเปลี่ยนเป็นไม่ว่าง 2 ใบ แต่ได้ %d", taken)
 	}
@@ -79,12 +72,12 @@ func TestCreateBookingRejectsSeatsThatAreAlreadyTaken(t *testing.T) {
 	}
 	var tickets int64
 	db.Model(&models.Ticket{}).Count(&tickets)
-	if tickets != 1 {
-		t.Fatalf("ต้องไม่มีตั๋วค้างจากการจองที่ล้มเหลว — ต้องเหลือ 1 ใบ แต่มี %d", tickets)
+	if tickets != 0 {
+		t.Fatalf("ก่อนอนุมัติต้องไม่มีตั๋วค้าง แต่มี %d", tickets)
 	}
 }
 
-func TestApproveBookingIssuesExistingTicketsWithoutFabricatingSeats(t *testing.T) {
+func TestApproveBookingCreatesTicketsForReservedSeats(t *testing.T) {
 	db := managementTestDB(t)
 	app := fiber.New()
 	RegisterBookingPaymentRoutes(app, db)
@@ -94,6 +87,11 @@ func TestApproveBookingIssuesExistingTicketsWithoutFabricatingSeats(t *testing.T
 	}
 	created := managementRequest(t, app, "POST", "/api/bookings", bookingInput([]string{"C3"}), fiber.StatusCreated)
 	bookingID := created["data"].(map[string]interface{})["booking_id"].(string)
+	var before int64
+	db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).Count(&before)
+	if before != 0 {
+		t.Fatalf("ก่อนอนุมัติต้องไม่มีตั๋ว แต่มี %d", before)
+	}
 
 	managementRequest(t, app, "POST", "/api/sales/bookings/"+bookingID+"/approve",
 		map[string]any{"officer_name": "พนักงานทดสอบ"}, fiber.StatusOK)
@@ -103,7 +101,7 @@ func TestApproveBookingIssuesExistingTicketsWithoutFabricatingSeats(t *testing.T
 		t.Fatal(err)
 	}
 	if len(tickets) != 1 {
-		t.Fatalf("การอนุมัติต้องไม่สร้างตั๋วเพิ่ม — ต้องมี 1 ใบ แต่มี %d", len(tickets))
+		t.Fatalf("การอนุมัติต้องสร้างตั๋ว 1 ใบ แต่มี %d", len(tickets))
 	}
 	if tickets[0].SeatLabel != "C3" {
 		t.Fatalf("เลขที่นั่งต้องคงเป็น C3 แต่ได้ %q", tickets[0].SeatLabel)
@@ -134,7 +132,7 @@ func TestRejectBookingReleasesSeats(t *testing.T) {
 		map[string]any{"reason": "สลิปไม่ชัด", "officer_name": "พนักงานทดสอบ"}, fiber.StatusOK)
 
 	var seat models.Seat
-	if err := db.Where("concert_id = ? AND zone_id = ? AND (seat_row || seat_column) = ?", "CCBOOK", "A1", "D4").
+	if err := db.Where("zone_id = ? AND seat_label = ?", "A1", "D4").
 		First(&seat).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -142,11 +140,13 @@ func TestRejectBookingReleasesSeats(t *testing.T) {
 		t.Fatalf("ที่นั่งของการจองที่ถูกปฏิเสธต้องกลับมาว่าง แต่ได้ %q", seat.StatusSeat)
 	}
 
-	var ticket models.Ticket
-	if err := db.Where("booking_id = ?", bookingID).First(&ticket).Error; err != nil {
-		t.Fatal(err)
+	if seat.ReservedBookingID != nil {
+		t.Fatalf("ที่นั่งที่ถูกปฏิเสธต้องล้างการจอง แต่ยังผูกกับ %q", *seat.ReservedBookingID)
 	}
-	if ticket.StatusTicket != ticketStatusCancelled {
-		t.Fatalf("ตั๋วต้องถูกยกเลิก แต่ได้ %q", ticket.StatusTicket)
+
+	var tickets int64
+	db.Model(&models.Ticket{}).Where("booking_id = ?", bookingID).Count(&tickets)
+	if tickets != 0 {
+		t.Fatalf("Booking ที่ถูกปฏิเสธก่อนอนุมัติต้องไม่มีตั๋ว แต่มี %d", tickets)
 	}
 }

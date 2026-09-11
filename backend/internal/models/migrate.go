@@ -1,16 +1,37 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
-	if err := prepareSeatColumnTypes(db); err != nil {
-		return err
-	}
 	if err := detachOrphanEmployeeActivityUsers(db); err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(
+	// Build every table before adding relationship constraints. Several domain
+	// models reference each other, so a single FK-enabled pass can target a
+	// table that has not been created yet on a brand-new schema.
+	foreignKeysDisabled := db.Config.DisableForeignKeyConstraintWhenMigrating
+	db.Config.DisableForeignKeyConstraintWhenMigrating = true
+	baseErr := db.AutoMigrate(allModels()...)
+	db.Config.DisableForeignKeyConstraintWhenMigrating = foreignKeysDisabled
+	if baseErr != nil {
+		return baseErr
+	}
+	if err := ensureTicketPlanningConstraints(db); err != nil {
+		return err
+	}
+	if err := db.Model(&User{}).
+		Where("(LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND COALESCE(personnel_type, '') = ''", []string{"employee", "staff", "admin", "พนักงาน"}).
+		Update("personnel_type", PersonnelTypeInternal).Error; err != nil {
+		return err
+	}
+	return normalizeOperationalDateTimeColumns(db)
+}
+
+func allModels() []any {
+	return []any{
 		// User & Access
 		&User{},
 		&CusActivityLogs{},
@@ -26,6 +47,10 @@ func MigrateAllModels(db *gorm.DB) error {
 		&ConcertDocument{},
 		&ModifiedHistory{},
 		&SummaryReport{},
+		&PerformanceSchedule{},
+		&PerformanceDetail{},
+		&Publication{},
+		&LayoutObject{},
 
 		// Artist
 		&Artist{},
@@ -51,40 +76,47 @@ func MigrateAllModels(db *gorm.DB) error {
 		&GateCheckIn{},
 		&SalesReport{},
 
-		// Performance
-		&PerformanceSchedule{},
-		&PerformanceDetail{},
-
 		// Work
 		&WorkPlan{},
 		&SponsorshipRequest{},
 		&Task{},
+	}
+}
 
-		// Venue Seat Plan
-		&VenueSeatPlan{},
-		&VenueSeatRound{},
-		&VenueSeatZone{},
-		&VenueSeat{},
-		&VenueLayoutObject{},
-		&VenueSeatPublication{},
-	); err != nil {
-		return err
+func ensureTicketPlanningConstraints(db *gorm.DB) error {
+	for _, statement := range ticketPlanningConstraintStatements() {
+		if err := db.Exec(statement).Error; err != nil {
+			return err
+		}
 	}
-	if err := db.Model(&User{}).
-		Where("(LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND COALESCE(personnel_type, '') = ''", []string{"employee", "staff", "admin", "พนักงาน"}).
-		Update("personnel_type", PersonnelTypeInternal).Error; err != nil {
-		return err
+	return nil
+}
+
+func ticketPlanningConstraintStatements() []string {
+	return []string{
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_zones_concert' AND conrelid = 'zones'::regclass) THEN ALTER TABLE zones ADD CONSTRAINT fk_zones_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE RESTRICT; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert' AND conrelid = 'layout_objects'::regclass) THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert' AND conrelid = 'publications'::regclass) THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
 	}
-	return normalizeOperationalDateTimeColumns(db)
 }
 
 // detachOrphanEmployeeActivityUsers repairs legacy audit/session rows created
 // for synthetic employee accounts before GORM adds the users foreign key.
 // Audit rows are retained; only their invalid optional reference is cleared.
 func detachOrphanEmployeeActivityUsers(db *gorm.DB) error {
-	if !db.Migrator().HasTable(&EmpActivityLogs{}) ||
-		!db.Migrator().HasTable(&User{}) ||
-		!db.Migrator().HasColumn(&EmpActivityLogs{}, "user_id") {
+	var ready bool
+	if err := db.Raw(`
+		SELECT to_regclass(current_schema() || '.emp_activity_logs') IS NOT NULL
+		   AND to_regclass(current_schema() || '.users') IS NOT NULL
+		   AND EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'emp_activity_logs'
+			  AND column_name = 'user_id'
+		   )`).Scan(&ready).Error; err != nil {
+		return err
+	}
+	if !ready {
 		return nil
 	}
 	return db.Exec(`
@@ -114,7 +146,6 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE performance_schedules ALTER COLUMN end_show TYPE time without time zone USING end_show::time`,
 		`ALTER TABLE artist_requirements ALTER COLUMN start_req TYPE time without time zone USING start_req::time`,
 		`ALTER TABLE artist_requirements ALTER COLUMN end_req TYPE time without time zone USING end_req::time`,
-		`ALTER TABLE venue_seat_rounds ALTER COLUMN door_time TYPE time without time zone USING door_time::time`,
 		`ALTER TABLE work_plans ALTER COLUMN update_date TYPE date USING update_date::date`,
 		`ALTER TABLE sponsorship_requests ALTER COLUMN submit_date TYPE date USING submit_date::date`,
 		`ALTER TABLE ticket_sales_infos ALTER COLUMN publish_date TYPE date USING publish_date::date`,
@@ -133,17 +164,8 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE promotions ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
 		`ALTER TABLE promotions ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 		`ALTER TABLE promotion_usage_logs ALTER COLUMN used_at TYPE timestamp without time zone USING used_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_plans ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_plans ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_publications ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_publications ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		// Customer sessions now reuse cus_activity_logs. Remove the obsolete table
-		// that an earlier version of the customer login feature created.
-		if err := tx.Exec(`DROP TABLE IF EXISTS customer_auth_sessions`).Error; err != nil {
-			return err
-		}
 		for _, statement := range statements {
 			if err := tx.Exec(statement).Error; err != nil {
 				return err
@@ -151,39 +173,4 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		}
 		return nil
 	})
-}
-
-// MigrateVenueSeatModels รัน AutoMigrate เฉพาะตาราง Venue/Seat
-// (ถูกเรียกใช้จาก main.go)
-func MigrateVenueSeatModels(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&Concert{},
-		&VenueSeatPlan{},
-		&VenueSeatRound{},
-		&VenueSeatZone{},
-		&VenueSeat{},
-		&VenueLayoutObject{},
-		&VenueSeatPublication{},
-	)
-}
-
-// prepareSeatColumnTypes แปลง seats.seat_row / seat_column จาก integer เป็น varchar
-// ต้องรันก่อน AutoMigrate เพราะ PostgreSQL แปลง integer → varchar ให้เองไม่ได้ ต้องระบุ USING
-// ฟังก์ชันนี้ idempotent: ติดตั้งใหม่ (ยังไม่มีตาราง) หรือแปลงไปแล้ว จะไม่ทำอะไร
-func prepareSeatColumnTypes(db *gorm.DB) error {
-	var dataType string
-	if err := db.Raw(
-		`SELECT data_type FROM information_schema.columns
-		 WHERE table_schema = current_schema() AND table_name = 'seats' AND column_name = 'seat_row'`,
-	).Scan(&dataType).Error; err != nil {
-		return err
-	}
-	if dataType == "" || dataType == "character varying" {
-		return nil
-	}
-	return db.Exec(
-		`ALTER TABLE seats
-		   ALTER COLUMN seat_row TYPE varchar(50) USING seat_row::varchar,
-		   ALTER COLUMN seat_column TYPE varchar(50) USING seat_column::varchar`,
-	).Error
 }

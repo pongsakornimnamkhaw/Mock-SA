@@ -1,0 +1,119 @@
+<mxfile host="65bd71144e">
+    <diagram id="EjOyPngvRzh5Ibf01muK" name="Page-1">
+        <mxGraphModel dx="1615" dy="1562" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="ll_cust" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#FFFFFF;strokeColor=#333333;fontStyle=1;fontSize=12;" value="Customer" vertex="1">
+                    <mxGeometry height="1010" width="140" x="30" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-9" parent="ll_cust" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="80" width="5" x="67.5" y="410" as="geometry"/>
+                </mxCell>
+                <mxCell id="ll_ui" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#FFFFFF;strokeColor=#333333;fontStyle=1;fontSize=12;" value="ZoneSelectionPage&#xa;(UI)" vertex="1">
+                    <mxGeometry height="1010" width="140" x="270" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-3" parent="ll_ui" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="240" width="5" x="67.5" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-10" parent="ll_ui" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="150" width="5" x="67.5" y="410" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-13" parent="ll_ui" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="240" width="5" x="67.5" y="660" as="geometry"/>
+                </mxCell>
+                <mxCell id="ll_store" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;outlineConnect=0;fillColor=#FFFFFF;strokeColor=#333333;fontStyle=1;fontSize=12;" value="bookingStore" vertex="1">
+                    <mxGeometry height="1010" width="140" x="510" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="bm1" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;" value="1: select Seat">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="100" y="110" as="sourcePoint"/>
+                        <mxPoint x="340" y="110" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm2" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;" value="2: count Seats For Zone">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="340" y="190" as="sourcePoint"/>
+                        <mxPoint x="580" y="190" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm3" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;dashed=1;" value="3: remaining seats">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="580" y="270" as="sourcePoint"/>
+                        <mxPoint x="340" y="270" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm4" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;dashed=1;" value="4: show countdown timer">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                        <mxPoint x="340" y="350" as="sourcePoint"/>
+                        <mxPoint x="100" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm6" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;" value="6: validate promotion">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="340" y="510" as="sourcePoint"/>
+                        <mxPoint x="580" y="510" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm7" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;dashed=1;" value="7: valid -&gt; discounted total">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="580" y="590" as="sourcePoint"/>
+                        <mxPoint x="340" y="590" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="frame_bm" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;recursiveResize=0;container=1;collapsible=0;align=left;verticalAlign=top;fontSize=11;fontStyle=1;width=50;height=20;" value="opt&amp;nbsp;" vertex="1">
+                    <mxGeometry height="270" width="660" x="10" y="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="bm8" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;" value="8: confirm Booking">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="100" y="700" as="sourcePoint"/>
+                        <mxPoint x="340" y="700" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm9" edge="1" parent="1" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;" value="9: add Booking">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="340" y="780" as="sourcePoint"/>
+                        <mxPoint x="580" y="780" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm10" edge="1" parent="1" style="html=1;endArrow=block;endFill=1;fontSize=10;strokeColor=#333333;rounded=0;dashed=1;" value="10: booking status">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="580" y="860" as="sourcePoint"/>
+                        <mxPoint x="340" y="860" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="bm11" edge="1" parent="1" style="html=1;endArrow=block;endFill=1;fontSize=10;strokeColor=#333333;rounded=0;dashed=1;" value="11: show &quot;Proceed to payment&quot;">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="340" y="940" as="sourcePoint"/>
+                        <mxPoint x="100" y="940" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-1" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;recursiveResize=0;container=1;collapsible=0;width=160;" value="Booking System" vertex="1">
+                    <mxGeometry height="1110" width="860" x="-100" y="-10" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-2" parent="hd6QHFpXs3LlmKmDsJHo-1" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="240" width="5" x="197.5" y="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-4" parent="hd6QHFpXs3LlmKmDsJHo-1" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="80" width="5" x="677.5" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="bm5" edge="1" parent="hd6QHFpXs3LlmKmDsJHo-1" source="ll_cust" style="html=1;endArrow=open;endFill=0;fontSize=10;strokeColor=#333333;rounded=0;" value="5: enter promotion code">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="202.5" y="460" as="sourcePoint"/>
+                        <mxPoint x="442.5" y="460" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-7" parent="hd6QHFpXs3LlmKmDsJHo-1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;span style=&quot;font-size: 11px; font-weight: 700; text-align: left;&quot;&gt;[customer uses a promotion code]&lt;/span&gt;" vertex="1">
+                    <mxGeometry height="30" width="210" x="197.5" y="410" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-11" parent="hd6QHFpXs3LlmKmDsJHo-1" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="80" width="5" x="677.5" y="520" as="geometry"/>
+                </mxCell>
+                <mxCell id="hd6QHFpXs3LlmKmDsJHo-12" parent="hd6QHFpXs3LlmKmDsJHo-1" style="html=1;points=[];perimeter=orthogonalPerimeter;fillColor=strokeColor;" value="" vertex="1">
+                    <mxGeometry height="250" width="5" x="197.5" y="710" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

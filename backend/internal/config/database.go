@@ -43,7 +43,8 @@ func ConnectDB() {
 		host, user, password, dbname, port, sslmode)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger:                                   logger.Default.LogMode(logger.Info),
+		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 
 	if err != nil {

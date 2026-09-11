@@ -382,7 +382,7 @@ func (h *customerAccountHandler) listTickets(c *fiber.Ctx) error {
 	user := currentCustomer(c)
 	rows := make([]customerTicketDTO, 0)
 	err := h.db.Table("tickets AS t").
-		Select(`t.ticket_id, t.booking_id, COALESCE(c.concert_id, '') AS concert_id,
+		Select(`CONCAT('TK-', t.ticket_id) AS ticket_id, t.booking_id, COALESCE(c.concert_id, '') AS concert_id,
 			COALESCE(NULLIF(t.name_concert, ''), c.concert_name, 'คอนเสิร์ต') AS concert_name,
 			COALESCE(c.start_date::text, '') AS event_date, COALESCE(c.location, '') AS location,
 			COALESCE(z.zone_type, '') AS zone, COALESCE(s.seat_row, '') AS seat_row,
@@ -391,7 +391,7 @@ func (h *customerAccountHandler) listTickets(c *fiber.Ctx) error {
 		Joins("JOIN bookings b ON b.booking_id = t.booking_id").
 		Joins("LEFT JOIN seats s ON s.seat_id = t.seat_id").
 		Joins("LEFT JOIN zones z ON z.zone_id = s.zone_id").
-		Joins("LEFT JOIN concerts c ON c.concert_id = s.concert_id").
+		Joins("LEFT JOIN concerts c ON c.concert_id = z.concert_id").
 		Where("b.user_id = ?", user.UserID).
 		Order("t.ticket_date_time DESC, t.ticket_id DESC").Scan(&rows).Error
 	if err != nil {
@@ -418,8 +418,7 @@ func (h *customerAccountHandler) listPurchases(c *fiber.Ctx) error {
 			COALESCE((SELECT p.payment_status FROM payments p WHERE p.booking_id = b.booking_id ORDER BY p.payment_id DESC LIMIT 1), '') AS payment_status,
 			COALESCE((SELECT STRING_AGG(DISTINCT t.name_concert, ', ') FROM tickets t WHERE t.booking_id = b.booking_id), 'คอนเสิร์ต') AS concert_names,
 			(SELECT COUNT(*) FROM tickets t WHERE t.booking_id = b.booking_id) AS ticket_count,
-			COALESCE((SELECT SUM(COALESCE((SELECT MAX(tc.price) FROM ticket_categories tc WHERE tc.zone_id = s.zone_id), 0))
-				FROM tickets t LEFT JOIN seats s ON s.seat_id = t.seat_id WHERE t.booking_id = b.booking_id), 0) AS total_amount`).
+			COALESCE((SELECT SUM(t.price_ticket) FROM tickets t WHERE t.booking_id = b.booking_id), 0) AS total_amount`).
 		Where("b.user_id = ?", user.UserID).
 		Order("b.booking_date DESC, b.booking_id DESC").Scan(&rows).Error
 	if err != nil {

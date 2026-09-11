@@ -207,10 +207,6 @@ func TestEmployeeAuditMetadataCoversOnlyEmployeeMutations(t *testing.T) {
 		{"PUT", "/api/concerts/C1/performance-schedules", "แก้ไข", "ตารางการแสดง"},
 		{"POST", "/api/performance-details", "เพิ่ม", "ตารางการแสดง"},
 		{"POST", "/api/artist-requirements", "เพิ่ม", "ความต้องการศิลปิน"},
-		{"POST", "/api/venue-seat/concerts", "เพิ่ม", "ผังสถานที่"},
-		{"PUT", "/api/venue-seat/concerts/C1", "แก้ไข", "ผังสถานที่"},
-		{"PUT", "/api/venue-seat/concerts/C1/layout", "แก้ไข", "ผังสถานที่"},
-		{"DELETE", "/api/venue-seat/concerts/C1/layout", "ลบ", "ผังสถานที่"},
 		{"PUT", "/api/work-plans/current", "แก้ไข", "แผนงาน"},
 		{"POST", "/api/work-plans/current/submit", "ส่งแผนงาน", "แผนงาน"},
 	} {

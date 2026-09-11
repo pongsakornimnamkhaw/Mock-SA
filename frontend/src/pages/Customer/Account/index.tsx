@@ -263,20 +263,17 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
 
                         <Divider sx={{ mb: 2.5 }} />
 
-                        {/* Tickets with QR Code */}
+                        {/* Tickets with QR Code — ต้องมาจาก booking.tickets จริงเท่านั้น ห้ามปั้นตั๋วปลอม */}
                         {(() => {
-                          const ticketsToRender = (booking.tickets && booking.tickets.length > 0)
-                            ? booking.tickets
-                            : Array.from({ length: booking.quantity || 1 }, (_, index) => {
-                                const seatLabel = booking.seats?.[index] || `${booking.zoneId}-${String(index + 1).padStart(2, '0')}`;
-                                const code = `TCK-${(booking.concertId || 'CONCERT').toUpperCase()}-${booking.zoneId}-${index + 1}-${booking.id.replace(/[^0-9]/g, '').slice(-4) || '0001'}`;
-                                return {
-                                  code,
-                                  seatLabel,
-                                  issuedAt: booking.createdAt,
-                                  qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`OCTAVIA|${code}|${booking.concertTitle}|${booking.zoneId}|${seatLabel}|${booking.customerName}`)}`,
-                                };
-                              });
+                          const ticketsToRender = booking.tickets ?? [];
+
+                          if (ticketsToRender.length === 0) {
+                            return (
+                              <Typography sx={{ color: '#83889a', fontSize: '0.9rem' }}>
+                                ไม่มีข้อมูลตั๋วสำหรับรายการนี้ กรุณาติดต่อเจ้าหน้าที่
+                              </Typography>
+                            );
+                          }
 
                           return (
                             <Box>

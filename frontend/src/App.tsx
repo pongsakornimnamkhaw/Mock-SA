@@ -30,7 +30,7 @@ import ResponsibilityPage from './pages/Employee/Responsibility'
 import ConcertStatusPage from './pages/Employee/ConcertStatus'
 import DocumentsPage from './pages/Employee/AddDocument'
 import EditHistoryPage from './pages/Employee/ConcertEditHistory'
-import SearchConcertPage from './features/venueSeats/VenueSeatsModule'
+import SearchConcertPage from './features/ticketPlanning/TicketPlanningModule'
 import ConcertSearchPage from './pages/Employee/SearchConcert'
 import ArtistDashboardPage from './pages/Employee/ArtistDashboard'
 import ArtistInfoPage from './pages/Employee/ArtistInfo'
@@ -43,7 +43,7 @@ import ArtistEditHistoryPage from './pages/Employee/ArtistEditHistory'
 
 import VenueSeatsViewPage from './pages/Customer/VenueSeatsView'
 
-import RegistrationModule from './features/registration/RegistrationModule'
+import RegistrationModule from './features/eventRegistration/EventRegistrationModule'
 
 // B6717537 - Frontend (Promotions & Employees)
 import PromotionLayout from './components/layout/PromotionLayout'
@@ -113,7 +113,7 @@ function App() {
       <Route path="/concert-status" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ConcertStatusPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/documents" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/edit-history" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/search-concert" element={<EmployeeRouteGuard module="concert_catalog"><Layout title="วางแผนหารจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/search-concert" element={<EmployeeRouteGuard module="concert_catalog"><Layout title="วางแผนจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/concert-search" element={<EmployeeRouteGuard module="concerts"><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/artist-dashboard" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/artist-info" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />

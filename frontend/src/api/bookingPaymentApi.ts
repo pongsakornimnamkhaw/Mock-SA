@@ -56,27 +56,16 @@ type BackendBookingWire = {
 
 const mapWireToBooking = (b: BackendBookingWire): BookingRecord => {
   const latestPayment = b.payments && b.payments.length > 0 ? b.payments[b.payments.length - 1] : undefined;
-  let tickets: Ticket[] | undefined = b.tickets?.map((t) => ({
+  // ตั๋วต้องมาจากข้อมูลจริงในตาราง tickets เท่านั้น — ห้ามปั้นตั๋วปลอมเมื่อ backend ไม่ส่งมา
+  // (ก่อนหน้านี้เคยมี fallback ปั้นตั๋วตอน status === 'issued' แต่ตั๋วไม่มา ถูกลบทิ้งแล้ว
+  //  เพราะ backend สร้าง Ticket จริงตั้งแต่ตอนจองเสมอ — ดู docs/superpowers/specs/2026-09-10-booking-seat-persistence.md)
+  const tickets: Ticket[] = (b.tickets ?? []).map((t) => ({
     code: t.ticket_id,
     seatLabel: t.seat_label || 'A1',
     issuedAt: t.ticket_datetime,
     qrCodeUrl: t.qr_code_data ? buildQrCodeUrl(t.qr_code_data) : buildQrCodeUrl(t.ticket_id),
   }));
-
-  // หากรายการจองออกบัตรแล้ว (issued) แต่ยังไม่มีรายการ tickets ให้สร้างตั๋วพร้อม QR Code ให้อัตโนมัติ
-  if (b.status === 'issued' && (!tickets || tickets.length === 0)) {
-    const qty = b.quantity || 1;
-    tickets = Array.from({ length: qty }, (_, index) => {
-      const seatLabel = `${b.zone_id || 'A'}-${String(index + 1).padStart(2, '0')}`;
-      const code = `TCK-${(b.concert_id || 'CONCERT').toUpperCase()}-${b.zone_id || 'A'}-${index + 1}-${b.booking_id.replace(/[^0-9]/g, '').slice(-4) || '0001'}`;
-      return {
-        code,
-        seatLabel,
-        issuedAt: b.reviewed_at || b.booking_date || new Date().toISOString(),
-        qrCodeUrl: buildQrCodeUrl(code),
-      };
-    });
-  }
+  const seats = tickets.map((t) => t.seatLabel);
 
   return {
     id: b.booking_id,
@@ -93,6 +82,7 @@ const mapWireToBooking = (b: BackendBookingWire): BookingRecord => {
     customerPhone: b.customer_phone,
     status: (b.status as BookingStatus) || 'under_review',
     createdAt: b.booking_date,
+    seats,
     tickets,
     payment: latestPayment
       ? {
