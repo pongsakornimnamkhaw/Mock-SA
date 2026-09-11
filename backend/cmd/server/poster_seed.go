@@ -17,9 +17,12 @@ var concertPosterAssets = map[string]string{
 	"neon nights vol.3":          "flux.png",
 	"acoustic sessions: bangkok": "celestial.png",
 	"neon pulse":                 "pulse.png",
+	"neon flux":                  "flux.png",
 	"neon flux festival":         "flux.png",
+	"neon flux festival 2024":    "flux.png",
 	"celestial sounds":           "celestial.png",
 	"starlight festival":         "starlight.png",
+	"star light festival":        "starlight.png",
 }
 
 func concertPosterAssetName(concertName string) (string, bool) {

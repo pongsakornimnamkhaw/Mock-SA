@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -104,6 +105,18 @@ type registrationConcertDTO struct {
 	EndDate  string `json:"endDate"`
 	Location string `json:"location"`
 	Status   string `json:"status"`
+	Cover    string `json:"cover"`
+}
+
+func registrationConcertView(concert models.Concert) (registrationConcertDTO, bool) {
+	if len(concert.Poster) == 0 && len(concert.ConcertPoster) == 0 {
+		return registrationConcertDTO{}, false
+	}
+	return registrationConcertDTO{
+		ID: concert.ConcertID, Name: concert.ConcertName, Date: concert.StartDate,
+		EndDate: concert.EndDate, Location: concert.Location, Status: concert.Status,
+		Cover: fmt.Sprintf("/api/concerts/%s/poster?v=%d", url.PathEscape(concert.ConcertID), concert.UpdatedAt.Unix()),
+	}, true
 }
 
 func RegisterRoutes(app *fiber.App, db *gorm.DB) {
@@ -124,10 +137,9 @@ func (h *RegistrationHandler) listConcerts(c *fiber.Ctx) error {
 	}
 	result := make([]registrationConcertDTO, 0, len(concerts))
 	for _, concert := range concerts {
-		result = append(result, registrationConcertDTO{
-			ID: concert.ConcertID, Name: concert.ConcertName, Date: concert.StartDate,
-			EndDate: concert.EndDate, Location: concert.Location, Status: concert.Status,
-		})
+		if view, ok := registrationConcertView(concert); ok {
+			result = append(result, view)
+		}
 	}
 	return c.JSON(result)
 }

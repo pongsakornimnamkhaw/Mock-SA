@@ -1,3 +1,5 @@
+import { apiRequest, resolveApiAssetUrl } from './sharedApi';
+
 export interface ConcertData {
   concert_id: string;
   concert_name: string;
@@ -10,6 +12,8 @@ export interface ConcertData {
   more_info?: string;
   poster_name?: string;
   poster_data?: string;
+  poster_url?: string;
+  updated_at?: string;
   artists?: string[];
 }
 
@@ -46,113 +50,21 @@ export interface HistoryItem {
   created_at: string;
 }
 
-const DEFAULT_CONCERTS: ConcertData[] = [
-  {
-    concert_id: "CC0001",
-    concert_name: "Riverside Sound Festival",
-    start_date: "2026-10-16",
-    end_date: "2026-10-18",
-    start_time: "18:00",
-    end_time: "23:30",
-    location: "ธันเดอร์โดม เมืองทองธานี",
-    status: "ยืนยันแล้ว",
-    artists: ["PUN", "YOUNGGU"],
-  },
-  {
-    concert_id: "CC0002",
-    concert_name: "Neon Nights Vol.3",
-    start_date: "2026-11-16",
-    end_date: "2026-11-18",
-    start_time: "18:00",
-    end_time: "23:30",
-    location: "MCC Hall เดอะมอลล์บางกะปิ",
-    status: "เลื่อนการจัด",
-    artists: ["Slot Machine"],
-  },
-  {
-    concert_id: "CC0003",
-    concert_name: "Acoustic Sessions: Bangkok",
-    start_date: "2026-12-16",
-    end_date: "2026-12-18",
-    start_time: "18:00",
-    end_time: "23:30",
-    location: "Lido Connect",
-    status: "ยกเลิกการจัด",
-    artists: ["URBOYTJ"],
-  },
-];
-
-const API_BASE = 'http://localhost:8080/api';
-
 async function request(endpoint: string, options: RequestInit = {}): Promise<any> {
-  let url = `${API_BASE}${endpoint}`;
-  try {
-    let res = await fetch(url, options);
-    if (!res.ok) {
-      let errText = '';
-      try {
-        const errJson = await res.json();
-        errText = errJson.error || errJson.message || JSON.stringify(errJson);
-      } catch {
-        errText = await res.text();
-      }
-      throw new Error(errText || `Request failed with status ${res.status}`);
-    }
-
-    if (res.status === 204) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : {};
-  } catch (err: any) {
-    // Try fallback to relative proxy path /api
-    const fallbackUrl = `/api${endpoint}`;
-    try {
-      const fallbackRes = await fetch(fallbackUrl, options);
-      if (!fallbackRes.ok) {
-        let errText = '';
-        try {
-          const errJson = await fallbackRes.json();
-          errText = errJson.error || errJson.message;
-        } catch {
-          errText = await fallbackRes.text();
-        }
-        throw new Error(errText || `Request failed with status ${fallbackRes.status}`);
-      }
-      if (fallbackRes.status === 204) return null;
-      const text = await fallbackRes.text();
-      return text ? JSON.parse(text) : {};
-    } catch {
-      throw err;
-    }
-  }
+  return apiRequest(endpoint, options);
 }
 
 export const concertApi = {
-  // 1. Get list of concerts (with default fallback)
+  // 1. Get list of concerts from the database
   async getConcerts(): Promise<ConcertData[]> {
-    try {
-      const data = await request('/concerts');
-      if (Array.isArray(data) && data.length > 0) {
-        return data;
-      }
-      return DEFAULT_CONCERTS;
-    } catch {
-      return DEFAULT_CONCERTS;
-    }
+    const data = await request('/concerts');
+    return Array.isArray(data) ? data.map((concert) => ({ ...concert, poster_url: resolveApiAssetUrl(concert.poster_url) })) : [];
   },
 
   // 2. Get concert details
   async getConcert(id: string): Promise<ConcertData> {
-    try {
-      const data = await request(`/concerts/${encodeURIComponent(id)}`);
-      if (data && data.concert_id) return data;
-      const fallback = DEFAULT_CONCERTS.find((c) => c.concert_id === id);
-      if (fallback) return fallback;
-      return data;
-    } catch (err) {
-      const fallback = DEFAULT_CONCERTS.find((c) => c.concert_id === id);
-      if (fallback) return fallback;
-      throw err;
-    }
+    const data = await request(`/concerts/${encodeURIComponent(id)}`);
+    return { ...data, poster_url: resolveApiAssetUrl(data.poster_url) };
   },
 
   // 3. Create concert (AddConcert)

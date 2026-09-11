@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -86,7 +85,7 @@ func reportConcertBase(concert models.Concert) concertReport {
 		Location:   concert.Location,
 		Status:     reportStatus(concert.Status),
 		LastUpdate: concert.UpdatedAt,
-		PosterURL:  fmt.Sprintf("/api/concerts/%s/poster", concert.ConcertID),
+		PosterURL:  concertPosterURL(concert),
 		Zones:      []reportZone{},
 	}
 }

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export interface ArtistData { artist_id: string; artist_name: string; artist_type: string; record_label: string; official_contact: string; coordinator_name: string; coordinator_phone: string; coordinator_email: string; coordinator_info?: string; more_info?: string; status?: string; }
 export interface InvitationData { concert_id: string; concert_name: string; start_date: string; end_date: string; start_time: string; end_time: string; location: string; invitation_status: string; }

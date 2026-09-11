@@ -16,11 +16,11 @@ function ConcertPicker({ onSelect }) {
   const [loading,setLoading] = useState(true)
   const [error,setError] = useState('')
   useEffect(() => { let active=true; registrationApi.listConcerts().then(rows => active && setConcerts(Array.isArray(rows)?rows:[])).catch(() => active && setError('ไม่สามารถโหลดรายการคอนเสิร์ตได้')).finally(() => active && setLoading(false)); return () => { active=false } },[])
-  const filtered = useMemo(() => concerts.filter(item => `${item.name} ${item.location}`.toLowerCase().includes(query.toLowerCase())),[concerts,query])
+  const filtered = useMemo(() => concerts.filter(item => item.cover && `${item.name} ${item.location}`.toLowerCase().includes(query.toLowerCase())),[concerts,query])
   return <main className="reg-page reg-select-page">
     <header className="reg-page-heading"><div><span>EVENT CHECK-IN</span><h1>เลือกคอนเสิร์ต</h1><p>เลือกคอนเสิร์ตเพื่อจัดการการลงทะเบียนเข้างาน</p></div></header>
     <section className="reg-search-card"><label>ค้นหาคอนเสิร์ต<input value={query} onChange={event=>setQuery(event.target.value)} placeholder="ชื่อคอนเสิร์ต หรือสถานที่..."/></label></section>
-    {loading ? <LoadingState/> : error ? <div className="reg-empty">{error}</div> : <section className="reg-concert-list">{filtered.map(concert => <article key={concert.id}><div className="reg-concert-poster">{concert.cover?<img src={concert.cover} alt=""/>:<><small>LIVE</small><b>{concert.name}</b></>}</div><div><h2>{concert.name}</h2><p>{concert.location||'-'} · {concert.date||'-'}</p></div><span className="reg-plan-pill">{concert.status||'ไม่ระบุสถานะ'}</span><button type="button" onClick={()=>onSelect(concert)}>เลือกคอนเสิร์ต</button></article>)}{!filtered.length&&<div className="reg-empty">ไม่พบคอนเสิร์ต</div>}</section>}
+    {loading ? <LoadingState/> : error ? <div className="reg-empty">{error}</div> : <section className="reg-concert-list">{filtered.map(concert => <article key={concert.id}><div className="reg-concert-poster"><img src={concert.cover} alt={concert.name}/></div><div><h2>{concert.name}</h2><p>{concert.location||'-'} · {concert.date||'-'}</p></div><span className="reg-plan-pill">{concert.status||'ไม่ระบุสถานะ'}</span><button type="button" onClick={()=>onSelect(concert)}>เลือกคอนเสิร์ต</button></article>)}{!filtered.length&&<div className="reg-empty">ไม่พบคอนเสิร์ต</div>}</section>}
   </main>
 }
 

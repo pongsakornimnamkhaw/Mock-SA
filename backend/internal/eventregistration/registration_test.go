@@ -4,10 +4,26 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"backend/internal/models"
 	"github.com/gofiber/fiber/v2"
 )
+
+func TestRegistrationConcertViewUsesDatabasePosterAndSkipsMissingImages(t *testing.T) {
+	concert := models.Concert{
+		ConcertID: "CC0002", ConcertName: "Neon Nights Vol.3", Poster: []byte("png"),
+		BaseModel: models.BaseModel{UpdatedAt: time.Unix(1789062000, 0)},
+	}
+	view, ok := registrationConcertView(concert)
+	if !ok || view.Cover != "/api/concerts/CC0002/poster?v=1789062000" {
+		t.Fatalf("registrationConcertView() = %+v, %v", view, ok)
+	}
+	concert.Poster = nil
+	if _, ok := registrationConcertView(concert); ok {
+		t.Fatal("concert without a poster must be hidden")
+	}
+}
 
 func TestCheckInRequestAcceptsNumericAndDisplayTicketIDs(t *testing.T) {
 	for _, payload := range []string{

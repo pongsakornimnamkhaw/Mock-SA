@@ -26,9 +26,12 @@ func main() {
 	if err := models.MigrateAllModels(config.DB); err != nil {
 		log.Fatalf("Failed to auto-migrate models: %v\n", err)
 	}
-	seededPosters, err := ensureConcertPosters(config.DB)
+	seededPosters, err := ensureStartupConcertData(
+		func() error { return handlers.EnsureDefaultConcertData(config.DB) },
+		func() (int, error) { return ensureConcertPosters(config.DB) },
+	)
 	if err != nil {
-		log.Fatalf("Failed to seed concert posters: %v\n", err)
+		log.Fatalf("Failed to prepare concert seed data: %v\n", err)
 	}
 	if seededPosters > 0 {
 		log.Printf("Seeded concert posters for %d concert(s)", seededPosters)
@@ -63,6 +66,7 @@ func main() {
 	})
 	ticketplanning.RegisterRoutes(app, config.DB)
 	eventregistration.RegisterRoutes(app, config.DB)
+	handlers.RegisterDashboardRoutes(app, config.DB)
 	handlers.RegisterConcertRoutes(app, config.DB)
 	handlers.RegisterArtistRoutes(app, config.DB)
 	handlers.RegisterManagementRoutes(app, config.DB)
@@ -80,6 +84,13 @@ func main() {
 
 	log.Printf("Server is starting on port %s", port)
 	log.Fatal(app.Listen(":" + port))
+}
+
+func ensureStartupConcertData(seedConcerts func() error, seedPosters func() (int, error)) (int, error) {
+	if err := seedConcerts(); err != nil {
+		return 0, err
+	}
+	return seedPosters()
 }
 
 func serverCORSConfig() cors.Config {

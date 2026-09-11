@@ -47,9 +47,6 @@ func dateOnly(value string) string {
 func RegisterConcertRoutes(app *fiber.App, db *gorm.DB) {
 	handler := &ConcertHandler{db: db}
 
-	// Auto seed default concerts if empty
-	handler.seedDefaultData()
-
 	view := requireEmployeeModule(db, access.Concerts, access.View)
 	edit := requireEmployeeModule(db, access.Concerts, access.Edit)
 	api := app.Group("/api")
@@ -82,9 +79,17 @@ func RegisterConcertRoutes(app *fiber.App, db *gorm.DB) {
 	api.Get("/concerts/:id/history", view, handler.listHistoryByConcert)
 }
 
-func (h *ConcertHandler) seedDefaultData() {
+func EnsureDefaultConcertData(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		return (&ConcertHandler{db: tx}).seedDefaultData()
+	})
+}
+
+func (h *ConcertHandler) seedDefaultData() error {
 	var count int64
-	h.db.Model(&models.Concert{}).Count(&count)
+	if err := h.db.Model(&models.Concert{}).Count(&count).Error; err != nil {
+		return err
+	}
 	if count == 0 {
 		c1 := models.Concert{
 			ConcertID:   "CC0001",
@@ -120,45 +125,57 @@ func (h *ConcertHandler) seedDefaultData() {
 			MoreInfo:    "คอนเสิร์ตอะคูสติกบรรยากาศสบายๆ",
 		}
 
-		h.db.Create(&c1)
-		h.db.Create(&c2)
-		h.db.Create(&c3)
+		for _, concert := range []*models.Concert{&c1, &c2, &c3} {
+			if err := h.db.Create(concert).Error; err != nil {
+				return err
+			}
+		}
 
 		// Seed initial history
-		h.db.Create(&models.ModifiedHistory{
+		if err := h.db.Create(&models.ModifiedHistory{
 			HistoryID:   "MH0001",
 			ConcertID:   "CC0001",
 			ActionType:  "CREATE",
 			Description: "สร้างรายการคอนเสิร์ต Riverside Sound Festival",
 			CreatedAt:   time.Now().Add(-72 * time.Hour),
-		})
-		h.db.Create(&models.ModifiedHistory{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.ModifiedHistory{
 			HistoryID:   "MH0002",
 			ConcertID:   "CC0001",
 			ActionType:  "UPDATE",
 			Description: "เพิ่มรายชื่อศิลปิน PUN และ YOUNGGU",
 			CreatedAt:   time.Now().Add(-48 * time.Hour),
-		})
-		h.db.Create(&models.ModifiedHistory{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.ModifiedHistory{
 			HistoryID:   "MH0003",
 			ConcertID:   "CC0001",
 			ActionType:  "UPDATE",
 			Description: "อัปเดตสถานะการติดต่อผู้สนับสนุนเป็นสำเร็จแล้ว",
 			CreatedAt:   time.Now().Add(-24 * time.Hour),
-		})
-		h.db.Create(&models.ModifiedHistory{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.ModifiedHistory{
 			HistoryID:   "MH0004",
 			ConcertID:   "CC0001",
 			ActionType:  "UPDATE",
 			Description: "แก้ไขสถานที่จัดงานเป็น ธันเดอร์โดม เมืองทองธานี",
 			CreatedAt:   time.Now().Add(-2 * time.Hour),
-		})
+		}).Error; err != nil {
+			return err
+		}
 	}
 
 	var taskCount int64
-	h.db.Model(&models.Task{}).Count(&taskCount)
+	if err := h.db.Model(&models.Task{}).Count(&taskCount).Error; err != nil {
+		return err
+	}
 	if taskCount == 0 {
-		h.db.Create(&models.Task{
+		if err := h.db.Create(&models.Task{
 			TaskID:           "TS0001",
 			ConcertID:        "CC0001",
 			TaskName:         "ประสานงานขอใบอนุญาตและสถานที่",
@@ -167,8 +184,10 @@ func (h *ConcertHandler) seedDefaultData() {
 			Department:       "ฝ่ายสถานที่",
 			TaskStatus:       "รอดำเนินการ",
 			MoreInfo:         "ติดต่อสำนักงานเขตและผู้ดูแลพื้นที่",
-		})
-		h.db.Create(&models.Task{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.Task{
 			TaskID:           "TS0002",
 			ConcertID:        "CC0001",
 			TaskName:         "จัดเตรียมระบบไฟและเครื่องเสียง",
@@ -177,8 +196,10 @@ func (h *ConcertHandler) seedDefaultData() {
 			Department:       "ฝ่ายเทคนิค",
 			TaskStatus:       "รอดำเนินการ",
 			MoreInfo:         "เช็คระบบไมค์และลำโพงเวทีหลัก",
-		})
-		h.db.Create(&models.Task{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.Task{
 			TaskID:           "TS0003",
 			ConcertID:        "CC0001",
 			TaskName:         "ดูแลรับรองศิลปินและห้องพัก",
@@ -187,56 +208,97 @@ func (h *ConcertHandler) seedDefaultData() {
 			Department:       "ฝ่ายดูแลศิลปิน",
 			TaskStatus:       "รอดำเนินการ",
 			MoreInfo:         "จัดเตรียมอาหารและเครื่องดื่มตามคำขอ",
-		})
+		}).Error; err != nil {
+			return err
+		}
 	}
 
 	var docCount int64
-	h.db.Model(&models.ConcertDocument{}).Count(&docCount)
+	if err := h.db.Model(&models.ConcertDocument{}).Count(&docCount).Error; err != nil {
+		return err
+	}
 	if docCount == 0 {
-		h.db.Create(&models.ConcertDocument{
+		if err := h.db.Create(&models.ConcertDocument{
 			DocumentID:   "CD0001",
 			ConcertID:    "CC0001",
 			Category:     "เอกสารขอเข้าใช้สถานที่",
 			DocumentName: "เอกสารขออนุญาตใช้พื้นที่ธันเดอร์โดม เมืองทองธานี.pdf",
 			DocumentFile: []byte("sample pdf file"),
-		})
-		h.db.Create(&models.ConcertDocument{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.ConcertDocument{
 			DocumentID:   "CD0002",
 			ConcertID:    "CC0001",
 			Category:     "สัญญาการจ้างศิลปิน",
 			DocumentName: "สัญญาการจ้างและการแสดงศิลปิน PUN และ YOUNGGU.pdf",
 			DocumentFile: []byte("sample pdf file"),
-		})
-		h.db.Create(&models.ConcertDocument{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.ConcertDocument{
 			DocumentID:   "CD0003",
 			ConcertID:    "CC0001",
 			Category:     "สัญญาผู้สนับสนุน",
 			DocumentName: "บันทึกข้อตกลงผู้สนับสนุนหลักเครื่องดื่มชูกำลัง.pdf",
 			DocumentFile: []byte("sample pdf file"),
-		})
-		h.db.Create(&models.ConcertDocument{
+		}).Error; err != nil {
+			return err
+		}
+		if err := h.db.Create(&models.ConcertDocument{
 			DocumentID:   "CD0004",
 			ConcertID:    "CC0002",
 			Category:     "เอกสารขอเข้าใช้สถานที่",
 			DocumentName: "เอกสารขอเช่าพื้นที่ MCC Hall เดอะมอลล์บางกะปิ.pdf",
 			DocumentFile: []byte("sample pdf file"),
-		})
+		}).Error; err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 type concertResponse struct {
-	ConcertID   string   `json:"concert_id"`
-	ConcertName string   `json:"concert_name"`
-	StartDate   string   `json:"start_date"`
-	EndDate     string   `json:"end_date"`
-	StartTime   string   `json:"start_time"`
-	EndTime     string   `json:"end_time"`
-	Location    string   `json:"location"`
-	Status      string   `json:"status"`
-	MoreInfo    string   `json:"more_info"`
-	PosterName  string   `json:"poster_name"`
-	PosterData  string   `json:"poster_data,omitempty"`
-	Artists     []string `json:"artists"`
+	ConcertID   string    `json:"concert_id"`
+	ConcertName string    `json:"concert_name"`
+	StartDate   string    `json:"start_date"`
+	EndDate     string    `json:"end_date"`
+	StartTime   string    `json:"start_time"`
+	EndTime     string    `json:"end_time"`
+	Location    string    `json:"location"`
+	Status      string    `json:"status"`
+	MoreInfo    string    `json:"more_info"`
+	PosterName  string    `json:"poster_name"`
+	PosterData  string    `json:"poster_data,omitempty"`
+	PosterURL   string    `json:"poster_url"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Artists     []string  `json:"artists"`
+}
+
+func concertPosterBytes(concert models.Concert) []byte {
+	if len(concert.Poster) > 0 {
+		return concert.Poster
+	}
+	return concert.ConcertPoster
+}
+
+func concertPosterURL(concert models.Concert) string {
+	if len(concertPosterBytes(concert)) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("/api/concerts/%s/poster?v=%d", url.PathEscape(concert.ConcertID), concert.UpdatedAt.Unix())
+}
+
+func decodePosterData(value string) ([]byte, error) {
+	data := strings.TrimSpace(value)
+	if index := strings.Index(data, ","); index >= 0 {
+		data = data[index+1:]
+	}
+	decoded, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return nil, fmt.Errorf("invalid poster base64: %w", err)
+	}
+	return decoded, nil
 }
 
 func (h *ConcertHandler) listConcerts(c *fiber.Ctx) error {
@@ -264,6 +326,8 @@ func (h *ConcertHandler) listConcerts(c *fiber.Ctx) error {
 			Location:    concert.Location,
 			Status:      concert.Status,
 			MoreInfo:    concert.MoreInfo,
+			PosterURL:   concertPosterURL(concert),
+			UpdatedAt:   concert.UpdatedAt,
 			Artists:     artists,
 		})
 	}
@@ -303,6 +367,8 @@ func (h *ConcertHandler) getConcert(c *fiber.Ctx) error {
 		Status:      concert.Status,
 		MoreInfo:    concert.MoreInfo,
 		PosterData:  posterBase64,
+		PosterURL:   concertPosterURL(concert),
+		UpdatedAt:   concert.UpdatedAt,
 		Artists:     artists,
 	})
 }
@@ -351,12 +417,11 @@ func (h *ConcertHandler) createConcert(c *fiber.Ctx) error {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 		}
 		if req.PosterData != "" {
-			// Strip prefix if any
-			data := req.PosterData
-			if idx := strings.Index(data, ","); idx != -1 {
-				data = data[idx+1:]
+			var err error
+			posterBytes, err = decodePosterData(req.PosterData)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 			}
-			posterBytes, _ = base64.StdEncoding.DecodeString(data)
 		}
 	}
 
@@ -439,6 +504,14 @@ func (h *ConcertHandler) updateConcert(c *fiber.Ctx) error {
 	}
 	if req.MoreInfo != "" {
 		concert.MoreInfo = req.MoreInfo
+	}
+	if req.PosterData != "" {
+		posterBytes, err := decodePosterData(req.PosterData)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		concert.Poster = posterBytes
+		concert.ConcertPoster = append([]byte(nil), posterBytes...)
 	}
 
 	if err := h.db.Save(&concert).Error; err != nil {

@@ -25,6 +25,7 @@ import {
   Delete as DeleteIcon
 } from '@mui/icons-material';
 import { concertApi, ConcertData, DocumentItem } from '@/api/concertApi';
+import { resolveApiAssetUrl } from '@/api/sharedApi';
 import ConfirmDeleteDialog from '@/components/common/ConfirmDeleteDialog';
 import { useModuleAccess } from '@/access/useModuleAccess';
 import { useLocation } from 'react-router-dom';
@@ -153,7 +154,7 @@ const DocumentsPage = () => {
   };
 
   const handleOpenDocument = (doc: DocumentItem) => {
-    const fileUrl = doc.file_url || `http://localhost:8080/api/documents/${doc.document_id}/file`;
+    const fileUrl = resolveApiAssetUrl(doc.file_url || `/api/documents/${doc.document_id}/file`);
     window.open(fileUrl, '_blank');
   };
 

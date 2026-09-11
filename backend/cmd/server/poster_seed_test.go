@@ -11,8 +11,13 @@ func TestConcertPosterAssetNameUsesCanonicalConcertNames(t *testing.T) {
 		"Riverside Sound Festival":   "pulse.png",
 		" Neon Nights Vol.3 ":        "flux.png",
 		"ACOUSTIC SESSIONS: BANGKOK": "celestial.png",
+		"Neon Pulse":                 "pulse.png",
+		"Neon Flux":                  "flux.png",
+		"Neon Flux Festival":         "flux.png",
+		"Neon Flux Festival 2024":    "flux.png",
 		"Celestial Sounds":           "celestial.png",
 		"Starlight Festival":         "starlight.png",
+		"Star Light Festival":        "starlight.png",
 	}
 	for name, want := range cases {
 		got, ok := concertPosterAssetName(name)

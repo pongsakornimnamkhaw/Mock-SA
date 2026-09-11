@@ -1,8 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
+const assetUrl = value => {
+  if (!value || /^https?:\/\//i.test(value) || !API_BASE.startsWith('http')) return value || ''
+  try { return new URL(value, new URL(API_BASE).origin).toString() } catch { return value }
+}
+
 const request = async (path, options = {}) => {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    credentials: 'include',
     ...options,
   })
   const data = response.status === 204 ? null : await response.json().catch(() => null)
@@ -16,7 +22,7 @@ const request = async (path, options = {}) => {
 }
 
 export const registrationApi = {
-  listConcerts: () => request('/event-registration/concerts'),
+  listConcerts: async () => (await request('/event-registration/concerts')).map(concert => ({ ...concert, cover: assetUrl(concert.cover) })),
   dashboard: concertId => request(`/event-registration/concerts/${encodeURIComponent(concertId)}/dashboard`),
   lookupTicket: (ticketId, concertId) => request(`/event-registration/tickets/${encodeURIComponent(ticketId)}?concertId=${encodeURIComponent(concertId)}`),
   checkIn: (ticketId, gateId, concertId) => request('/event-registration/check-ins', {
