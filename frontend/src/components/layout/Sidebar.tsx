@@ -195,7 +195,7 @@ export default function Sidebar() {
   const concertSubItems = [
     { label: 'เพิ่มข้อมูลคอนเสิร์ต', route: '/add-concert' },
     { label: 'แก้ไขข้อมูลคอนเสิร์ต', route: '/edit-concert' },
-    { label: 'ผู้รับผิดชอบคอนเสิร์ต', route: '/responsibility' },
+    { label: 'มอบหมายงาน', route: '/responsibility' },
     { label: 'สถานะคอนเสิร์ต', route: '/concert-status' },
     { label: 'แบบเอกสาร', route: '/documents' },
     { label: 'ประวัติการแก้ไข', route: '/edit-history' },
