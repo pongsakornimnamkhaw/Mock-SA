@@ -2,7 +2,7 @@ import { Box, Typography, Container, Link, IconButton, Paper, Stepper, Step, Ste
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import Logo from '@/components/common/Logo';
 import { useNavigate, Link as RouterLink, useParams } from 'react-router-dom';
-import { pulse, flux, celestial, starlight } from '@/assets/Poster';
+import { pulse, flux, celestial, starlight } from '@/assets/poster';
 import { useEffect, useState } from 'react';
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import { formatThaiDate } from '@/utils/customerPromotion';

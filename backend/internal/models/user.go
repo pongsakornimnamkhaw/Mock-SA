@@ -8,22 +8,24 @@ import (
 
 // User - ผู้ใช้งานในระบบ
 type User struct {
-	UserID           string    `gorm:"primaryKey;type:varchar(50);not null" json:"user_id"`
-	FirstName        string    `gorm:"type:varchar(100);not null" json:"first_name"`
-	LastName         string    `gorm:"type:varchar(100);not null" json:"last_name"`
-	DateOfBirth      time.Time `gorm:"type:date;not null" json:"date_of_birth"`
-	Gender           string    `gorm:"type:varchar(20);not null" json:"gender"`
-	PhoneNumber      string    `gorm:"type:varchar(20);not null" json:"phone_number"`
-	Address          string    `gorm:"type:text" json:"address"`
-	Email            string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
-	PasswordHash     string    `gorm:"type:text;not null;default:''" json:"-"`
-	UserType         string    `gorm:"type:varchar(50);not null" json:"user_type"`
-	Role             string    `gorm:"type:varchar(50);not null" json:"role"`
-	CompanyName      string    `gorm:"type:varchar(255)" json:"company_name"`
-	EmployeeCode     *string   `gorm:"type:varchar(50);uniqueIndex" json:"employee_code,omitempty"`
-	Department       string    `gorm:"type:varchar(100)" json:"department"`
-	EmployeeInactive bool      `gorm:"not null;default:false" json:"employee_inactive"`
-	PersonnelType    string    `gorm:"type:varchar(20)" json:"personnel_type"`
+	UserID             string    `gorm:"primaryKey;type:varchar(50);not null" json:"user_id"`
+	FirstName          string    `gorm:"type:varchar(100);not null" json:"first_name"`
+	LastName           string    `gorm:"type:varchar(100);not null" json:"last_name"`
+	DateOfBirth        time.Time `gorm:"type:date;not null" json:"date_of_birth"`
+	Gender             string    `gorm:"type:varchar(20);not null" json:"gender"`
+	PhoneNumber        string    `gorm:"type:varchar(20);not null" json:"phone_number"`
+	Address            string    `gorm:"type:text" json:"address"`
+	Email              string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
+	PasswordHash       string    `gorm:"type:text;not null;default:''" json:"-"`
+	UserType           string    `gorm:"type:varchar(50);not null" json:"user_type"`
+	Role               string    `gorm:"type:varchar(50);not null" json:"role"`
+	JobRole            string    `gorm:"type:varchar(50);not null;default:'staff'" json:"job_role"`
+	CompanyName        string    `gorm:"type:varchar(255)" json:"company_name"`
+	EmployeeCode       *string   `gorm:"type:varchar(50);uniqueIndex" json:"employee_code,omitempty"`
+	Department         string    `gorm:"type:varchar(100)" json:"department"`
+	EmployeeInactive   bool      `gorm:"not null;default:false" json:"employee_inactive"`
+	MustChangePassword bool      `gorm:"not null;default:false" json:"must_change_password"`
+	PersonnelType      string    `gorm:"type:varchar(20)" json:"personnel_type"`
 
 	// Relations
 	Permissions        []Permission        `gorm:"foreignKey:UserID" json:"permissions,omitempty"`

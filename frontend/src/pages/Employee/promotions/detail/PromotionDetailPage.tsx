@@ -37,10 +37,12 @@ import StatusBadge from '../../../../components/ui/StatusBadge';
 import Pagination from '../../../../components/ui/Pagination';
 import { useNavigate, useParams } from 'react-router-dom';
 import ConfirmDeleteDialog from '../../../../components/common/ConfirmDeleteDialog';
+import { useModuleAccess } from '../../../../access/useModuleAccess';
 
 const PAGE_SIZE = 5;
 
 export default function PromotionDetailPage() {
+  const { canEdit } = useModuleAccess('promotions');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [promo, setPromo] = useState<Promotion | null>(null);
@@ -190,7 +192,7 @@ export default function PromotionDetailPage() {
             variant="outlined"
             color="error"
             startIcon={<DeleteIcon />}
-            disabled={deleting}
+            disabled={deleting || !canEdit}
             onClick={() => setDeleteOpen(true)}
             sx={{ borderColor: '#ef4444', color: '#ef4444' }}
           >
@@ -199,7 +201,7 @@ export default function PromotionDetailPage() {
           <Button
             variant="contained"
             startIcon={<EditIcon />}
-            disabled={deleting}
+            disabled={deleting || !canEdit}
             onClick={() => navigate(`/promotions/${promo.promotion_id}/edit`)}
             sx={{
               background: 'linear-gradient(135deg, #22c55e, #16a34a)',

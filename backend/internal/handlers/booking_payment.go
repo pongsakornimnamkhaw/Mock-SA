@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -33,10 +34,10 @@ func RegisterBookingPaymentRoutes(app *fiber.App, db *gorm.DB) {
 	app.Get("/api/bookings/:id/slip", h.getSlipImage)
 
 	// Sales Officer Endpoints (B6728786: final document SA.docx U4, UP2, UP3, UP5)
-	app.Get("/api/sales/bookings", h.getSalesBookings)
-	app.Post("/api/sales/bookings/:id/approve", h.approveBooking)
-	app.Post("/api/sales/bookings/:id/reject", h.rejectBooking)
-	app.Post("/api/sales/bookings/:id/resend", h.resendTickets)
+	app.Get("/api/sales/bookings", requireEmployeeModule(db, access.Sales, access.View), h.getSalesBookings)
+	app.Post("/api/sales/bookings/:id/approve", requireEmployeeModule(db, access.Sales, access.Edit), h.approveBooking)
+	app.Post("/api/sales/bookings/:id/reject", requireEmployeeModule(db, access.Sales, access.Edit), h.rejectBooking)
+	app.Post("/api/sales/bookings/:id/resend", requireEmployeeModule(db, access.Sales, access.Edit), h.resendTickets)
 }
 
 // Request & DTO Structs

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,51 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+func TestEmployeeAuthRequiresPasswordSetupWithoutSession(t *testing.T) {
+	db := managementTestDB(t)
+	app := newEmployeeAccountTestApp(db)
+	user := employeeAccountTestUser(t, db, "AUTH_SETUP", models.PersonnelTypeInternal, "setup@example.test", "0812345678", "0812345678")
+	if err := db.Model(&user).Update("must_change_password", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	response := employeeAccountTestRequest(t, app, "POST", "/api/employee/auth/login", map[string]string{"username": user.Email, "password": user.PhoneNumber}, nil, 200)
+	defer response.Body.Close()
+	var body struct {
+		Requires bool   `json:"requires_password_setup"`
+		Token    string `json:"setup_token"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.Requires || len(body.Token) != 64 {
+		t.Fatalf("unexpected setup response: %+v", body)
+	}
+	if len(response.Cookies()) != 0 {
+		t.Fatal("first-login setup must not create an employee session")
+	}
+}
+
+func TestEmployeeAuthRejectsInactiveEmployee(t *testing.T) {
+	db := managementTestDB(t)
+	app := newEmployeeAccountTestApp(db)
+	user := employeeAccountTestUser(t, db, "AUTH_INACTIVE", models.PersonnelTypeInternal, "inactive@example.test", "0811111122", "AccountPassword123!")
+	if err := db.Model(&user).Update("employee_inactive", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	employeeAccountTestRequest(t, app, "POST", "/api/employee/auth/login", map[string]string{"username": user.Email, "password": "AccountPassword123!"}, nil, http.StatusUnauthorized).Body.Close()
+}
+
+func TestEmployeePasswordSetupTokenHashIsNotRawToken(t *testing.T) {
+	raw := strings.Repeat("a", 64)
+	hash, err := employeePasswordSetupTokenHash(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash == raw || len(hash) != 64 {
+		t.Fatalf("unsafe token hash %q", hash)
+	}
+}
 
 func TestEmployeeAuthRejectsDemoPasswordBypass(t *testing.T) {
 	hash, err := bcrypt.GenerateFromPassword([]byte("AccountPassword123!"), bcrypt.MinCost)
@@ -108,6 +154,24 @@ func TestEmployeeAuthSyntheticAliasCannotLoginAsRealUser(t *testing.T) {
 	}
 	if sessions != 0 {
 		t.Fatal("synthetic alias created a real account session")
+	}
+}
+
+func TestEmployeeAuthRejectsSyntheticAliasWithoutPersistedAccount(t *testing.T) {
+	db := managementTestDB(t)
+	app := newEmployeeAccountTestApp(db)
+	response := employeeAccountTestRequest(t, app, "POST", "/api/employee/auth/login", map[string]string{
+		"username": "missing-sales-alias",
+		"password": "AnyPassword123!",
+	}, nil, 401)
+	response.Body.Close()
+
+	var logs int64
+	if err := db.Model(&models.EmpActivityLogs{}).Where("user_id = ?", "EMP-B6728786").Count(&logs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if logs != 0 {
+		t.Fatal("rejected synthetic alias left orphan employee activity rows")
 	}
 }
 

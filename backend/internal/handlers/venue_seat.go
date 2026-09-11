@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -21,12 +22,14 @@ type VenueSeatHandler struct {
 func RegisterVenueSeatRoutes(app *fiber.App, db *gorm.DB) {
 	handler := &VenueSeatHandler{db: db}
 	group := app.Group("/api/venue-seat")
-	group.Get("/concerts", handler.listConcerts)
-	group.Get("/concerts/:id", handler.getConcert)
-	group.Post("/concerts", handler.createConcert)
-	group.Put("/concerts/:id", handler.updateConcert)
-	group.Put("/concerts/:id/layout", handler.saveLayout)
-	group.Delete("/concerts/:id/layout", handler.clearLayout)
+	view := requireEmployeeModule(db, access.Venues, access.View)
+	edit := requireEmployeeModule(db, access.Venues, access.Edit)
+	group.Get("/concerts", view, handler.listConcerts)
+	group.Get("/concerts/:id", view, handler.getConcert)
+	group.Post("/concerts", edit, handler.createConcert)
+	group.Put("/concerts/:id", edit, handler.updateConcert)
+	group.Put("/concerts/:id/layout", edit, handler.saveLayout)
+	group.Delete("/concerts/:id/layout", edit, handler.clearLayout)
 }
 
 type roundDTO struct {

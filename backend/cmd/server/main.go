@@ -7,6 +7,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/handlers"
 	"backend/internal/models"
+	"backend/internal/seed"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -23,6 +24,17 @@ func main() {
 	if err := models.MigrateAllModels(config.DB); err != nil {
 		log.Fatalf("Failed to auto-migrate models: %v\n", err)
 	}
+	if err := seed.EnsureDemoAccounts(config.DB); err != nil {
+		log.Fatalf("Failed to seed demo accounts: %v\n", err)
+	}
+	repairedEmployees, err := seed.RepairMissingEmployeePasswords(config.DB)
+	if err != nil {
+		log.Fatalf("Failed to repair employee initial passwords: %v\n", err)
+	}
+	if repairedEmployees > 0 {
+		log.Printf("Repaired initial passwords for %d existing employee account(s)", repairedEmployees)
+	}
+	log.Printf("Demo accounts ready: 10 employees + 10 customers (see test.md)")
 
 	// 3. Initialize Fiber App
 	app := fiber.New(fiber.Config{BodyLimit: 20 * 1024 * 1024})
@@ -63,7 +75,7 @@ func main() {
 func serverCORSConfig() cors.Config {
 	return cors.Config{
 		AllowOrigins:     "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:3000",
-		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Employee-Reset-Token",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Employee-Reset-Token, X-Employee-Setup-Token",
 		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		AllowCredentials: true,
 	}

@@ -7,12 +7,16 @@ func MigrateAllModels(db *gorm.DB) error {
 	if err := prepareSeatColumnTypes(db); err != nil {
 		return err
 	}
+	if err := detachOrphanEmployeeActivityUsers(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(
 		// User & Access
 		&User{},
 		&CusActivityLogs{},
 		&EmpActivityLogs{},
 		&EmployeePasswordResetRequest{},
+		&EmployeePasswordSetupToken{},
 		&Permission{},
 		&Inquiry{},
 
@@ -72,6 +76,24 @@ func MigrateAllModels(db *gorm.DB) error {
 		return err
 	}
 	return normalizeOperationalDateTimeColumns(db)
+}
+
+// detachOrphanEmployeeActivityUsers repairs legacy audit/session rows created
+// for synthetic employee accounts before GORM adds the users foreign key.
+// Audit rows are retained; only their invalid optional reference is cleared.
+func detachOrphanEmployeeActivityUsers(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&EmpActivityLogs{}) ||
+		!db.Migrator().HasTable(&User{}) ||
+		!db.Migrator().HasColumn(&EmpActivityLogs{}, "user_id") {
+		return nil
+	}
+	return db.Exec(`
+		UPDATE emp_activity_logs AS logs
+		SET user_id = NULL
+		WHERE logs.user_id IS NOT NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM users WHERE users.user_id = logs.user_id
+		  )`).Error
 }
 
 // normalizeOperationalDateTimeColumns keeps business dates and clock values

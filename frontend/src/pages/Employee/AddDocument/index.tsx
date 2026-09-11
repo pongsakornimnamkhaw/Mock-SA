@@ -26,8 +26,12 @@ import {
 } from '@mui/icons-material';
 import { concertApi, ConcertData, DocumentItem } from '@/api/concertApi';
 import ConfirmDeleteDialog from '@/components/common/ConfirmDeleteDialog';
+import { useModuleAccess } from '@/access/useModuleAccess';
+import { useLocation } from 'react-router-dom';
 
 const DocumentsPage = () => {
+  const { canEdit } = useModuleAccess('concerts');
+  const location = useLocation();
   const [concerts, setConcerts] = useState<ConcertData[]>([]);
   const [concertName, setConcertName] = useState('');
   const [category, setCategory] = useState('');
@@ -53,7 +57,12 @@ const DocumentsPage = () => {
       const data = await concertApi.getConcerts();
       setConcerts(data);
       if (data.length > 0 && !concertName) {
-        const initialId = data[0].concert_id;
+        const requested = (location.state as { concert?: { id?: string | number; title?: string } } | null)?.concert;
+        const matched = data.find((concert) =>
+          (requested?.id !== undefined && concert.concert_id === String(requested.id)) ||
+          (requested?.title && concert.concert_name === requested.title)
+        );
+        const initialId = matched?.concert_id ?? data[0].concert_id;
         setConcertName(initialId);
         loadDocuments(initialId);
       }
@@ -108,6 +117,7 @@ const DocumentsPage = () => {
   };
 
   const handleSave = async () => {
+    if (!canEdit) return;
     if (!concertName || !category || !documentTitle.trim() || !documentFile) {
       alert("บันทึกไม่สำเร็จ ข้อมูลไม่ถูกต้อง หรือกรอกไม่ครบถ้วน");
       return;
@@ -148,6 +158,7 @@ const DocumentsPage = () => {
   };
 
   const confirmDeleteDocument = async () => {
+    if (!canEdit) return;
     if (!documentToDelete) return;
     try {
       setLoading(true);
@@ -181,8 +192,29 @@ const DocumentsPage = () => {
         แนบเอกสารเกี่ยวกับคอนเสิร์ต
       </Typography>
 
+      {!canEdit && (
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 3, backgroundColor: '#eef7f6' }}>
+          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#1a237e', mb: 1 }}>
+            เลือกคอนเสิร์ตเพื่อดูเอกสาร
+          </Typography>
+          <FormControl fullWidth size="small">
+            <Select
+              displayEmpty
+              value={concertName}
+              onChange={(event) => setConcertName(event.target.value as string)}
+              sx={{ bgcolor: 'white' }}
+            >
+              <MenuItem value="" disabled>โปรดระบุชื่อคอนเสิร์ต</MenuItem>
+              {concerts.map((concert) => (
+                <MenuItem key={concert.concert_id} value={concert.concert_id}>{concert.concert_name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Paper>
+      )}
+
       {/* Form Upload Paper */}
-      <Paper sx={{ p: 4, borderRadius: 3, backgroundColor: '#C5EDE8' }}>
+      {canEdit && <Paper sx={{ p: 4, borderRadius: 3, backgroundColor: '#C5EDE8' }}>
         <Grid container spacing={3} sx={{ alignItems: 'center' }}>
 
           {/* 1. ชื่อคอนเสิร์ต */}
@@ -327,7 +359,7 @@ const DocumentsPage = () => {
             {loading ? 'กำลังบันทึก...' : 'บันทึกเอกสาร'}
           </Button>
         </Box>
-      </Paper>
+      </Paper>}
 
       {/* Documents Table for the Selected Concert */}
       <Box sx={{ mt: 4 }}>
@@ -424,7 +456,7 @@ const DocumentsPage = () => {
                           >
                             เปิดดูไฟล์
                           </Button>
-                          <Button
+                          {canEdit && <Button
                             variant="contained"
                             size="small"
                             startIcon={<DeleteIcon />}
@@ -441,7 +473,7 @@ const DocumentsPage = () => {
                             }}
                           >
                             ลบ
-                          </Button>
+                          </Button>}
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -458,12 +490,12 @@ const DocumentsPage = () => {
           </TableContainer>
         </Paper>
       </Box>
-      <ConfirmDeleteDialog
+      {canEdit && <ConfirmDeleteDialog
         open={documentToDelete !== null}
         onCancel={() => setDocumentToDelete(null)}
         onConfirm={confirmDeleteDocument}
         loading={loading}
-      />
+      />}
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-import { celestial, flux, pulse, starlight } from '@/assets/Poster';
+import { celestial, flux, pulse, starlight } from '@/assets/poster';
 import type { CustomerEvent } from '@/data/customerEvents';
 import type { CustomerPromotionConcert } from '@/types/customerPromotion';
 import { formatThaiDateRange } from '@/utils/customerPromotion';

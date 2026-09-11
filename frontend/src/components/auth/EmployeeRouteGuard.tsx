@@ -1,18 +1,41 @@
 import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { getEmployeeSession } from '@/utils/employeeSession';
+import { getCustomerSession } from '@/utils/customerSession';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import { effectiveModulePermissions, hasModuleAccess, type AccessLevel, type BackofficeModule } from '@/access/backofficeAccess';
 
 interface EmployeeRouteGuardProps {
   children: ReactNode;
+  module?: BackofficeModule;
+  required?: Extract<AccessLevel, 'view' | 'edit'>;
 }
 
-export default function EmployeeRouteGuard({ children }: EmployeeRouteGuardProps) {
+export default function EmployeeRouteGuard({ children, module, required = 'view' }: EmployeeRouteGuardProps) {
   const session = getEmployeeSession();
   const location = useLocation();
 
   if (!session) {
+    if (getCustomerSession()) {
+      return <Navigate to="/home" replace />;
+    }
     const returnUrl = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/employee/login?redirect=${returnUrl}`} replace />;
+  }
+
+  if (module) {
+    const permissions = effectiveModulePermissions(session.role, session.department, session.modulePermissions, session.jobRole);
+    if (!hasModuleAccess(permissions, module, required)) {
+      return (
+        <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center', p: 3 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#050C38', mb: 1 }}>ไม่มีสิทธิ์เข้าถึงส่วนนี้</Typography>
+            <Typography color="text.secondary">กรุณาติดต่อผู้ดูแลระบบหากต้องการใช้งานโมดูลนี้</Typography>
+          </Box>
+        </Box>
+      );
+    }
   }
 
   return <>{children}</>;

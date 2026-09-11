@@ -41,7 +41,7 @@ func loadEmployeeFromRequest(c *fiber.Ctx, db *gorm.DB) (models.User, error) {
 		return models.User{}, fiber.ErrUnauthorized
 	}
 	var user models.User
-	if session.UserID == nil || db.First(&user, "user_id = ? AND employee_inactive = ?", *session.UserID, false).Error != nil {
+	if session.UserID == nil || db.Preload("Permissions").First(&user, "user_id = ? AND employee_inactive = ?", *session.UserID, false).Error != nil {
 		return models.User{}, fiber.ErrUnauthorized
 	}
 	return user, nil
