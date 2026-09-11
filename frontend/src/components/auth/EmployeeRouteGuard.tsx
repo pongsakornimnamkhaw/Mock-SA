@@ -1,16 +1,41 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getEmployeeSession } from '@/utils/employeeSession';
+import { employeeAuthApi } from '@/api/employeeAuthApi';
+import { clearEmployeeSession, saveEmployeeSession } from '@/utils/employeeSession';
 
 interface EmployeeRouteGuardProps {
   children: ReactNode;
 }
 
 export default function EmployeeRouteGuard({ children }: EmployeeRouteGuardProps) {
-  const session = getEmployeeSession();
   const location = useLocation();
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
 
-  if (!session) {
+  useEffect(() => {
+    let active = true;
+
+    employeeAuthApi.getMe().then((session) => {
+      if (!active) return;
+
+      if (session) {
+        saveEmployeeSession(session);
+        setAuthenticated(true);
+        return;
+      }
+
+      clearEmployeeSession();
+      setAuthenticated(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Do not render protected content while the server-side session is being checked.
+  if (authenticated === null) return null;
+
+  if (!authenticated) {
     const returnUrl = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/employee/login?redirect=${returnUrl}`} replace />;
   }

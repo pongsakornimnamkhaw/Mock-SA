@@ -22,16 +22,16 @@ type Concert struct {
 
 	BaseModel
 
-	ConcertArtists		[]ConcertArtist `gorm:"foreignKey:ConcertID"`
-	ConcertDocuments 	[]ConcertDocument `gorm:"foreignKey:ConcertID"`
-	ModifiedHistories 	[]ModifiedHistory `gorm:"foreignKey:ConcertID"`
-	SummaryReports		[]SummaryReport `gorm:"foreignKey:ConcertID"`
-	ArtistRequirements	[]ArtistRequirement `gorm:"foreignKey:ConcertID"`		
+	ConcertArtists      []ConcertArtist      `gorm:"foreignKey:ConcertID"`
+	ConcertDocuments    []ConcertDocument    `gorm:"foreignKey:ConcertID"`
+	ModifiedHistories   []ModifiedHistory    `gorm:"foreignKey:ConcertID"`
+	SummaryReports      []SummaryReport      `gorm:"foreignKey:ConcertID"`
+	ArtistRequirements  []ArtistRequirement  `gorm:"foreignKey:ConcertID"`
 	PerformanceSchedule *PerformanceSchedule `gorm:"foreignKey:ConcertID"`
-	Promotions 			[]Promotion `gorm:"foreignKey:ConcertID"`
-	WorkPlan			*WorkPlan `gorm:"foreignKey:ConcertID"`
-	SponsorshipRequest 	[]SponsorshipRequest `gorm:"foreignKey:ConcertID"`
-	Tasks 				[]Task `gorm:"foreignKey:ConcertID"`
+	Promotions          []Promotion          `gorm:"foreignKey:ConcertID"`
+	WorkPlan            *WorkPlan            `gorm:"foreignKey:ConcertID"`
+	SponsorshipRequest  []SponsorshipRequest `gorm:"foreignKey:ConcertID"`
+	Tasks               []Task               `gorm:"foreignKey:ConcertID"`
 }
 
 func (c *Concert) BeforeCreate(tx *gorm.DB) (err error) {
@@ -43,11 +43,11 @@ func (c *Concert) BeforeCreate(tx *gorm.DB) (err error) {
 
 // ConcertArtist - ตารางกลาง Concert <-> Artist (many2many)
 type ConcertArtist struct {
-	ConcertID        string `gorm:"primaryKey;type:varchar(50);not null" json:"concert_id"`
-	Concert Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
-	
-	ArtistID         string `gorm:"primaryKey;type:varchar(50);not null" json:"artist_id"`
-	Artist Artist `gorm:"foreignKey:ArtistID;references:ArtistID"`
+	ConcertID string  `gorm:"primaryKey;type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
+
+	ArtistID string `gorm:"primaryKey;type:varchar(50);not null" json:"artist_id"`
+	Artist   Artist `gorm:"foreignKey:ArtistID;references:ArtistID"`
 
 	InvitationStatus string `gorm:"type:varchar(50);not null;default:'รอการตอบรับ'" json:"invitation_status"`
 }
@@ -59,8 +59,8 @@ type ConcertDocument struct {
 	DocumentName string `gorm:"type:text;not null" json:"document_name"`
 	DocumentFile []byte `gorm:"type:bytea" json:"document_file,omitempty"`
 
-	ConcertID    string `gorm:"type:varchar(50);not null" json:"concert_id"`
-	Concert Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
+	ConcertID string  `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 }
 
 func (d *ConcertDocument) BeforeCreate(tx *gorm.DB) (err error) {
@@ -77,8 +77,8 @@ type ModifiedHistory struct {
 	Description string    `gorm:"type:text;not null" json:"description"`
 	CreatedAt   time.Time `gorm:"type:timestamp without time zone;autoCreateTime;not null" json:"created_at"`
 
-	ConcertID   string    `gorm:"type:varchar(50);not null" json:"concert_id"`
-	Concert Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
+	ConcertID string  `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 }
 
 func (m *ModifiedHistory) BeforeCreate(tx *gorm.DB) (err error) {
@@ -94,8 +94,8 @@ type SummaryReport struct {
 	GeneratedDate time.Time `gorm:"type:date;not null" json:"generated_date"`
 	FileFormat    []byte    `gorm:"type:bytea;not null" json:"file_format,omitempty"`
 
-	ConcertID     string    `gorm:"type:varchar(50);not null" json:"concert_id"`
-	Concert Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
+	ConcertID string  `gorm:"type:varchar(50);not null" json:"concert_id"`
+	Concert   Concert `gorm:"foreignKey:ConcertID;references:ConcertID"`
 }
 
 func (s *SummaryReport) BeforeCreate(tx *gorm.DB) (err error) {
