@@ -49,7 +49,9 @@ type Seat struct {
 	ZoneID     string  `gorm:"type:varchar(50);not null" json:"zone_id"`
 	// ReservedBookingID keeps the seat tied to a pending booking without
 	// creating a Ticket before payment approval.
-	ReservedBookingID *string `gorm:"type:varchar(50);index" json:"reserved_booking_id,omitempty"`
+	ReservedBookingID *string    `gorm:"type:varchar(50);index" json:"reserved_booking_id,omitempty"`
+	HoldToken         *string    `gorm:"type:varchar(100);index" json:"hold_token,omitempty"`
+	HoldExpiresAt     *time.Time `gorm:"type:timestamp;index" json:"hold_expires_at,omitempty"`
 
 	// Relations
 	Tickets         []Ticket         `gorm:"foreignKey:SeatID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"tickets,omitempty"`

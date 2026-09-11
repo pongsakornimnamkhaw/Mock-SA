@@ -39,8 +39,9 @@ type promotionConcertUI struct {
 }
 
 type promotionZoneUI struct {
-	ZoneID   string `json:"zone_id"`
-	ZoneName string `json:"zone_name"`
+	ZoneID    string `json:"zone_id"`
+	ZoneName  string `json:"zone_name"`
+	ConcertID string `json:"concert_id"`
 }
 
 type promotionDiscountUI struct {
@@ -369,7 +370,9 @@ func promotionView(p models.Promotion, concerts map[string]promotionConcertUI, n
 		}
 	}
 	for _, zone := range p.Zones {
-		view.Zones = append(view.Zones, promotionZoneUI{zone.ZoneID, zone.ZoneType})
+		view.Zones = append(view.Zones, promotionZoneUI{
+			ZoneID: zone.ZoneID, ZoneName: zone.ZoneType, ConcertID: zone.ConcertID,
+		})
 	}
 	for _, approval := range p.PromotionApprovals {
 		view.Approvals = append(view.Approvals, promotionApprovalView(approval))
@@ -424,7 +427,9 @@ func (h *managementHandler) promotionOptions(c *fiber.Ctx) error {
 			return err
 		}
 		for _, zone := range zoneModels {
-			zones = append(zones, promotionZoneUI{zone.ZoneID, zone.ZoneType})
+			zones = append(zones, promotionZoneUI{
+				ZoneID: zone.ZoneID, ZoneName: zone.ZoneType, ConcertID: zone.ConcertID,
+			})
 		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
@@ -538,7 +543,22 @@ func promotionReferences(tx *gorm.DB, p promotionPayload) ([]models.Zone, error)
 	if len(zones) != len(p.SelectedZones) {
 		return nil, fiber.NewError(400, "ไม่พบโซนบางรายการที่ระบุใน selected_zones")
 	}
+	if err := validatePromotionZonesForConcert(p.ConcertID, p.SelectedZones, zones); err != nil {
+		return nil, err
+	}
 	return zones, nil
+}
+
+func validatePromotionZonesForConcert(concertID string, selectedZoneIDs []string, zones []models.Zone) error {
+	if len(zones) != len(selectedZoneIDs) {
+		return fiber.NewError(400, "ไม่พบโซนบางรายการที่ระบุใน selected_zones")
+	}
+	for _, zone := range zones {
+		if zone.ConcertID != concertID {
+			return fiber.NewError(400, "โซนที่เลือกต้องเป็นของคอนเสิร์ตเดียวกับ concert_id")
+		}
+	}
+	return nil
 }
 
 func promotionUniqueCode(tx *gorm.DB, code, id string) error {

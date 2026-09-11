@@ -9,6 +9,7 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export interface Zone {
   zone_id: string;
   zone_name: string;
+  concert_id: string;
 }
 
 export interface DiscountInfo {

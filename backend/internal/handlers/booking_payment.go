@@ -68,6 +68,7 @@ type createBookingInput struct {
 	UserID         string   `json:"user_id"`
 	SlipFileName   string   `json:"slip_file_name"`
 	SlipDataURL    string   `json:"slip_data_url"`
+	HoldToken      string   `json:"hold_token"`
 }
 
 type rejectBookingInput struct {
@@ -237,17 +238,12 @@ func (h *bookingPaymentHandler) createBooking(c *fiber.Ctx) error {
 		TotalPrice:     input.TotalPrice,
 	}
 
-	// เตรียมผังที่นั่งไว้ก่อน (คอนเสิร์ตสาธิตที่ยังไม่มีผังจะได้ผังเริ่มต้น)
-	if err := ensureZoneSeats(h.db, input.ConcertID, input.ZoneID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถเตรียมผังที่นั่งได้"})
-	}
-
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&booking).Error; err != nil {
 			return err
 		}
 
-		_, err := reserveSeats(tx, bookingID, input.ConcertID, input.ZoneID, input.Seats)
+		_, err := reserveSeats(tx, bookingID, input.ConcertID, input.ZoneID, input.Seats, strings.TrimSpace(input.HoldToken))
 		if err != nil {
 			return err
 		}

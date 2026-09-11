@@ -26,6 +26,13 @@ func main() {
 	if err := models.MigrateAllModels(config.DB); err != nil {
 		log.Fatalf("Failed to auto-migrate models: %v\n", err)
 	}
+	seededPosters, err := ensureConcertPosters(config.DB)
+	if err != nil {
+		log.Fatalf("Failed to seed concert posters: %v\n", err)
+	}
+	if seededPosters > 0 {
+		log.Printf("Seeded concert posters for %d concert(s)", seededPosters)
+	}
 	if err := seed.EnsureDemoAccounts(config.DB); err != nil {
 		log.Fatalf("Failed to seed demo accounts: %v\n", err)
 	}

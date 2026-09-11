@@ -149,8 +149,16 @@ export default function PromotionFormPage() {
   const ready = !loading && !loadError && loadedId === (id ?? '');
   const disabled = !ready || saving || deleting || !canEdit;
 
+  const concertZones = form.concert_id
+    ? zones.filter((zone) => zone.concert_id === form.concert_id)
+    : [];
+
   const set = (key: keyof FormState, value: string | string[]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const selectConcert = (concertId: string) => {
+    setForm((prev) => ({ ...prev, concert_id: concertId, selected_zones: [] }));
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -232,7 +240,7 @@ export default function PromotionFormPage() {
       setError('กรุณาระบุวันเริ่มต้นและวันสิ้นสุดที่ถูกต้อง โดยวันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น');
       return;
     }
-    if (form.selected_zones.length === 0 || form.selected_zones.some((zoneId) => !zones.some((zone) => zone.zone_id === zoneId))) {
+    if (form.selected_zones.length === 0 || form.selected_zones.some((zoneId) => !concertZones.some((zone) => zone.zone_id === zoneId))) {
       setError('กรุณาเลือกโซนที่เข้าร่วมอย่างน้อยหนึ่งโซนจากรายการที่มีอยู่');
       return;
     }
@@ -333,7 +341,7 @@ export default function PromotionFormPage() {
           <Button
             variant="contained"
             startIcon={<SaveIcon />}
-            disabled={disabled || readingImage || !!imageError || concerts.length === 0 || zones.length === 0}
+            disabled={disabled || readingImage || !!imageError || concerts.length === 0 || concertZones.length === 0}
             onClick={handleSave}
             sx={{
               background: 'linear-gradient(135deg, #22c55e, #16a34a)',
@@ -349,7 +357,7 @@ export default function PromotionFormPage() {
       {loadError && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => setRetry((value) => value + 1)}>ลองอีกครั้ง</Button>}>{loadError}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {ready && <Alert severity="info" sx={{ mb: 2 }}>เมื่อบันทึก โปรโมชั่นใหม่และรายการแก้ไขจะเป็นแบบร่างรอการอนุมัติ</Alert>}
-      {ready && (concerts.length === 0 || zones.length === 0) && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => setRetry((value) => value + 1)}>ลองอีกครั้ง</Button>}>ยังไม่มีคอนเสิร์ตหรือโซนให้เลือก ไม่สามารถบันทึกได้</Alert>}
+      {ready && concerts.length === 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => setRetry((value) => value + 1)}>ลองอีกครั้ง</Button>}>ยังไม่มีคอนเสิร์ตให้เลือก ไม่สามารถบันทึกได้</Alert>}
 
       <Box component="fieldset" disabled={disabled} sx={{
         m: 0, p: 0, border: 0, minWidth: 0, display: 'grid',
@@ -377,7 +385,7 @@ export default function PromotionFormPage() {
                   <Select
                     value={form.concert_id}
                     label="คอนเสิร์ตที่เกี่ยวข้อง"
-                    onChange={(e) => set('concert_id', e.target.value)}
+                    onChange={(e) => selectConcert(e.target.value)}
                   >
                     <MenuItem value=""><em>------</em></MenuItem>
                     {concerts.map((c) => (
@@ -570,7 +578,17 @@ export default function PromotionFormPage() {
               </Typography>
               <FormGroup>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.25 }}>
-                  {zones.map((z) => (
+                  {!form.concert_id && (
+                    <Typography sx={{ gridColumn: '1 / -1', fontSize: '0.82rem', color: '#94a3b8' }}>
+                      กรุณาเลือกคอนเสิร์ตก่อน
+                    </Typography>
+                  )}
+                  {form.concert_id && concertZones.length === 0 && (
+                    <Typography sx={{ gridColumn: '1 / -1', fontSize: '0.82rem', color: '#dc2626' }}>
+                      คอนเสิร์ตนี้ยังไม่มีโซน
+                    </Typography>
+                  )}
+                  {concertZones.map((z) => (
                     <FormControlLabel
                       key={z.zone_id}
                       control={

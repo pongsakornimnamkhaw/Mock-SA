@@ -1,6 +1,8 @@
 package ticketplanning
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -432,6 +434,10 @@ func (h *TicketPlanningHandler) persistConcert(c *fiber.Ctx, concertID string, p
 	if publishAt != nil && unpublishAt != nil && unpublishAt.Before(*publishAt) {
 		return apiError(c, fiber.StatusBadRequest, "unpublish date must not be before publish date", nil)
 	}
+	posterBytes, err := decodeConcertCover(payload.Cover)
+	if err != nil {
+		return apiError(c, fiber.StatusBadRequest, "invalid concert cover", err)
+	}
 
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		var concert models.Concert
@@ -449,8 +455,8 @@ func (h *TicketPlanningHandler) persistConcert(c *fiber.Ctx, concertID string, p
 		concert.Location = payload.Location
 		concert.Status = payload.Status
 		concert.MoreInfo = payload.Description
-		concert.Poster = []byte(payload.Cover)
-		concert.ConcertPoster = []byte(payload.Cover)
+		concert.Poster = posterBytes
+		concert.ConcertPoster = posterBytes
 
 		if errors.Is(lookup, gorm.ErrRecordNotFound) {
 			concert.StartTime = "00:00:00"
@@ -465,8 +471,8 @@ func (h *TicketPlanningHandler) persistConcert(c *fiber.Ctx, concertID string, p
 			"location":       payload.Location,
 			"status":         payload.Status,
 			"more_info":      payload.Description,
-			"poster":         []byte(payload.Cover),
-			"concert_poster": []byte(payload.Cover),
+			"poster":         posterBytes,
+			"concert_poster": posterBytes,
 			"updated_at":     time.Now(),
 		}).Error; err != nil {
 			return err
@@ -827,10 +833,14 @@ func (h *TicketPlanningHandler) ensureConcert(concertID string) error {
 }
 
 func (h *TicketPlanningHandler) buildConcertDTO(concert models.Concert) (concertPlanDTO, error) {
+	poster := concert.Poster
+	if len(poster) == 0 {
+		poster = concert.ConcertPoster
+	}
 	result := concertPlanDTO{
 		ID: concert.ConcertID, Name: concert.ConcertName, Date: concert.StartDate,
 		EndDate: concert.EndDate, Location: concert.Location, Status: concert.Status,
-		Description: concert.MoreInfo, Cover: string(concert.Poster), Rounds: []roundDTO{},
+		Description: concert.MoreInfo, Cover: encodeConcertCover(poster), Rounds: []roundDTO{},
 		Publishing: publishingDTO{}, Zones: []zoneDTO{}, LayoutObjects: []layoutObjectDTO{}, TicketLayoutObjects: []layoutObjectDTO{},
 	}
 	if len(concert.SeatLayoutImage) > 0 {
@@ -914,6 +924,48 @@ func (h *TicketPlanningHandler) buildConcertDTO(concert models.Concert) (concert
 		result.TicketLayoutObjects = append(result.TicketLayoutObjects, layoutObjectDTO{ID: item.ObjectID, Kind: data.Kind, Shape: data.Shape, Name: data.Name, Color: style.Color, TextColor: style.TextColor, X: item.PositionX, Y: item.PositionY, Width: item.Width, Height: item.Height, Rotation: item.Rotation, Layer: int64(item.LayerOrder), Side: valueOrEmpty(item.SideType), ImageSrc: data.ImageSrc, FontSize: style.FontSize, AspectRatio: data.AspectRatio})
 	}
 	return result, nil
+}
+
+func decodeConcertCover(value string) ([]byte, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	if !strings.HasPrefix(value, "data:") {
+		return []byte(value), nil
+	}
+	comma := strings.IndexByte(value, ',')
+	if comma < 0 || !strings.Contains(value[:comma], ";base64") {
+		return nil, errors.New("cover must be a base64 data URL")
+	}
+	decoded, err := base64.StdEncoding.DecodeString(value[comma+1:])
+	if err != nil {
+		return nil, fmt.Errorf("decode cover: %w", err)
+	}
+	return decoded, nil
+}
+
+func encodeConcertCover(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	if strings.HasPrefix(string(data), "data:image/") {
+		return string(data)
+	}
+	mime := "image/jpeg"
+	if len(data) >= 8 && string(data[:8]) == "\x89PNG\r\n\x1a\n" {
+		mime = "image/png"
+	} else if len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
+		mime = "image/webp"
+	} else if len(data) >= 6 && (string(data[:6]) == "GIF87a" || string(data[:6]) == "GIF89a") {
+		mime = "image/gif"
+	} else {
+		trimmed := bytes.TrimSpace(data)
+		if bytes.HasPrefix(trimmed, []byte("<svg")) || (bytes.HasPrefix(trimmed, []byte("<?xml")) && bytes.Contains(trimmed, []byte("<svg"))) {
+			mime = "image/svg+xml"
+		}
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
 func parseDate(value string) (time.Time, error) {

@@ -24,7 +24,8 @@ import {
   getBookingsSnapshot, subscribeBookings,
 } from '@/utils/bookingStore';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
-import TicketStub from '@/components/tickets/TicketStub';
+import CustomerTicketCard, { type CustomerTicketPreview } from '@/components/tickets/CustomerTicketCard';
+import { TicketDesignRenderer, type TicketDesignSide } from '@/components/tickets/TicketDesignRenderer';
 import { ticketThemeForConcertId } from '@/utils/posterPalette';
 
 type AccountPageMode = 'tickets' | 'history' | 'profile' | 'password';
@@ -68,7 +69,8 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
   const [reuploadPreview, setReuploadPreview] = useState('');
 
   // Preview enlarged QR ticket dialog
-  const [previewQrTicket, setPreviewQrTicket] = useState<{ code: string; qrCodeUrl: string; seatLabel: string; concertTitle: string; concertId: string } | null>(null);
+  const [previewQrTicket, setPreviewQrTicket] = useState<CustomerTicketPreview | null>(null);
+  const [previewSide, setPreviewSide] = useState<TicketDesignSide>('FRONT');
 
   useEffect(() => {
     return subscribeBookings(() => {
@@ -282,23 +284,21 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
                               </Typography>
                               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fill, minmax(340px, 1fr))' }, gap: 2.5 }}>
                                 {ticketsToRender.map((ticket) => (
-                                  <TicketStub
+                                  <CustomerTicketCard
                                     key={ticket.code}
                                     concertId={booking.concertId}
                                     concertTitle={booking.concertTitle}
+                                    customerName={booking.customerName || accountName}
                                     eventDate={formatDate(booking.eventDate)}
                                     location={booking.location || 'ฮอลล์จัดแสดง'}
                                     zoneLabel={`โซน ${booking.zoneId} (${booking.tierName})`}
                                     code={ticket.code}
                                     seatLabel={ticket.seatLabel}
                                     qrCodeUrl={ticket.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticket.code)}`}
-                                    onOpenQr={() => setPreviewQrTicket({
-                                      code: ticket.code,
-                                      qrCodeUrl: ticket.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticket.code)}`,
-                                      seatLabel: ticket.seatLabel,
-                                      concertTitle: booking.concertTitle,
-                                      concertId: booking.concertId,
-                                    })}
+                                    onOpen={(preview) => {
+                                      setPreviewSide('FRONT');
+                                      setPreviewQrTicket(preview);
+                                    }}
                                   />
                                 ))}
                               </Box>
@@ -465,26 +465,41 @@ export default function CustomerAccountPage({ mode }: { mode: AccountPageMode })
       <Dialog
         open={Boolean(previewQrTicket)}
         onClose={() => setPreviewQrTicket(null)}
-        maxWidth="xs"
+        maxWidth={previewQrTicket?.objects.length ? 'md' : 'xs'}
         fullWidth
         slotProps={{ paper: { sx: { borderRadius: 4, p: 1 } } }}
       >
         {previewQrTicket && (() => {
           const ticketTheme = ticketThemeForConcertId(previewQrTicket.concertId);
+          if (previewQrTicket.objects.length > 0) {
+            const hasBack = previewQrTicket.objects.some((item) => (item.side || 'FRONT').toUpperCase() === 'BACK');
+            return (
+              <Box sx={{ p: 2.5 }}>
+                <Stack direction="row" spacing={1} sx={{ mb: 2, justifyContent: 'center' }}>
+                  <Button variant={previewSide === 'FRONT' ? 'contained' : 'outlined'} onClick={() => setPreviewSide('FRONT')}>ด้านหน้า</Button>
+                  <Button variant={previewSide === 'BACK' ? 'contained' : 'outlined'} disabled={!hasBack} onClick={() => setPreviewSide('BACK')}>ด้านหลัง</Button>
+                </Stack>
+                <TicketDesignRenderer objects={previewQrTicket.objects} side={previewSide} data={previewQrTicket.data} />
+                <Button fullWidth variant="contained" onClick={() => setPreviewQrTicket(null)} sx={{ mt: 2, bgcolor: '#11366b' }}>
+                  ปิดหน้าต่าง
+                </Button>
+              </Box>
+            );
+          }
           return (
             <Box sx={{ p: 3, textAlign: 'center', bgcolor: ticketTheme.base, color: '#F1F5F9', borderRadius: 3 }}>
               <Typography variant="caption" sx={{ color: ticketTheme.accent, fontWeight: 800, letterSpacing: '2px' }}>
                 OCTAVIA E-TICKET
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, mb: 0.5 }}>
-                {previewQrTicket.concertTitle}
+                {previewQrTicket.data.concertTitle}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(241,245,249,0.72)', mb: 2 }}>
-                ที่นั่ง: <strong>{previewQrTicket.seatLabel}</strong> · รหัสตั๋ว: <strong>{previewQrTicket.code}</strong>
+                ที่นั่ง: <strong>{previewQrTicket.data.seatLabel}</strong> · รหัสตั๋ว: <strong>{previewQrTicket.data.code}</strong>
               </Typography>
               <Box
                 component="img"
-                src={previewQrTicket.qrCodeUrl}
+                src={previewQrTicket.data.qrCodeUrl}
                 alt="Enlarged QR Code"
                 sx={{
                   width: 240, height: 240, mx: 'auto', p: 2, bgcolor: '#fff', borderRadius: 3,

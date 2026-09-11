@@ -67,7 +67,7 @@ var accounts = []empSpec{
 		firstName: "พงศกร", lastName: "อิ่มน้ำขาว",
 		code: "B6728786", department: "ฝ่ายขาย",
 		email: "sales.b6728786@octavia.test", phone: "0812345678",
-		role: "sales", scope: "all", password: "Demo1234!", personnel: "internal",
+		role: "sales", scope: "all", password: "c", personnel: "internal",
 	},
 }
 

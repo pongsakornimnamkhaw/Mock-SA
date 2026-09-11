@@ -147,7 +147,7 @@ function Poster({ concert }) {
   return <div className={`poster poster-${concert.id.slice(-1)}`}><small>LIVE</small><b>{concert.name || 'CONCERT'}</b><span>2026</span></div>
 }
 
-function ConcertList({ concerts, onAdd, onEdit, onDelete }) {
+function ConcertList({ concerts, onEdit, onDelete }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('ทั้งหมด')
   const [currentPage, setCurrentPage] = useState(1)
@@ -168,7 +168,7 @@ function ConcertList({ concerts, onAdd, onEdit, onDelete }) {
         ? [1, 'start-gap', totalPages - 2, totalPages - 1, totalPages]
         : [1, 'start-gap', activePage, 'end-gap', totalPages]
   return <main className="content list-page">
-    <div className="page-heading"><div><span className="eyebrow">TICKET SALES PLANNING</span><h1>เลือกคอนเสิร์ต</h1><p>เลือกคอนเสิร์ตเพื่อจัดทำแผนจำหน่ายบัตร</p></div><button className="btn primary" onClick={onAdd}><PlusIcon/>เพิ่มรายการคอนเสิร์ต</button></div>
+    <div className="page-heading"><div><span className="eyebrow">TICKET SALES PLANNING</span><h1>เลือกคอนเสิร์ต</h1><p>เลือกคอนเสิร์ตเพื่อจัดทำแผนจำหน่ายบัตร</p></div></div>
     <section className="filter-card">
       <label><span>ค้นหา</span><div className="search-box"><input value={query} onChange={e => { setQuery(e.target.value); setCurrentPage(1) }} placeholder="ชื่อคอนเสิร์ต หรือ ศิลปิน..."/><SearchIcon/></div></label>
       <label><span>สถานะ</span><select value={status} onChange={e => { setStatus(e.target.value); setCurrentPage(1) }}><option>ทั้งหมด</option><option>ฉบับร่าง</option><option>กำลังแสดง</option><option>สิ้นสุดแล้ว</option></select></label>
@@ -300,9 +300,36 @@ function PublishingTab({ concertName, value, setValue }) {
 const shapeNames = { rectangle: 'สี่เหลี่ยม', circle: 'วงกลม', triangle: 'สามเหลี่ยม' }
 const shapeStyle = shape => shape === 'circle' ? { borderRadius: '50%' } : shape === 'triangle' ? { clipPath: 'polygon(50% 0, 100% 100%, 0 100%)' } : { borderRadius: '8px' }
 
+const triangleBoundsAtY = y => {
+  const halfSpan = clamp((Number(y) - 1.5) / 97, 0, 1) * 48.5
+  return { minX: 50 - halfSpan + 3, maxX: 50 + halfSpan - 3 }
+}
+
+const isInsideTriangle = seat => {
+  const y = Number(seat.y)
+  const x = Number(seat.x)
+  if (y < 7 || y > 93) return false
+  const { minX, maxX } = triangleBoundsAtY(y)
+  return x >= minX && x <= maxX
+}
+
+const constrainSeatPosition = (x, y, shape) => {
+  if (shape !== 'triangle') return { x: clamp(x, 2, 98), y: clamp(y, 3, 97) }
+  const safeY = clamp(y, 7, 93)
+  const { minX, maxX } = triangleBoundsAtY(safeY)
+  return { x: clamp(x, Math.min(minX, 50), Math.max(maxX, 50)), y: safeY }
+}
+
+export const avoidSeatCollision = (desired, currentSeat, seats) => {
+  const collision = seats.some(seat => seatKey(seat) !== seatKey(currentSeat)
+    && Math.abs(Number(seat.x) - Number(desired.x)) < 3.5
+    && Math.abs(Number(seat.y) - Number(desired.y)) < 3.5)
+  return collision ? { x: Number(currentSeat.x), y: Number(currentSeat.y) } : desired
+}
+
 function arrangeSeats(count, shape, oldSeats = []) {
   const total = Math.max(0, Number(count) || 0)
-  return Array.from({ length: total }, (_, index) => {
+  const positionFor = index => {
     let x = 50, y = 50
     if (shape === 'circle') {
       const angle = index * 2.39996
@@ -313,16 +340,34 @@ function arrangeSeats(count, shape, oldSeats = []) {
       const first = row * (row + 1) / 2
       const position = index - first
       const rows = Math.ceil((Math.sqrt(8 * total + 1) - 1) / 2)
-      x = 50 + (position - row / 2) * (82 / Math.max(rows, 1))
-      y = 10 + row * (80 / Math.max(rows - 1, 1))
+      y = rows < 2 ? 50 : 8 + row * (84 / Math.max(rows - 1, 1))
+      const { minX, maxX } = triangleBoundsAtY(y)
+      x = row === 0 ? 50 : minX + position * ((maxX - minX) / row)
     } else {
       const columns = Math.max(1, Math.ceil(Math.sqrt(total * 1.5)))
       const rows = Math.ceil(total / columns)
       x = 7 + (index % columns) * (86 / Math.max(columns - 1, 1))
       y = 9 + Math.floor(index / columns) * (82 / Math.max(rows - 1, 1))
     }
+    return { x, y }
+  }
+  const positionKey = ({ x, y }) => `${Number(x).toFixed(4)}:${Number(y).toFixed(4)}`
+  const occupied = new Set(oldSeats.filter(seat => shape !== 'triangle' || isInsideTriangle(seat)).map(positionKey))
+  const availablePositions = Array.from({ length: total }, (_, index) => positionFor(index)).filter(position => !occupied.has(positionKey(position)))
+  let nextPosition = 0
+  const assigned = new Set()
+  return Array.from({ length: total }, (_, index) => {
     const existing = oldSeats[index]
-    return existing ? { ...existing, x, y } : { clientKey: `seat-${Date.now()}-${index}`, name: `${String.fromCharCode(65 + Math.floor(index / 26))}${index + 1}`, x, y, disabled: false }
+    const existingKey = existing ? positionKey(existing) : ''
+    if (existing && (shape !== 'triangle' || isInsideTriangle(existing)) && !assigned.has(existingKey)) {
+      assigned.add(existingKey)
+      return existing
+    }
+    const { x, y } = availablePositions[nextPosition++] || positionFor(index)
+    assigned.add(positionKey({ x, y }))
+    return existing
+      ? { ...existing, x, y }
+      : { clientKey: `seat-${Date.now()}-${index}`, name: `${String.fromCharCode(65 + Math.floor(index / 26))}${index + 1}`, x, y, disabled: false }
   })
 }
 
@@ -342,7 +387,11 @@ function ItemModal({ kind, shape, onClose, onSave }) {
 }
 
 function ZoneDetail({ zone, onBack, onSave, onDelete }) {
-  const [working, setWorking] = useState(() => ({ ...zone, shape: zone.shape || 'rectangle', seatItems: zone.seatItems?.length ? zone.seatItems : arrangeSeats(zone.seats, zone.shape || 'rectangle') }))
+  const [working, setWorking] = useState(() => {
+    const shape = zone.shape || 'rectangle'
+    const seats = zone.seatItems?.length ? zone.seatItems : arrangeSeats(zone.seats, shape)
+    return { ...zone, shape, seatItems: arrangeSeats(seats.length, shape, seats) }
+  })
   const [addCount, setAddCount] = useState(1)
   const [selectedSeat, setSelectedSeat] = useState(null)
   const seatCanvas = useRef(null)
@@ -353,7 +402,7 @@ function ZoneDetail({ zone, onBack, onSave, onDelete }) {
   const dragSeat = (event, seat) => {
     event.stopPropagation(); setSelectedSeat(seat)
     const rect = seatCanvas.current.getBoundingClientRect()
-    const move = e => updateSeat({ ...seat, x: Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100)), y: Math.max(3, Math.min(97, (e.clientY - rect.top) / rect.height * 100)) })
+    const move = e => { const position = constrainSeatPosition((e.clientX - rect.left) / rect.width * 100, (e.clientY - rect.top) / rect.height * 100, working.shape); const availablePosition = avoidSeatCollision(position, seat, working.seatItems); updateSeat({ ...seat, ...availablePosition }) }
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
   }
@@ -363,7 +412,7 @@ function ZoneDetail({ zone, onBack, onSave, onDelete }) {
     <div className="section-bar"><button className="back-link" onClick={onBack}><ArrowLeftIcon/>กลับไปยังผังรวม</button><div className="detail-actions"><button className="btn danger small" onClick={onDelete}><TrashIcon/>ลบโซน</button><button className="btn success small" onClick={() => onSave({ ...working, seats: working.seatItems.length })}><SaveIcon/>บันทึกผังที่นั่ง</button></div></div>
     <div className="seat-editor-toolbar"><div className="shape-switch"><b>รูปทรงโซน</b>{Object.keys(shapeNames).map(shape => <button key={shape} className={working.shape === shape ? 'active' : ''} onClick={() => changeShape(shape)}><i className={`shape-icon ${shape}`}></i>{shapeNames[shape]}</button>)}</div><div className="add-seat-control"><input type="number" min="1" value={addCount} onChange={e => setAddCount(+e.target.value)}/><button className="btn primary small" onClick={addSeats}><PlusIcon/>เพิ่มเก้าอี้</button></div></div>
     <div className="zone-detail-grid">
-      <div className="seat-shape-frame"><div ref={seatCanvas} className={`free-seat-canvas ${working.shape}`} style={{ '--zone-color': working.color }} onClick={() => setSelectedSeat(null)}>{working.seatItems.map(seat => <button key={seatKey(seat)} className={`free-seat ${seat.disabled ? 'disabled' : ''} ${seatKey(activeSeat) === seatKey(seat) ? 'selected' : ''}`} style={{ left: `${seat.x}%`, top: `${seat.y}%` }} onPointerDown={e => dragSeat(e, seat)} onClick={e => { e.stopPropagation(); setSelectedSeat(seat) }}>{seat.name}</button>)}</div><p className="seat-hint">ลากเก้าอี้ได้อย่างอิสระ และคลิกเพื่อแก้ชื่อรายตัว</p></div>
+      <div className="seat-shape-frame"><div ref={seatCanvas} className={`free-seat-canvas ${working.shape}`} style={{ '--zone-color': working.color }} onClick={() => setSelectedSeat(null)}>{working.shape === 'triangle' && <svg className="triangle-zone-frame" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon data-testid="triangle-zone-outline" points="50,1.5 98.5,98.5 1.5,98.5" fill="none" stroke="#e72d70" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/></svg>}{working.seatItems.map(seat => <button key={seatKey(seat)} className={`free-seat ${seat.disabled ? 'disabled' : ''} ${seatKey(activeSeat) === seatKey(seat) ? 'selected' : ''}`} style={{ left: `${seat.x}%`, top: `${seat.y}%` }} onPointerDown={e => dragSeat(e, seat)} onClick={e => { e.stopPropagation(); setSelectedSeat(seat) }}>{seat.name}</button>)}</div><p className="seat-hint">ลากเก้าอี้ได้อย่างอิสระ และคลิกเพื่อแก้ชื่อรายตัว</p></div>
       <aside className="zone-form"><div className="zone-badge" style={{ background: working.color, ...shapeStyle(working.shape) }}>{working.name}<small>{working.seatItems.length} ที่นั่ง</small></div>
         <FormField label="ชื่อโซน"><input value={working.name} onChange={e => update('name', e.target.value)}/></FormField><FormField label="สีโซน"><input className="color-input" type="color" value={working.color} onChange={e => update('color', e.target.value)}/></FormField><FormField label="ราคาโซน (บาท)"><input type="number" min="0" step="0.01" value={working.zonePrice || 0} onChange={e => update('zonePrice', Number(e.target.value))}/></FormField>
         {activeSeat && <div className="seat-inspector"><b>เก้าอี้ที่เลือก</b><FormField label="ชื่อเก้าอี้"><input value={activeSeat.name} onChange={e => updateSeat({ ...activeSeat, name: e.target.value })}/></FormField><button className={`btn small ${activeSeat.disabled ? 'success' : 'ghost'}`} onClick={() => updateSeat({ ...activeSeat, disabled: !activeSeat.disabled })}>{activeSeat.disabled ? 'เปิดใช้งานเก้าอี้' : 'ปิดใช้งานเก้าอี้'}</button><button className="btn danger small" onClick={() => { setWorking(current => ({ ...current, seatItems: current.seatItems.filter(seat => seatKey(seat) !== seatKey(activeSeat)) })); setSelectedSeat(null) }}><TrashIcon/>ลบเก้าอี้</button></div>}
@@ -435,6 +484,7 @@ function TicketDesigner({ concert, objects, setObjects, onSave }) {
   const [side, setSide] = useState('FRONT')
   const [selectedId, setSelectedId] = useState(null)
   const [uploadError, setUploadError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const canvasRef = useRef(null)
   const imageInputRef = useRef(null)
   const replaceImageIdRef = useRef(null)
@@ -445,7 +495,15 @@ function TicketDesigner({ concert, objects, setObjects, onSave }) {
   const update = next => changeObjects(allObjects.map(item => item.id === next.id ? next : item))
   const add = (kind, values = {}) => {
     const item = { id:`ticket-${kind}-${Date.now()}`,kind,shape:'rectangle',name:kind === 'qr' ? 'QR CODE' : kind === 'image' ? 'รูปภาพ' : kind === 'shape' ? '' : 'ข้อความใหม่',color:kind === 'shape' ? '#e72d70' : kind === 'image' ? 'transparent' : '#ffffff',textColor:'#071033',fontSize:kind === 'text' ? 24 : 0,x:50,y:50,width:kind === 'text' ? 34 : 18,height:kind === 'text' ? 12 : 20,rotation:0,z:nextLayerOrder(allObjects),side,...values }
-    changeObjects([...allObjects,item]); setSelectedId(item.id)
+    changeObjects([...allObjects,item]); setSelectedId(item.id); setSaveError('')
+  }
+  const saveDesign = () => {
+    if (!allObjects.some(item => item.kind === 'qr')) {
+      setSaveError('กรุณาวาง QR Code อย่างน้อยหนึ่งตำแหน่งก่อนบันทึกแบบบัตร')
+      return
+    }
+    setSaveError('')
+    onSave(allObjects)
   }
   const openImagePicker = (itemId = null) => {
     replaceImageIdRef.current = itemId
@@ -492,10 +550,10 @@ function TicketDesigner({ concert, objects, setObjects, onSave }) {
     window.addEventListener('pointermove',move); window.addEventListener('pointerup',up)
   }
   return <div className="ticket-designer">
-    <div className="ticket-toolbar"><div><button onClick={() => add('text')}><b className="text-tool">T</b>ข้อความ</button><button onClick={() => openImagePicker()}><UploadIcon/>รูปภาพ</button><button onClick={() => add('shape')}><i className="shape-icon rectangle"></i>รูปทรง</button><button onClick={() => add('qr')}><span className="qr-tool">▦</span>QR Code</button><input ref={imageInputRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseImage}/>{uploadError && <span className="ticket-upload-error" role="alert">{uploadError}</span>}</div><button className="btn success small" onClick={() => onSave(allObjects)}><SaveIcon/>บันทึกแบบบัตร</button></div>
+    <div className="ticket-toolbar"><div><button onClick={() => add('text')}><b className="text-tool">T</b>ข้อความ</button><button onClick={() => openImagePicker()}><UploadIcon/>รูปภาพ</button><button onClick={() => add('shape')}><i className="shape-icon rectangle"></i>รูปทรง</button><button onClick={() => add('qr')}><span className="qr-tool">▦</span>QR Code</button><input ref={imageInputRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseImage}/>{uploadError && <span className="ticket-upload-error" role="alert">{uploadError}</span>}{saveError && <span className="ticket-upload-error" role="alert">{saveError}</span>}</div><button className="btn success small" onClick={saveDesign}><SaveIcon/>บันทึกแบบบัตร</button></div>
     <div className="ticket-workspace">
-      <aside className="ticket-assets"><h3>องค์ประกอบ</h3><p>ลากวัตถุบนบัตร แล้วปรับค่าจากแถบคุณสมบัติ</p><div className="data-fields"><button onClick={() => add('text')}>{'{ชื่อคอนเสิร์ต}'}</button><button onClick={() => add('text')}>{'{รหัสบัตร}'}</button><button onClick={() => add('text')}>{'{ชื่อผู้ถือบัตร}'}</button><button onClick={() => add('text')}>{'{โซน}'}</button><button onClick={() => add('text')}>{'{ที่นั่ง}'}</button></div></aside>
-      <section className="ticket-canvas-wrap"><div className="ticket-side-tabs"><button className={side === 'FRONT' ? 'active' : ''} onClick={() => {setSide('FRONT');setSelectedId(null)}}>ด้านหน้า</button><button className={side === 'BACK' ? 'active' : ''} onClick={() => {setSide('BACK');setSelectedId(null)}}>ด้านหลัง</button></div><div className="ticket-canvas" ref={canvasRef} onPointerDown={() => setSelectedId(null)}>{visible.sort((a,b)=>Number(a.z)-Number(b.z)).map((item, index) => <div key={item.id} className={`ticket-node ${selectedId === item.id ? 'selected' : ''}`} style={{left:`${item.x}%`,top:`${item.y}%`,width:`${item.width}%`,height:`${item.height}%`,transform:`translate(-50%,-50%) rotate(${item.rotation || 0}deg)`,zIndex:index + 1}} onPointerDown={e => drag(e,item)}><div className={`ticket-object ${item.kind}`} style={{background:item.color,color:item.textColor,fontSize:item.kind === 'text' ? `${item.fontSize || 24}px` : undefined}}>{item.kind === 'qr' ? <><span className="fake-qr">▦</span><small>#TK-2026-0459</small></> : item.kind === 'image' ? item.imageSrc ? <img className="ticket-uploaded-image" src={item.imageSrc} alt={item.name || 'รูปภาพบนบัตร'} onLoad={event => { const aspectRatio = event.currentTarget.naturalWidth / event.currentTarget.naturalHeight; if (!item.aspectRatio && aspectRatio) update({ ...item, aspectRatio }) }}/> : <UploadIcon/> : item.name}</div>{selectedId === item.id && <TransformHandles item={item} canvasRef={canvasRef} onChange={update}/>}</div>)}</div></section>
+      <aside className="ticket-assets"><h3>องค์ประกอบ</h3><p>ลากวัตถุบนบัตร แล้วปรับค่าจากแถบคุณสมบัติ</p><div className="data-fields"><button onClick={() => add('text', {name:'{ชื่อคอนเสิร์ต}'})}>{'{ชื่อคอนเสิร์ต}'}</button><button onClick={() => add('text', {name:'{รหัสบัตร}'})}>{'{รหัสบัตร}'}</button><button onClick={() => add('text', {name:'{ชื่อผู้ถือบัตร}'})}>{'{ชื่อผู้ถือบัตร}'}</button><button onClick={() => add('text', {name:'{โซน}'})}>{'{โซน}'}</button><button onClick={() => add('text', {name:'{ที่นั่ง}'})}>{'{ที่นั่ง}'}</button></div></aside>
+      <section className="ticket-canvas-wrap"><div className="ticket-side-tabs"><button className={side === 'FRONT' ? 'active' : ''} onClick={() => {setSide('FRONT');setSelectedId(null)}}>ด้านหน้า</button><button className={side === 'BACK' ? 'active' : ''} onClick={() => {setSide('BACK');setSelectedId(null)}}>ด้านหลัง</button></div><div className="ticket-canvas" ref={canvasRef} onPointerDown={() => setSelectedId(null)}>{visible.sort((a,b)=>Number(a.z)-Number(b.z)).map((item, index) => <div key={item.id} className={`ticket-node ${selectedId === item.id ? 'selected' : ''}`} style={{left:`${item.x}%`,top:`${item.y}%`,width:`${item.width}%`,height:`${item.height}%`,transform:`translate(-50%,-50%) rotate(${item.rotation || 0}deg)`,zIndex:index + 1}} onPointerDown={e => drag(e,item)}><div className={`ticket-object ${item.kind}`} style={{background:item.color,color:item.textColor,fontSize:item.kind === 'text' ? `${item.fontSize || 24}px` : undefined}}>{item.kind === 'qr' ? <><span className="fake-qr">▦</span><small>QR</small></> : item.kind === 'image' ? item.imageSrc ? <img className="ticket-uploaded-image" src={item.imageSrc} alt={item.name || 'รูปภาพบนบัตร'} onLoad={event => { const aspectRatio = event.currentTarget.naturalWidth / event.currentTarget.naturalHeight; if (!item.aspectRatio && aspectRatio) update({ ...item, aspectRatio }) }}/> : <UploadIcon/> : item.name}</div>{selectedId === item.id && <TransformHandles item={item} canvasRef={canvasRef} onChange={update}/>}</div>)}</div></section>
       <aside className="ticket-properties"><h3>คุณสมบัติวัตถุ</h3>{selected ? <>{selected.kind === 'image' ? <div className="image-property"><div className="image-property-preview">{selected.imageSrc ? <img src={selected.imageSrc} alt={selected.name || 'รูปภาพบนบัตร'}/> : <UploadIcon/>}</div><small>แสดงเต็มภาพ · ลากมุมเพื่อย่อ–ขยายตามสัดส่วน</small><button className="btn ghost small" onClick={() => openImagePicker(selected.id)}><UploadIcon/>เปลี่ยนรูป</button></div> : <><FormField label="ข้อความ"><input value={selected.name} onChange={e => update({...selected,name:e.target.value})}/></FormField><FormField label="สีพื้น"><input type="color" value={selected.color === 'transparent' ? '#ffffff' : selected.color} onChange={e => update({...selected,color:e.target.value})}/></FormField><FormField label="สีข้อความ"><input type="color" value={selected.textColor || '#071033'} onChange={e => update({...selected,textColor:e.target.value})}/></FormField>{selected.kind === 'text' && <RangeControl label="ขนาดตัวอักษร" min={8} max={96} value={selected.fontSize || 24} onChange={fontSize => update({...selected,fontSize})}/>}</>}<div className="property-pair"><RangeControl label="กว้าง" min={4} value={selected.width} onChange={width => update(keepImageInsideCanvas({...selected,width}))}/><RangeControl label="สูง" min={4} value={selected.height} onChange={height => update(keepImageInsideCanvas({...selected,height}))}/></div><FormField label="หมุน"><input type="number" value={selected.rotation || 0} onChange={e => update({...selected,rotation:+e.target.value})}/></FormField><button className="btn danger small" onClick={() => {changeObjects(allObjects.filter(item=>item.id!==selected.id));setSelectedId(null)}}><TrashIcon/>ลบวัตถุ</button></> : <p>เลือกวัตถุบนบัตรเพื่อแก้ไข</p>}</aside>
     </div>
   </div>
@@ -553,7 +611,6 @@ export default function App() {
   const [deleting, setDeleting] = useState(null)
   const [toast, setToast] = useState('')
   const active = useMemo(() => editing ? concerts.find(c => c.id === editing) || blankConcert() : null, [editing, concerts])
-  const startNew = () => { const fresh = blankConcert(); setConcerts(current => [...current, fresh]); setEditing(fresh.id) }
   const save = async draft => {
     const saved = { ...draft, status: draft.status || 'ฉบับร่าง' }
     try {
@@ -606,5 +663,5 @@ export default function App() {
     if (item && !item.name) setConcerts(current => current.filter(c => c.id !== editing))
     setEditing(null)
   }
-  return <div className="app-shell venue-seat-app">{active ? <Editor source={active} onCancel={cancel} onSave={save} onSeatSave={saveSeats} onTicketSave={saveTickets}/> : <ConcertList concerts={concerts} onAdd={startNew} onEdit={concert => setEditing(concert.id)} onDelete={setDeleting}/>} {deleting && <DeleteModal concert={deleting} onClose={() => setDeleting(null)} onConfirm={clearLayout}/>} {toast && <Toast message={toast} onDone={() => setToast('')}/>}</div>
+  return <div className="app-shell venue-seat-app">{active ? <Editor source={active} onCancel={cancel} onSave={save} onSeatSave={saveSeats} onTicketSave={saveTickets}/> : <ConcertList concerts={concerts} onEdit={concert => setEditing(concert.id)} onDelete={setDeleting}/>} {deleting && <DeleteModal concert={deleting} onClose={() => setDeleting(null)} onConfirm={clearLayout}/>} {toast && <Toast message={toast} onDone={() => setToast('')}/>}</div>
 }

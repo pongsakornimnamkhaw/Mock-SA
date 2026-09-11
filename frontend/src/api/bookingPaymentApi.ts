@@ -116,6 +116,7 @@ export const bookingPaymentApi = {
     userId?: string;
     slipFileName?: string;
     slipDataUrl?: string;
+    holdToken?: string;
   }): Promise<BookingRecord> {
     try {
       const res = await fetch('/api/bookings', {
@@ -139,6 +140,7 @@ export const bookingPaymentApi = {
           user_id: data.userId,
           slip_file_name: data.slipFileName,
           slip_data_url: data.slipDataUrl,
+          hold_token: data.holdToken,
         }),
       });
 
@@ -159,6 +161,9 @@ export const bookingPaymentApi = {
       // เซิร์ฟเวอร์ตอบว่าไม่ผ่าน → ต้องให้ผู้ใช้เห็น ห้ามกลืนแล้วบอกว่าจองสำเร็จ
       if (error instanceof BookingRejectedError) {
         throw error;
+      }
+      if (data.holdToken) {
+        throw new Error('ไม่สามารถเชื่อมต่อระบบจองที่นั่งได้ กรุณาลองใหม่ก่อนหมดเวลา');
       }
       // Local Fallback
       return addLocalBooking({
