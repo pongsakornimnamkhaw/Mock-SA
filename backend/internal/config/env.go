@@ -8,8 +8,8 @@ import (
 
 // LoadEnv loads environment variables from .env file
 func LoadEnv() {
-	err := godotenv.Overload()
-	if err != nil {
-		log.Println("Warning: No .env file found or error loading it, using system environment variables")
+	if err := godotenv.Overload(".env"); err == nil {
+		return
 	}
+	log.Println("Warning: No environment file found, using system environment variables")
 }

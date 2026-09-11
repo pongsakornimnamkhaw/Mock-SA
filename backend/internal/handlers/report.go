@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,11 +20,13 @@ import (
 func RegisterReportRoutes(app *fiber.App, db *gorm.DB) {
 	h := &reportHandler{db: db}
 	api := app.Group("/api")
-	api.Get("/reports/concerts", h.listConcertReports)
+	api.Get("/reports/concerts", requireEmployeeModule(db, access.Reports, access.View), h.listConcertReports)
 	api.Get("/concerts/:id/poster", h.getConcertPoster)
-	api.Get("/work-plans/current", h.getCurrentWorkPlan)
-	api.Put("/work-plans/current", h.saveCurrentWorkPlan)
-	api.Post("/work-plans/current/submit", h.submitCurrentWorkPlan)
+	// Current work plans belong to concert operations, not completed-concert
+	// reporting. This keeps report-only finance accounts out of active plans.
+	api.Get("/work-plans/current", requireEmployeeModule(db, access.Concerts, access.View), h.getCurrentWorkPlan)
+	api.Put("/work-plans/current", requireEmployeeModule(db, access.Concerts, access.Edit), h.saveCurrentWorkPlan)
+	api.Post("/work-plans/current/submit", requireEmployeeModule(db, access.Concerts, access.Edit), h.submitCurrentWorkPlan)
 }
 
 func (h *reportHandler) getConcertPoster(c *fiber.Ctx) error {
@@ -51,6 +54,8 @@ func (h *reportHandler) getConcertPoster(c *fiber.Ctx) error {
 }
 
 type reportHandler struct{ db *gorm.DB }
+
+var completedConcertStatuses = []string{"เสร็จสิ้น", "ตรวจสอบข้อมูลเสร็จสิ้น"}
 
 type reportZone struct {
 	Zone      string  `json:"zone"`
@@ -88,10 +93,7 @@ func reportConcertBase(concert models.Concert) concertReport {
 
 func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 	var concerts []models.Concert
-	// A report is useful once an event has ended. Include explicitly completed
-	// concerts as well, because imported data may not have perfect end dates.
-	today := time.Now().Format("2006-01-02")
-	if err := h.db.Where("end_date <= ? OR status IN ?", today, []string{"เสร็จสิ้น", "ตรวจสอบข้อมูลเสร็จสิ้น"}).
+	if err := h.db.Where("status IN ?", completedConcertStatuses).
 		Order("end_date DESC, concert_id DESC").Find(&concerts).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "ไม่สามารถอ่านรายงานคอนเสิร์ตได้"})
 	}
@@ -102,13 +104,15 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 
 		// Ticket -> Seat is the authoritative link from a sale to its concert/zone.
 		type zoneAggregate struct {
-			ZoneID string
-			Sold   int64
+			ZoneID  string
+			Sold    int64
+			Revenue float64
 		}
 		var aggregates []zoneAggregate
-		if err := h.db.Table("tickets t").Select("s.zone_id, COUNT(DISTINCT t.ticket_id) AS sold").
+		if err := h.db.Table("tickets t").Select("s.zone_id, COUNT(DISTINCT t.ticket_id) AS sold, COALESCE(SUM(t.price_ticket), 0) AS revenue").
 			Joins("JOIN seats s ON s.seat_id = t.seat_id").
-			Where("s.concert_id = ? AND LOWER(t.status_ticket) NOT IN ?", concert.ConcertID, []string{"cancelled", "canceled", "ยกเลิก"}).
+			Joins("JOIN zones z ON z.zone_id = s.zone_id").
+			Where("z.concert_id = ? AND LOWER(t.status_ticket) NOT IN ?", concert.ConcertID, []string{"cancelled", "canceled", "ยกเลิก"}).
 			Group("s.zone_id").Scan(&aggregates).Error; err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "ไม่สามารถสรุปยอดขายบัตรได้"})
 		}
@@ -118,12 +122,9 @@ func (h *reportHandler) listConcertReports(c *fiber.Ctx) error {
 			if h.db.First(&zone, "zone_id = ?", aggregate.ZoneID).Error == nil && zone.ZoneType != "" {
 				zoneName = zone.ZoneType
 			}
-			var price float64
-			h.db.Model(&models.TicketCategory{}).Where("zone_id = ?", aggregate.ZoneID).Select("COALESCE(MAX(price), 0)").Scan(&price)
-			revenue := price * float64(aggregate.Sold)
 			row.TicketsSold += aggregate.Sold
-			row.TicketRevenue += revenue
-			row.Zones = append(row.Zones, reportZone{Zone: zoneName, SeatsSold: aggregate.Sold, Revenue: revenue})
+			row.TicketRevenue += aggregate.Revenue
+			row.Zones = append(row.Zones, reportZone{Zone: zoneName, SeatsSold: aggregate.Sold, Revenue: aggregate.Revenue})
 		}
 		result = append(result, row)
 	}
@@ -135,6 +136,15 @@ func reportStatus(status string) string {
 		return status
 	}
 	return "ตรวจสอบข้อมูลเสร็จสิ้น"
+}
+
+func isCompletedConcertStatus(status string) bool {
+	for _, completed := range completedConcertStatuses {
+		if status == completed {
+			return true
+		}
+	}
+	return false
 }
 
 type scheduleEntry struct {

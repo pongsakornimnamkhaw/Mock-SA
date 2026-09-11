@@ -8,14 +8,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"backend/internal/config"
+	"backend/internal/eventregistration"
 	"backend/internal/handlers"
 	"backend/internal/models"
+	"backend/internal/ticketplanning"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -35,11 +40,31 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
 		host, user, password, dbname, port, sslmode)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		t.Skipf("Skipping test: Database connection failed: %v", err)
+	}
+	schemaName := "ticket_planning_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if err := admin.Exec(`CREATE SCHEMA "` + schemaName + `"`).Error; err != nil {
+		t.Fatalf("Failed to create isolated test schema: %v", err)
+	}
+	t.Cleanup(func() {
+		if !strings.HasPrefix(schemaName, "ticket_planning_test_") || len(schemaName) != 53 {
+			t.Errorf("unsafe test schema cleanup target %q", schemaName)
+			return
+		}
+		if err := admin.Exec(`DROP SCHEMA "` + schemaName + `" CASCADE`).Error; err != nil {
+			t.Errorf("Failed to clean isolated test schema: %v", err)
+		}
+	})
+
+	db, err := gorm.Open(postgres.Open(dsn+" search_path="+schemaName), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("Failed to connect to isolated test schema: %v", err)
 	}
 
 	if err := models.MigrateAllModels(db); err != nil {
@@ -65,8 +90,48 @@ func setupTestApp(db *gorm.DB) *fiber.App {
 			"status":  "success",
 		})
 	})
-	handlers.RegisterVenueSeatRoutes(app, db)
+	handlers.RegisterEmployeeAuthRoutes(app, db)
+	ticketplanning.RegisterRoutes(app, db)
+	eventregistration.RegisterRoutes(app, db)
 	return app
+}
+
+func authenticateTestEmployee(t *testing.T, db *gorm.DB, app *fiber.App) *http.Cookie {
+	t.Helper()
+	password := "IntegrationPassword123!"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprintf("test-admin-%d", time.Now().UnixNano())
+	code := id
+	user := models.User{
+		UserID: id, FirstName: "Integration", LastName: "Admin", Email: id + "@example.test",
+		PhoneNumber: "0812345678", UserType: "employee", Role: "admin", EmployeeCode: &code,
+		PasswordHash: string(hash), DateOfBirth: time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC), Gender: "Other",
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Where("user_id = ?", id).Delete(&models.EmpActivityLogs{})
+		db.Where("user_id = ?", id).Delete(&models.Permission{})
+		db.Where("user_id = ?", id).Delete(&models.User{})
+	})
+	body, _ := json.Marshal(map[string]string{"username": user.Email, "password": password})
+	request := httptest.NewRequest(http.MethodPost, "/api/employee/auth/login", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request, -1)
+	if err != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("employee login failed: status=%d err=%v", response.StatusCode, err)
+	}
+	for _, cookie := range response.Cookies() {
+		if cookie.Name == "octavia_employee_session" {
+			return cookie
+		}
+	}
+	t.Fatal("employee login did not issue session cookie")
+	return nil
 }
 
 // Test 1: ทดสอบยิง GET /
@@ -95,10 +160,121 @@ func TestRootEndpoint(t *testing.T) {
 	}
 }
 
-// Test 2: ทดสอบยิง POST /api/venue-seat/concerts เพื่อสร้าง Concert เข้า DB จริง
+func TestAutoMigrateTwicePreservesPlanningDataAndExcludesLegacyTables(t *testing.T) {
+	db := setupTestDB(t)
+	concert := models.Concert{
+		ConcertID:   "test-migrate-" + strings.ReplaceAll(uuid.NewString(), "-", ""),
+		ConcertName: "Migration Safety Test", StartDate: "2026-09-10", EndDate: "2026-09-10",
+		StartTime: "18:00:00", EndTime: "20:00:00", Location: "Test Hall", Status: "Draft",
+	}
+	if err := db.Create(&concert).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := models.MigrateAllModels(db); err != nil {
+		t.Fatalf("second AutoMigrate failed: %v", err)
+	}
+	var count int64
+	if err := db.Model(&models.Concert{}).Where("concert_id = ?", concert.ConcertID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("second AutoMigrate changed existing planning data; concert count = %d", count)
+	}
+	for _, table := range []string{"venue_seat_plans", "venue_seat_rounds", "venue_seat_zones", "venue_seats", "venue_layout_objects", "venue_seat_publications"} {
+		if db.Migrator().HasTable(table) {
+			t.Fatalf("legacy table %q was created", table)
+		}
+	}
+}
+
+func TestEventRegistrationDashboardDerivesConcertThroughZone(t *testing.T) {
+	db := setupTestDB(t)
+	app := setupTestApp(db)
+	concert := models.Concert{ConcertID: "dashboard-zone-test", ConcertName: "Dashboard Test", StartDate: "2026-09-10", EndDate: "2026-09-10", StartTime: "18:00:00", EndTime: "20:00:00", Location: "Hall", Status: "Draft"}
+	if err := db.Create(&concert).Error; err != nil {
+		t.Fatal(err)
+	}
+	zone := models.Zone{ZoneID: "dashboard-zone", ConcertID: concert.ConcertID, ZoneType: "A", Capacity: 2, ZonePrice: 1000}
+	if err := db.Create(&zone).Error; err != nil {
+		t.Fatal(err)
+	}
+	seat := models.Seat{ZoneID: zone.ZoneID, SeatLabel: "A1", SeatRow: 1, SeatColumn: 1, StatusSeat: "AVAILABLE"}
+	if err := db.Create(&seat).Error; err != nil {
+		t.Fatal(err)
+	}
+	booking := models.Booking{BookingID: "dashboard-booking", BookingDate: time.Now(), Status: "สำเร็จ", ConcertID: concert.ConcertID}
+	if err := db.Create(&booking).Error; err != nil {
+		t.Fatal(err)
+	}
+	ticket := models.Ticket{NameConcert: concert.ConcertName, TicketDateTime: time.Now(), PriceTicket: zone.ZonePrice, StatusTicket: "พร้อมใช้งาน", SeatID: seat.SeatID, BookingID: booking.BookingID}
+	if err := db.Create(&ticket).Error; err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/event-registration/concerts/"+concert.ConcertID+"/dashboard", nil)
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("dashboard got %d: %s", resp.StatusCode, body)
+	}
+	var dashboard struct {
+		TotalTickets int64 `json:"totalTickets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&dashboard); err != nil {
+		t.Fatal(err)
+	}
+	if dashboard.TotalTickets != 1 {
+		t.Fatalf("totalTickets = %d, want 1", dashboard.TotalTickets)
+	}
+
+	checkInBody, _ := json.Marshal(map[string]interface{}{"ticketId": ticket.TicketID, "gateId": 1, "concertId": concert.ConcertID})
+	checkIn := func() int {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/event-registration/check-ins", bytes.NewReader(checkInBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req, -1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.StatusCode
+	}
+	if got := checkIn(); got != http.StatusCreated {
+		t.Fatalf("first numeric-ID check-in got %d, want 201", got)
+	}
+	if got := checkIn(); got != http.StatusConflict {
+		t.Fatalf("repeated check-in got %d, want 409", got)
+	}
+
+	missingReq := httptest.NewRequest(http.MethodGet, "/api/event-registration/tickets/999999999?concertId="+concert.ConcertID, nil)
+	missingResp, err := app.Test(missingReq, -1)
+	if err != nil || missingResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing ticket lookup got status=%d err=%v, want 404", missingResp.StatusCode, err)
+	}
+
+	secondSeat := models.Seat{ZoneID: zone.ZoneID, SeatLabel: "A2", SeatRow: 1, SeatColumn: 2, StatusSeat: "AVAILABLE"}
+	if err := db.Create(&secondSeat).Error; err != nil {
+		t.Fatal(err)
+	}
+	secondTicket := models.Ticket{NameConcert: concert.ConcertName, TicketDateTime: time.Now(), PriceTicket: zone.ZonePrice, StatusTicket: "พร้อมใช้งาน", SeatID: secondSeat.SeatID, BookingID: booking.BookingID}
+	if err := db.Create(&secondTicket).Error; err != nil {
+		t.Fatal(err)
+	}
+	wrongBody, _ := json.Marshal(map[string]interface{}{"ticketId": secondTicket.TicketID, "gateId": 1, "concertId": "another-concert"})
+	wrongReq := httptest.NewRequest(http.MethodPost, "/api/event-registration/check-ins", bytes.NewReader(wrongBody))
+	wrongReq.Header.Set("Content-Type", "application/json")
+	wrongResp, err := app.Test(wrongReq, -1)
+	if err != nil || wrongResp.StatusCode != http.StatusConflict {
+		t.Fatalf("wrong-concert check-in got status=%d err=%v, want 409", wrongResp.StatusCode, err)
+	}
+}
+
+// Test 2: ทดสอบยิง POST /api/ticket-planning/concerts เพื่อสร้าง Concert เข้า DB จริง
 func TestCreateAndGetConcertAPI(t *testing.T) {
 	db := setupTestDB(t)
 	app := setupTestApp(db)
+	cookie := authenticateTestEmployee(t, db, app)
 
 	testConcertID := fmt.Sprintf("test-cc-%d", time.Now().UnixNano())
 	payload := map[string]interface{}{
@@ -132,9 +308,10 @@ func TestCreateAndGetConcertAPI(t *testing.T) {
 
 	jsonBytes, _ := json.Marshal(payload)
 
-	// POST /api/venue-seat/concerts
-	req := httptest.NewRequest(http.MethodPost, "/api/venue-seat/concerts", bytes.NewReader(jsonBytes))
+	// POST /api/ticket-planning/concerts
+	req := httptest.NewRequest(http.MethodPost, "/api/ticket-planning/concerts", bytes.NewReader(jsonBytes))
 	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("POST concerts request failed: %v", err)
@@ -145,8 +322,9 @@ func TestCreateAndGetConcertAPI(t *testing.T) {
 		t.Fatalf("Expected status 200 on POST, got %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	// GET /api/venue-seat/concerts/:id
-	getReq := httptest.NewRequest(http.MethodGet, "/api/venue-seat/concerts/"+testConcertID, nil)
+	// GET /api/ticket-planning/concerts/:id
+	getReq := httptest.NewRequest(http.MethodGet, "/api/ticket-planning/concerts/"+testConcertID, nil)
+	getReq.AddCookie(cookie)
 	getResp, err := app.Test(getReq, -1)
 	if err != nil {
 		t.Fatalf("GET concert request failed: %v", err)
@@ -168,17 +346,17 @@ func TestCreateAndGetConcertAPI(t *testing.T) {
 
 	// Clean up test data
 	t.Cleanup(func() {
-		db.Where("concert_id = ?", testConcertID).Delete(&models.VenueSeatRound{})
-		db.Where("concert_id = ?", testConcertID).Delete(&models.VenueSeatPlan{})
-		db.Where("concert_id = ?", testConcertID).Delete(&models.VenueSeatPublication{})
+		db.Where("concert_id = ?", testConcertID).Delete(&models.PerformanceSchedule{})
+		db.Where("concert_id = ?", testConcertID).Delete(&models.Publication{})
 		db.Where("concert_id = ?", testConcertID).Delete(&models.Concert{})
 	})
 }
 
-// Test 3: ทดสอบยิง PUT /api/venue-seat/concerts/:id/layout บันทึก Layout
+// Test 3: ทดสอบยิง PUT /api/ticket-planning/concerts/:id/layout บันทึก Layout
 func TestSaveLayoutAPI(t *testing.T) {
 	db := setupTestDB(t)
 	app := setupTestApp(db)
+	cookie := authenticateTestEmployee(t, db, app)
 
 	testConcertID := fmt.Sprintf("test-layout-%d", time.Now().UnixNano())
 	// สร้าง concert ก่อน
@@ -202,22 +380,22 @@ func TestSaveLayoutAPI(t *testing.T) {
 	layoutPayload := map[string]interface{}{
 		"zones": []map[string]interface{}{
 			{
-				"id":     "zone-vip-1",
-				"kind":   "zone",
-				"name":   "VIP A",
-				"color":  "#FF0000",
-				"seats":  2,
-				"price":  3500.0,
-				"type":   "seated",
-				"shape":  "rect",
-				"x":      100.0,
-				"y":      200.0,
-				"width":  150.0,
-				"height": 80.0,
-				"z":      1,
+				"id":        "zone-vip-1",
+				"kind":      "zone",
+				"name":      "VIP A",
+				"color":     "#FF0000",
+				"seats":     2,
+				"zonePrice": 3500.0,
+				"type":      "seated",
+				"shape":     "rect",
+				"x":         100.0,
+				"y":         200.0,
+				"width":     150.0,
+				"height":    80.0,
+				"z":         1,
 				"seatItems": []map[string]interface{}{
-					{"id": "seat-a1", "name": "A1", "x": 105.0, "y": 210.0, "disabled": false},
-					{"id": "seat-a2", "name": "A2", "x": 135.0, "y": 210.0, "disabled": false},
+					{"clientKey": "seat-a1", "name": "A1", "x": 105.0, "y": 210.0, "disabled": false},
+					{"clientKey": "seat-a2", "name": "A2", "x": 135.0, "y": 210.0, "disabled": false},
 				},
 			},
 		},
@@ -239,8 +417,9 @@ func TestSaveLayoutAPI(t *testing.T) {
 	}
 
 	jsonBytes, _ := json.Marshal(layoutPayload)
-	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/venue-seat/concerts/%s/layout", testConcertID), bytes.NewReader(jsonBytes))
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/ticket-planning/concerts/%s/layout", testConcertID), bytes.NewReader(jsonBytes))
 	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("PUT layout request failed: %v", err)
@@ -250,13 +429,78 @@ func TestSaveLayoutAPI(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("Expected status 200 on PUT layout, got %d, body: %s", resp.StatusCode, string(body))
 	}
+	var savedLayout struct {
+		Zones []struct {
+			ZonePrice float64 `json:"zonePrice"`
+			SeatItems []struct {
+				ID uint `json:"id"`
+			} `json:"seatItems"`
+		} `json:"zones"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&savedLayout); err != nil {
+		t.Fatalf("decode saved layout: %v", err)
+	}
+	if len(savedLayout.Zones) != 1 || savedLayout.Zones[0].ZonePrice != 3500 || len(savedLayout.Zones[0].SeatItems) != 2 || savedLayout.Zones[0].SeatItems[0].ID == 0 {
+		t.Fatalf("saved layout did not return zone price and database seat IDs: %+v", savedLayout)
+	}
+
+	booking := models.Booking{BookingID: "booking-" + strings.ReplaceAll(uuid.NewString(), "-", ""), BookingDate: time.Now(), Status: "สำเร็จ", ConcertID: testConcertID}
+	if err := db.Create(&booking).Error; err != nil {
+		t.Fatal(err)
+	}
+	ticket := models.Ticket{NameConcert: concert.ConcertName, TicketDateTime: time.Now(), PriceTicket: savedLayout.Zones[0].ZonePrice, StatusTicket: "พร้อมใช้งาน", SeatID: savedLayout.Zones[0].SeatItems[0].ID, BookingID: booking.BookingID}
+	if err := db.Create(&ticket).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	seatItems := layoutPayload["zones"].([]map[string]interface{})[0]["seatItems"].([]map[string]interface{})
+	seatItems[0] = map[string]interface{}{"id": savedLayout.Zones[0].SeatItems[0].ID, "name": "A1", "x": 105.0, "y": 210.0, "disabled": false}
+	seatItems[1] = map[string]interface{}{"id": savedLayout.Zones[0].SeatItems[1].ID, "name": "A2", "x": 135.0, "y": 210.0, "disabled": false}
+	layoutPayload["zones"].([]map[string]interface{})[0]["zonePrice"] = 4200.0
+	updatedJSON, _ := json.Marshal(layoutPayload)
+	updatedReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/ticket-planning/concerts/%s/layout", testConcertID), bytes.NewReader(updatedJSON))
+	updatedReq.Header.Set("Content-Type", "application/json")
+	updatedResp, err := app.Test(updatedReq, -1)
+	if err != nil || updatedResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(updatedResp.Body)
+		t.Fatalf("updating ZonePrice failed: status=%d err=%v body=%s", updatedResp.StatusCode, err, body)
+	}
+	var unchanged models.Ticket
+	if err := db.First(&unchanged, ticket.TicketID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.PriceTicket != 3500 {
+		t.Fatalf("existing ticket price changed with ZonePrice: got %.2f", unchanged.PriceTicket)
+	}
+
+	seatItems[0]["name"] = "RENAMED"
+	conflictJSON, _ := json.Marshal(layoutPayload)
+	conflictReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/ticket-planning/concerts/%s/layout", testConcertID), bytes.NewReader(conflictJSON))
+	conflictReq.Header.Set("Content-Type", "application/json")
+	conflictResp, err := app.Test(conflictReq, -1)
+	if err != nil || conflictResp.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(conflictResp.Body)
+		t.Fatalf("renaming issued seat got status=%d err=%v body=%s, want 409", conflictResp.StatusCode, err, body)
+	}
+
+	seatItems[0]["name"] = "A1"
+	layoutPayload["zones"].([]map[string]interface{})[0]["seats"] = 0
+	capacityJSON, _ := json.Marshal(layoutPayload)
+	capacityReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/ticket-planning/concerts/%s/layout", testConcertID), bytes.NewReader(capacityJSON))
+	capacityReq.Header.Set("Content-Type", "application/json")
+	capacityResp, err := app.Test(capacityReq, -1)
+	if err != nil || capacityResp.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(capacityResp.Body)
+		t.Fatalf("capacity below issued ticket count got status=%d err=%v body=%s, want 409", capacityResp.StatusCode, err, body)
+	}
 
 	// Clean up
 	t.Cleanup(func() {
-		db.Where("zone_id = ?", "zone-vip-1").Delete(&models.VenueSeat{})
-		db.Where("concert_id = ?", testConcertID).Delete(&models.VenueSeatZone{})
-		db.Where("concert_id = ?", testConcertID).Delete(&models.VenueLayoutObject{})
-		db.Where("concert_id = ?", testConcertID).Delete(&models.VenueSeatPlan{})
+		db.Where("ticket_id = ?", ticket.TicketID).Delete(&models.Ticket{})
+		db.Where("booking_id = ?", booking.BookingID).Delete(&models.Booking{})
+		db.Where("zone_id = ?", "zone-vip-1").Delete(&models.Seat{})
+		db.Where("concert_id = ?", testConcertID).Delete(&models.Zone{})
+		db.Where("concert_id = ?", testConcertID).Delete(&models.LayoutObject{})
 		db.Where("concert_id = ?", testConcertID).Delete(&models.Concert{})
 	})
 }

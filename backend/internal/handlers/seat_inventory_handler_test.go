@@ -23,7 +23,7 @@ func TestSeatsEndpointMaterialisesDefaultGridWhenLayoutMissing(t *testing.T) {
 	}
 
 	var stored int64
-	db.Model(&models.Seat{}).Where("concert_id = ? AND zone_id = ?", "CCGRID", "A1").Count(&stored)
+	db.Model(&models.Seat{}).Where("zone_id = ?", "A1").Count(&stored)
 	if stored != 40 {
 		t.Fatalf("ที่นั่งต้องถูกบันทึกลงฐานข้อมูลจริง แต่มี %d แถว", stored)
 	}
@@ -39,12 +39,12 @@ func TestSeatsEndpointReportsTakenSeats(t *testing.T) {
 	app := fiber.New()
 	RegisterSeatInventoryRoutes(app, db)
 
-	if err := db.Create(&models.Zone{ZoneID: "Z1", ZoneType: "นั่ง", Capacity: 2}).Error; err != nil {
+	if err := db.Create(&models.Zone{ZoneID: "Z1", ConcertID: "CCT", ZoneType: "นั่ง", Capacity: 2}).Error; err != nil {
 		t.Fatal(err)
 	}
 	seats := []models.Seat{
-		{SeatID: "SA1", SeatRow: "A", SeatColumn: "1", StatusSeat: seatStatusAvailable, ConcertID: "CCT", ZoneID: "Z1"},
-		{SeatID: "SA2", SeatRow: "A", SeatColumn: "2", StatusSeat: seatStatusTaken, ConcertID: "CCT", ZoneID: "Z1"},
+		{SeatLabel: "A1", SeatRow: 1, SeatColumn: 1, StatusSeat: seatStatusAvailable, ZoneID: "Z1"},
+		{SeatLabel: "A2", SeatRow: 1, SeatColumn: 2, StatusSeat: seatStatusTaken, ZoneID: "Z1"},
 	}
 	if err := db.Create(&seats).Error; err != nil {
 		t.Fatal(err)
@@ -66,15 +66,12 @@ func TestZonesEndpointReturnsPriceAndAvailability(t *testing.T) {
 	app := fiber.New()
 	RegisterSeatInventoryRoutes(app, db)
 
-	if err := db.Create(&models.Zone{ZoneID: "Z9", ZoneType: "นั่ง", Capacity: 2, Color: "#E53935"}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Create(&models.TicketCategory{CategoryID: "TC-Z9", CategoryName: "โซน A", Price: 1800, Quantity: 2, ZoneID: "Z9"}).Error; err != nil {
+	if err := db.Create(&models.Zone{ZoneID: "Z9", ConcertID: "CCZ", ZoneType: "นั่ง", Capacity: 2, Color: "#E53935", ZonePrice: 1800}).Error; err != nil {
 		t.Fatal(err)
 	}
 	seats := []models.Seat{
-		{SeatID: "SZ1", SeatRow: "A", SeatColumn: "1", StatusSeat: seatStatusAvailable, ConcertID: "CCZ", ZoneID: "Z9"},
-		{SeatID: "SZ2", SeatRow: "A", SeatColumn: "2", StatusSeat: seatStatusTaken, ConcertID: "CCZ", ZoneID: "Z9"},
+		{SeatLabel: "A1", SeatRow: 1, SeatColumn: 1, StatusSeat: seatStatusAvailable, ZoneID: "Z9"},
+		{SeatLabel: "A2", SeatRow: 1, SeatColumn: 2, StatusSeat: seatStatusTaken, ZoneID: "Z9"},
 	}
 	if err := db.Create(&seats).Error; err != nil {
 		t.Fatal(err)

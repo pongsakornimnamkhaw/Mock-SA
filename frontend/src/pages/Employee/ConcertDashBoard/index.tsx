@@ -14,7 +14,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { Link } from 'react-router-dom';
 import NotificationBell from '@/components/Notification/NotificationBell';
 
-import { flux, pulse, celestial } from '@/assets/Poster';
+import { flux, pulse, celestial } from '@/assets/poster';
 
 const concerts = [
   {

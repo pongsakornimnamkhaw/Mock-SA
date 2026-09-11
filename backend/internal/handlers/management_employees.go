@@ -1,31 +1,52 @@
 package handlers
 
 import (
+	"backend/internal/access"
 	"net/mail"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"backend/internal/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 const employeePermissionPosition = "employee_management"
+const employeeModulePermissionPrefix = "module:"
+
+func initializeNewEmployeePassword(user *models.User, phone string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(phone), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user.PasswordHash = string(hash)
+	user.MustChangePassword = true
+	return nil
+}
+
+type modulePermissionDTO struct {
+	Module string `json:"module"`
+	Level  string `json:"level"`
+}
 
 type employeeDTO struct {
-	EmployeeID    string `json:"employee_id"`
-	FirstName     string `json:"first_name"`
-	LastName      string `json:"last_name"`
-	EmployeeCode  string `json:"employee_code"`
-	Department    string `json:"department"`
-	Email         string `json:"email"`
-	Phone         string `json:"phone"`
-	Permission    string `json:"permission"`
-	EditScope     string `json:"edit_scope,omitempty"`
-	PersonnelType string `json:"personnel_type"`
+	EmployeeID        string                `json:"employee_id"`
+	FirstName         string                `json:"first_name"`
+	LastName          string                `json:"last_name"`
+	EmployeeCode      string                `json:"employee_code"`
+	Department        string                `json:"department"`
+	JobRole           string                `json:"job_role"`
+	Email             string                `json:"email"`
+	Phone             string                `json:"phone"`
+	Permission        string                `json:"permission"`
+	EditScope         string                `json:"edit_scope,omitempty"`
+	PersonnelType     string                `json:"personnel_type"`
+	ModulePermissions []modulePermissionDTO `json:"module_permissions"`
 }
 
 func employeeQuery(db *gorm.DB) *gorm.DB {
@@ -42,6 +63,7 @@ func employeeView(u models.User) employeeDTO {
 		FirstName:     u.FirstName,
 		LastName:      u.LastName,
 		Department:    u.Department,
+		JobRole:       u.JobRole,
 		Email:         u.Email,
 		Phone:         u.PhoneNumber,
 		Permission:    u.Role,
@@ -54,14 +76,22 @@ func employeeView(u models.User) employeeDTO {
 		e.Permission = "view_only"
 	}
 	for _, p := range u.Permissions {
+		if strings.HasPrefix(p.Position, employeeModulePermissionPrefix) {
+			module := strings.TrimPrefix(p.Position, employeeModulePermissionPrefix)
+			if access.Module(module).Valid() && access.Level(p.PermissionName).Valid() {
+				e.ModulePermissions = append(e.ModulePermissions, modulePermissionDTO{Module: module, Level: p.PermissionName})
+			}
+			continue
+		}
 		if p.Position == employeePermissionPosition {
 			e.Permission = p.PermissionName
 			if p.PermissionName == "edit" {
 				e.EditScope = p.Scope
 			}
-			break
+			continue
 		}
 	}
+	sort.Slice(e.ModulePermissions, func(i, j int) bool { return e.ModulePermissions[i].Module < e.ModulePermissions[j].Module })
 	return e
 }
 
@@ -126,6 +156,14 @@ func validateEmployee(e *employeeDTO) error {
 	e.LastName = strings.TrimSpace(e.LastName)
 	e.EmployeeCode = strings.TrimSpace(e.EmployeeCode)
 	e.Department = strings.TrimSpace(e.Department)
+	e.JobRole = strings.ToLower(strings.TrimSpace(e.JobRole))
+	if e.JobRole == "" {
+		e.JobRole = "staff"
+	}
+	validJobRoles := map[string]bool{"staff": true, "organizer": true, "co_organizer": true, "event_staff": true, "approver": true, "sales": true}
+	if !validJobRoles[e.JobRole] {
+		return fiber.NewError(400, "บทบาทงานไม่ถูกต้อง")
+	}
 	e.PersonnelType = strings.TrimSpace(e.PersonnelType)
 	if e.PersonnelType == "" {
 		e.PersonnelType = models.PersonnelTypeInternal
@@ -146,14 +184,46 @@ func validateEmployee(e *employeeDTO) error {
 	if e.Permission != "view_only" && e.Permission != "edit" && e.Permission != "admin" {
 		return fiber.NewError(400, "สิทธิ์พนักงานไม่ถูกต้อง")
 	}
-	if e.Permission == "edit" {
-		if e.EditScope != "all" && e.EditScope != "promotions" && e.EditScope != "users" {
-			return fiber.NewError(400, "กรุณาเลือกขอบเขตการแก้ไข")
-		}
-	} else {
+	if e.Permission != "edit" {
 		e.EditScope = ""
 	}
+	seenModules := make(map[string]struct{}, len(e.ModulePermissions))
+	overrides := make(map[access.Module]access.Level, len(e.ModulePermissions))
+	for _, item := range e.ModulePermissions {
+		module := access.Module(strings.TrimSpace(item.Module))
+		level := access.Level(strings.TrimSpace(item.Level))
+		if !module.Valid() || !level.Valid() {
+			return fiber.NewError(400, "สิทธิ์โมดูลไม่ถูกต้อง")
+		}
+		if _, duplicate := seenModules[string(module)]; duplicate {
+			return fiber.NewError(400, "กำหนดสิทธิ์โมดูลซ้ำ")
+		}
+		seenModules[string(module)] = struct{}{}
+		overrides[module] = level
+	}
+	if e.Permission == "edit" {
+		hasEditableModule := false
+		for _, module := range access.Modules {
+			if access.Resolve(e.JobRole, e.Department, module, overrides) == access.Edit {
+				hasEditableModule = true
+				break
+			}
+		}
+		legacyScope := e.EditScope == "all" || e.EditScope == "promotions" || e.EditScope == "users"
+		if !hasEditableModule && !legacyScope {
+			return fiber.NewError(400, "กรุณาเลือกอย่างน้อย 1 โมดูลที่แก้ไขได้")
+		}
+	}
 	return nil
+}
+
+func modulePermissionsKey(items []modulePermissionDTO) string {
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		values = append(values, item.Module+"="+item.Level)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
 }
 
 func employeeAccountActions(previous, input employeeDTO, creating bool) []string {
@@ -165,12 +235,13 @@ func employeeAccountActions(previous, input employeeDTO, creating bool) []string
 		previous.LastName != input.LastName ||
 		previous.EmployeeCode != input.EmployeeCode ||
 		previous.Department != input.Department ||
+		previous.JobRole != input.JobRole ||
 		previous.Email != input.Email ||
 		previous.Phone != input.Phone
 	if profileChanged {
 		actions = append(actions, "แก้ไขบัญชี")
 	}
-	if previous.Permission != input.Permission || previous.EditScope != input.EditScope {
+	if previous.Permission != input.Permission || previous.EditScope != input.EditScope || modulePermissionsKey(previous.ModulePermissions) != modulePermissionsKey(input.ModulePermissions) {
 		actions = append(actions, "เปลี่ยนสิทธิ์")
 	}
 	return actions
@@ -215,11 +286,15 @@ func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 		u.LastName = input.LastName
 		u.EmployeeCode = &input.EmployeeCode
 		u.Department = input.Department
+		u.JobRole = input.JobRole
 		u.Email = input.Email
 		u.PhoneNumber = input.Phone
 		u.Role = input.Permission
 		u.PersonnelType = input.PersonnelType
 		if id == "" {
+			if err := initializeNewEmployeePassword(&u, input.Phone); err != nil {
+				return err
+			}
 			if err := tx.Omit(clause.Associations).Create(&u).Error; err != nil {
 				return err
 			}
@@ -230,6 +305,7 @@ func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 				"last_name":      u.LastName,
 				"employee_code":  u.EmployeeCode,
 				"department":     u.Department,
+				"job_role":       u.JobRole,
 				"email":          u.Email,
 				"phone_number":   u.PhoneNumber,
 				"role":           u.Role,
@@ -249,6 +325,19 @@ func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 		if err := tx.Create(&p).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("user_id = ? AND position LIKE ?", u.UserID, employeeModulePermissionPrefix+"%").Delete(&models.Permission{}).Error; err != nil {
+			return err
+		}
+		for _, item := range input.ModulePermissions {
+			modulePermission := models.Permission{
+				PermissionID: "PM" + uuid.NewString(), UserID: u.UserID,
+				Position:       employeeModulePermissionPrefix + item.Module,
+				PermissionName: item.Level, Scope: "global",
+			}
+			if err := tx.Create(&modulePermission).Error; err != nil {
+				return err
+			}
+		}
 		for _, action := range actions {
 			detail := "สร้างบัญชีพนักงาน " + input.EmployeeCode + " สิทธิ์ " + input.Permission
 			if action == "แก้ไขบัญชี" {
@@ -261,6 +350,9 @@ func (h *managementHandler) saveEmployee(c *fiber.Ctx) error {
 			}
 		}
 		u.Permissions = []models.Permission{p}
+		for _, item := range input.ModulePermissions {
+			u.Permissions = append(u.Permissions, models.Permission{Position: employeeModulePermissionPrefix + item.Module, PermissionName: item.Level, Scope: "global"})
+		}
 		result = employeeView(u)
 		return nil
 	})
@@ -280,6 +372,9 @@ func (h *managementHandler) deleteEmployee(c *fiber.Ctx) error {
 			return err
 		}
 		if err := tx.Model(&u).Update("employee_inactive", true).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ? AND used_at IS NULL", u.UserID).Delete(&models.EmployeePasswordSetupToken{}).Error; err != nil {
 			return err
 		}
 		return auditManagement(tx, "ปิดใช้งานบัญชี", u.UserID, "ปิดใช้งานบัญชีพนักงาน "+u.FirstName+" "+u.LastName+" โดยเก็บข้อมูลอ้างอิงและประวัติไว้")

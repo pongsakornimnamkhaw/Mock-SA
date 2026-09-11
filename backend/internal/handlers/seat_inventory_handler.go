@@ -39,52 +39,42 @@ type zoneInventoryDTO struct {
 }
 
 type seatInventoryDTO struct {
-	SeatID     string  `json:"seat_id"`
+	SeatID     uint    `json:"seat_id"`
 	Label      string  `json:"label"`
-	SeatRow    string  `json:"seat_row"`
-	SeatColumn string  `json:"seat_column"`
+	SeatRow    int     `json:"seat_row"`
+	SeatColumn int     `json:"seat_column"`
 	Status     string  `json:"status"`
 	PositionX  float64 `json:"position_x"`
 	PositionY  float64 `json:"position_y"`
 }
 
-// listZones คืนโซนของคอนเสิร์ตนี้ — Zone ไม่มี concert_id (ตามไดอะแกรม)
-// จึงหาโซนผ่านที่นั่งของคอนเสิร์ตแทน
+// listZones returns zones owned by this concert.
 func (h *seatInventoryHandler) listZones(c *fiber.Ctx) error {
 	concertID := c.Params("id")
 
-	var zoneIDs []string
-	if err := h.db.Model(&models.Seat{}).Where("concert_id = ?", concertID).
-		Distinct().Order("zone_id").Pluck("zone_id", &zoneIDs).Error; err != nil {
+	var zones []models.Zone
+	if err := h.db.Where("concert_id = ?", concertID).Order("zone_id").Find(&zones).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดโซนได้"})
 	}
 
-	result := make([]zoneInventoryDTO, 0, len(zoneIDs))
-	for _, zoneID := range zoneIDs {
-		var zone models.Zone
-		if err := h.db.First(&zone, "zone_id = ?", zoneID).Error; err != nil {
-			zone = models.Zone{ZoneID: zoneID}
-		}
-
-		var category models.TicketCategory
-		_ = h.db.Where("zone_id = ?", zoneID).First(&category).Error
-
+	result := make([]zoneInventoryDTO, 0, len(zones))
+	for _, zone := range zones {
 		var available int64
 		h.db.Model(&models.Seat{}).
-			Where("concert_id = ? AND zone_id = ? AND status_seat = ?", concertID, zoneID, seatStatusAvailable).
+			Where("zone_id = ? AND status_seat = ?", zone.ZoneID, seatStatusAvailable).
 			Count(&available)
 
 		var capacity int64
 		h.db.Model(&models.Seat{}).
-			Where("concert_id = ? AND zone_id = ?", concertID, zoneID).
+			Where("zone_id = ?", zone.ZoneID).
 			Count(&capacity)
 
 		result = append(result, zoneInventoryDTO{
-			ZoneID:       zoneID,
+			ZoneID:       zone.ZoneID,
 			ZoneType:     zone.ZoneType,
-			CategoryName: category.CategoryName,
+			CategoryName: zone.ZoneType,
 			Color:        zone.Color,
-			Price:        category.Price,
+			Price:        zone.ZonePrice,
 			Capacity:     int(capacity),
 			Available:    int(available),
 		})
@@ -104,8 +94,9 @@ func (h *seatInventoryHandler) listSeats(c *fiber.Ctx) error {
 	}
 
 	var seats []models.Seat
-	if err := h.db.Where("concert_id = ? AND zone_id = ?", concertID, zoneID).
-		Order("seat_row, length(seat_column), seat_column").Find(&seats).Error; err != nil {
+	if err := h.db.Joins("JOIN zones ON zones.zone_id = seats.zone_id").
+		Where("zones.concert_id = ? AND seats.zone_id = ?", concertID, zoneID).
+		Order("seats.seat_row, seats.seat_column").Find(&seats).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถโหลดที่นั่งได้"})
 	}
 
@@ -133,8 +124,15 @@ func ensureZoneSeats(db *gorm.DB, concertID, zoneID string) error {
 	}
 
 	var existing int64
-	if err := db.Model(&models.Seat{}).
-		Where("concert_id = ? AND zone_id = ?", concertID, zoneID).Count(&existing).Error; err != nil {
+	var zone models.Zone
+	err := db.Where("zone_id = ?", zoneID).First(&zone).Error
+	if err == nil && zone.ConcertID != concertID {
+		return fmt.Errorf("zone %s belongs to another concert", zoneID)
+	}
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return err
+	}
+	if err := db.Model(&models.Seat{}).Where("zone_id = ?", zoneID).Count(&existing).Error; err != nil {
 		return err
 	}
 	if existing > 0 {
@@ -144,19 +142,8 @@ func ensureZoneSeats(db *gorm.DB, concertID, zoneID string) error {
 	price := defaultZonePrices[zoneID[0]]
 
 	return db.Transaction(func(tx *gorm.DB) error {
-		zone := models.Zone{ZoneID: zoneID, ZoneType: "ที่นั่ง", Capacity: defaultGridRows * defaultGridColumns}
+		zone := models.Zone{ZoneID: zoneID, ConcertID: concertID, ZoneType: "ที่นั่ง", Capacity: defaultGridRows * defaultGridColumns, ZonePrice: price}
 		if err := tx.Where("zone_id = ?", zoneID).FirstOrCreate(&zone).Error; err != nil {
-			return err
-		}
-
-		category := models.TicketCategory{
-			CategoryID:   "TC-" + zoneID,
-			CategoryName: "โซน " + zoneID,
-			Price:        price,
-			Quantity:     defaultGridRows * defaultGridColumns,
-			ZoneID:       zoneID,
-		}
-		if err := tx.Where("category_id = ?", category.CategoryID).FirstOrCreate(&category).Error; err != nil {
 			return err
 		}
 
@@ -166,11 +153,10 @@ func ensureZoneSeats(db *gorm.DB, concertID, zoneID string) error {
 			for column := 1; column <= defaultGridColumns; column++ {
 				label := fmt.Sprintf("%s%d", row, column)
 				seats = append(seats, models.Seat{
-					SeatID:     fmt.Sprintf("ST-%s-%s-%s", concertID, zoneID, label),
-					SeatRow:    row,
-					SeatColumn: fmt.Sprintf("%d", column),
+					SeatLabel:  label,
+					SeatRow:    rowIndex + 1,
+					SeatColumn: column,
 					StatusSeat: seatStatusAvailable,
-					ConcertID:  concertID,
 					ZoneID:     zoneID,
 				})
 			}

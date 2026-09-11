@@ -87,9 +87,6 @@ func employeeAuditMetadata(method, path string) (action, module string, ok bool)
 		{"PUT", "api/concerts/:id/performance-schedules", "ตารางการแสดง", ""},
 		{"POST", "api/performance-details", "ตารางการแสดง", ""},
 		{"POST", "api/artist-requirements", "ความต้องการศิลปิน", ""},
-		{"POST", "api/venue-seat/concerts", "ผังสถานที่", ""},
-		{"PUT", "api/venue-seat/concerts/:id", "ผังสถานที่", ""},
-		{"PUT DELETE", "api/venue-seat/concerts/:id/layout", "ผังสถานที่", ""},
 		{"PUT", "api/work-plans/current", "แผนงาน", ""},
 		{"POST", "api/work-plans/current/submit", "แผนงาน", "ส่งแผนงาน"},
 	} {

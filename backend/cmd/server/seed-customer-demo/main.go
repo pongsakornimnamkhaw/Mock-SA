@@ -174,7 +174,7 @@ func seedCustomerDemo(db *gorm.DB, now time.Time) (bool, error) {
 			sequence := bookingIndex + 1
 			concert := concerts[bookingIndex%len(concerts)]
 			zoneID := fmt.Sprintf("%sZONE_%02d", demoPrefix, sequence)
-			zone := models.Zone{ZoneID: zoneID, ZoneType: spec.zoneName, Capacity: 100}
+			zone := models.Zone{ZoneID: zoneID, ConcertID: concert.ConcertID, ZoneType: spec.zoneName, Capacity: 100, ZonePrice: spec.price}
 			if err := createDemoRow(tx, &zone); err != nil {
 				return err
 			}
@@ -202,19 +202,14 @@ func seedCustomerDemo(db *gorm.DB, now time.Time) (bool, error) {
 			}
 
 			for ticketIndex := 0; ticketIndex < spec.ticketCount; ticketIndex++ {
-				seatID := fmt.Sprintf("%sSEAT_%02d_%02d", demoPrefix, sequence, ticketIndex+1)
-				if err := createDemoRow(tx, &models.Seat{
-					SeatID:     seatID,
-					SeatRow:    fmt.Sprintf("%d", sequence),
-					SeatColumn: fmt.Sprintf("%d", ticketIndex+1),
-					StatusSeat: "ไม่ว่าง", ConcertID: concert.ConcertID, ZoneID: zoneID,
-				}); err != nil {
+				seat := models.Seat{SeatRow: sequence, SeatColumn: ticketIndex + 1,
+					SeatLabel: fmt.Sprintf("%s-%02d", spec.zoneName, ticketIndex+1), StatusSeat: "ไม่ว่าง", ZoneID: zoneID}
+				if err := createDemoRow(tx, &seat); err != nil {
 					return err
 				}
 				if err := createDemoRow(tx, &models.Ticket{
-					TicketID:    fmt.Sprintf("%sTICKET_%02d_%02d", demoPrefix, sequence, ticketIndex+1),
 					NameConcert: concert.ConcertName, TicketDateTime: bookingDate.Add(time.Duration(ticketIndex+10) * time.Minute),
-					StatusTicket: spec.ticketStatus, SeatID: seatID, BookingID: bookingID,
+					PriceTicket: zone.ZonePrice, StatusTicket: spec.ticketStatus, SeatID: seat.SeatID, BookingID: bookingID,
 				}); err != nil {
 					return err
 				}

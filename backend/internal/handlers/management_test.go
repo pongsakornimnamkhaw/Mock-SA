@@ -20,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -38,6 +39,7 @@ func TestManagementEmployeeValidation(t *testing.T) {
 		{"missing scope", func(e *employeeDTO) { e.Permission = "edit" }},
 		{"long code", func(e *employeeDTO) { e.EmployeeCode = strings.Repeat("ก", 51) }},
 		{"invalid personnel type", func(e *employeeDTO) { e.PersonnelType = "contractor" }},
+		{"invalid job role", func(e *employeeDTO) { e.JobRole = "owner" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -60,11 +62,74 @@ func TestManagementEmployeeValidation(t *testing.T) {
 		t.Fatalf("personnel type = %q; want %q", valid.PersonnelType, models.PersonnelTypeInternal)
 	}
 	valid.PersonnelType = models.PersonnelTypeExternal
+	valid.JobRole = "organizer"
 	if err := validateEmployee(&valid); err != nil {
 		t.Fatal(err)
 	}
 	if valid.PersonnelType != models.PersonnelTypeExternal {
 		t.Fatalf("personnel type = %q; want %q", valid.PersonnelType, models.PersonnelTypeExternal)
+	}
+}
+
+func TestEmployeeViewIncludesModulesAfterAccountPermission(t *testing.T) {
+	user := models.User{Role: "edit", Permissions: []models.Permission{
+		{Position: employeePermissionPosition, PermissionName: "edit", Scope: ""},
+		{Position: employeeModulePermissionPrefix + "sales", PermissionName: "edit", Scope: "global"},
+		{Position: employeeModulePermissionPrefix + "promotions", PermissionName: "view", Scope: "global"},
+	}}
+	view := employeeView(user)
+	if len(view.ModulePermissions) != 2 {
+		t.Fatalf("module permissions omitted after account row: %#v", view.ModulePermissions)
+	}
+}
+
+func TestManagementEmployeeModulePermissionValidation(t *testing.T) {
+	valid := employeeDTO{
+		FirstName: "Test", LastName: "Employee", EmployeeCode: "T-02",
+		Email: "modules@example.com", Phone: "0812345678", Permission: "edit",
+		ModulePermissions: []modulePermissionDTO{
+			{Module: "promotions", Level: "edit"},
+			{Module: "promotion_approvals", Level: "view"},
+		},
+	}
+	if err := validateEmployee(&valid); err != nil {
+		t.Fatalf("valid module permissions rejected: %v", err)
+	}
+
+	for _, permissions := range [][]modulePermissionDTO{
+		{{Module: "unknown", Level: "edit"}},
+		{{Module: "promotions", Level: "owner"}},
+		{{Module: "promotions", Level: "view"}, {Module: "promotions", Level: "edit"}},
+	} {
+		candidate := valid
+		candidate.ModulePermissions = permissions
+		if err := validateEmployee(&candidate); err == nil {
+			t.Fatalf("invalid module permissions accepted: %+v", permissions)
+		}
+	}
+}
+
+func TestManagementEmployeeEditPermissionCanUseRoleDefaults(t *testing.T) {
+	employee := employeeDTO{
+		FirstName: "Test", LastName: "Organizer", EmployeeCode: "T-03",
+		Email: "organizer@example.com", Phone: "0812345678", Permission: "edit",
+		JobRole: "organizer",
+	}
+	if err := validateEmployee(&employee); err != nil {
+		t.Fatalf("organizer defaults should provide editable modules: %v", err)
+	}
+}
+
+func TestInitializeNewEmployeePassword(t *testing.T) {
+	user := models.User{}
+	if err := initializeNewEmployeePassword(&user, "0812345678"); err != nil {
+		t.Fatal(err)
+	}
+	if !user.MustChangePassword {
+		t.Fatal("new employee must be forced to set a private password")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("0812345678")) != nil {
+		t.Fatal("initial phone credential was not hashed")
 	}
 }
 
@@ -163,10 +228,21 @@ func managementTestDB(t *testing.T) *gorm.DB {
 		t.Skip("set MANAGEMENT_INTEGRATION_TEST=1 to test PostgreSQL in an isolated schema")
 	}
 	values, err := godotenv.Read("../../.env")
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", values["DB_HOST"], values["DB_PORT"], values["DB_USER"], values["DB_PASSWORD"], values["DB_NAME"], values["DB_SSLMODE"])
+	value := func(key, fallback string) string {
+		if current := os.Getenv(key); current != "" {
+			return current
+		}
+		if current := values[key]; current != "" {
+			return current
+		}
+		return fallback
+	}
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		value("DB_HOST", "localhost"), value("DB_PORT", "5432"), value("DB_USER", "admin_T01SA"),
+		value("DB_PASSWORD", "T01SA"), value("DB_NAME", "backend_T01"), value("DB_SSLMODE", "disable"))
 	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		t.Fatal("PostgreSQL connection failed:", err)

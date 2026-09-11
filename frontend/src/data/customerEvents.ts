@@ -1,4 +1,4 @@
-import { celestial, flux, pulse, starlight } from '@/assets/Poster';
+import { celestial, flux, pulse, starlight } from '@/assets/poster';
 
 export interface CustomerEvent {
   id: string;

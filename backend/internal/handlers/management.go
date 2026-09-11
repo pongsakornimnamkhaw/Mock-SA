@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -24,20 +25,20 @@ const unidentifiedActor = "ไม่ระบุตัวตน (ยังไม
 func RegisterManagementRoutes(app *fiber.App, db *gorm.DB) {
 	h := &managementHandler{db: db}
 	r := app.Group("/api")
-	r.Get("/promotions/options", h.promotionOptions)
-	r.Get("/promotions", h.listPromotions)
-	r.Post("/promotions", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).savePromotion))
-	r.Get("/promotions/:id", h.getPromotion)
-	r.Put("/promotions/:id", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).savePromotion))
-	r.Delete("/promotions/:id", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).deletePromotion))
-	r.Get("/promotion-approvals", h.listApprovals)
-	r.Patch("/promotion-approvals/:id", h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).decideApproval))
-	r.Get("/employees", h.listEmployees)
-	r.Post("/employees", h.withEmployeeAudit("พนักงาน", (*managementHandler).saveEmployee))
-	r.Get("/employees/:id", h.getEmployee)
-	r.Put("/employees/:id", h.withEmployeeAudit("พนักงาน", (*managementHandler).saveEmployee))
-	r.Delete("/employees/:id", h.withEmployeeAudit("พนักงาน", (*managementHandler).deleteEmployee))
-	r.Get("/activity-logs", h.listActivityLogs)
+	r.Get("/promotions/options", requireEmployeeModule(db, access.Promotions, access.View), h.promotionOptions)
+	r.Get("/promotions", requireEmployeeModule(db, access.Promotions, access.View), h.listPromotions)
+	r.Post("/promotions", requireEmployeeModule(db, access.Promotions, access.Edit), h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).savePromotion))
+	r.Get("/promotions/:id", requireEmployeeModule(db, access.Promotions, access.View), h.getPromotion)
+	r.Put("/promotions/:id", requireEmployeeModule(db, access.Promotions, access.Edit), h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).savePromotion))
+	r.Delete("/promotions/:id", requireEmployeeModule(db, access.Promotions, access.Edit), h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).deletePromotion))
+	r.Get("/promotion-approvals", requireEmployeeModule(db, access.PromotionApprovals, access.View), h.listApprovals)
+	r.Patch("/promotion-approvals/:id", requireEmployeeModule(db, access.PromotionApprovals, access.Edit), h.withEmployeeAudit("โปรโมชั่น", (*managementHandler).decideApproval))
+	r.Get("/employees", requireEmployeeModule(db, access.EmployeeManagement, access.View), h.listEmployees)
+	r.Post("/employees", requireEmployeeModule(db, access.EmployeeManagement, access.Edit), h.withEmployeeAudit("พนักงาน", (*managementHandler).saveEmployee))
+	r.Get("/employees/:id", requireEmployeeModule(db, access.EmployeeManagement, access.View), h.getEmployee)
+	r.Put("/employees/:id", requireEmployeeModule(db, access.EmployeeManagement, access.Edit), h.withEmployeeAudit("พนักงาน", (*managementHandler).saveEmployee))
+	r.Delete("/employees/:id", requireEmployeeModule(db, access.EmployeeManagement, access.Edit), h.withEmployeeAudit("พนักงาน", (*managementHandler).deleteEmployee))
+	r.Get("/activity-logs", requireEmployeeModule(db, access.Audit, access.View), h.listActivityLogs)
 }
 
 func managementError(c *fiber.Ctx, err error) error {

@@ -42,6 +42,7 @@ import Pagination from '../../../../components/ui/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { promotionFontSizes, promotionPageSx, promotionTitleSx } from '../typography';
 import ConfirmDeleteDialog from '../../../../components/common/ConfirmDeleteDialog';
+import { useModuleAccess } from '../../../../access/useModuleAccess';
 
 const PAGE_SIZE = 3;
 
@@ -52,6 +53,7 @@ interface Props {
 
 export default function PromotionListPage(_props: Props) {
   const navigate = useNavigate();
+  const { canEdit } = useModuleAccess('promotions');
   const [tab, setTab] = useState<TabStatus>('all');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -173,6 +175,7 @@ export default function PromotionListPage(_props: Props) {
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <Button
             variant="contained"
+            disabled={!canEdit}
             startIcon={<AddIcon />}
             onClick={() => navigate('/promotions/new')}
             sx={{
@@ -333,6 +336,7 @@ export default function PromotionListPage(_props: Props) {
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                         <IconButton
                           size="small"
+                          disabled={!canEdit}
                           onClick={() => handleAction('edit', promo)}
                           sx={{ color: '#64748b', '&:hover': { color: '#d63384', bgcolor: '#fdf2f8' } }}
                           title="แก้ไข"
@@ -350,7 +354,7 @@ export default function PromotionListPage(_props: Props) {
                         <IconButton
                           size="small"
                           onClick={() => setDeleteTarget(promo)}
-                          disabled={deleting}
+                          disabled={deleting || !canEdit}
                           sx={{ color: '#64748b', '&:hover': { color: '#dc2626', bgcolor: '#fef2f2' } }}
                           title="ลบโปรโมชั่น"
                           aria-label={`ลบโปรโมชั่น ${promo.promotion_name}`}

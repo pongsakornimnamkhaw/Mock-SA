@@ -12,7 +12,7 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import CustomerHeader from '@/components/common/CustomerHeader';
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import type { CustomerPromotion, CustomerPromotionConcert } from '@/types/customerPromotion';
-import { celestial, flux, pulse, starlight } from '@/assets/Poster';
+import { celestial, flux, pulse, starlight } from '@/assets/poster';
 import { discountLabel, formatThaiDate } from '@/utils/customerPromotion';
 
 interface EventView {

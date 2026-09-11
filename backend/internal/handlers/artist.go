@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -15,22 +16,24 @@ type ArtistHandler struct{ db *gorm.DB }
 func RegisterArtistRoutes(app *fiber.App, db *gorm.DB) {
 	h := &ArtistHandler{db: db}
 	api := app.Group("/api")
-	api.Get("/artists", h.listArtists)
-	api.Get("/artists/:id", h.getArtist)
-	api.Post("/artists", h.createArtist)
-	api.Put("/artists/:id", h.updateArtist)
-	api.Delete("/artists/:id", h.deleteArtist)
-	api.Get("/artists/:id/invitations", h.listInvitations)
-	api.Put("/artists/:id/invitations", h.updateInvitations)
-	api.Get("/performance-schedules", h.listSchedules)
-	api.Post("/performance-schedules", h.replaceSchedules)
-	api.Put("/concerts/:id/performance-schedules", h.replaceConcertSchedules)
-	api.Get("/performance-details", h.listDetails)
-	api.Post("/performance-details", h.createDetail)
-	api.Get("/artist-requirements", h.listRequirements)
-	api.Post("/artist-requirements", h.createRequirement)
-	api.Get("/artist-history", h.listHistory)
-	api.Get("/artist-dashboard", h.dashboard)
+	view := requireEmployeeModule(db, access.Artists, access.View)
+	edit := requireEmployeeModule(db, access.Artists, access.Edit)
+	api.Get("/artists", view, h.listArtists)
+	api.Get("/artists/:id", view, h.getArtist)
+	api.Post("/artists", edit, h.createArtist)
+	api.Put("/artists/:id", edit, h.updateArtist)
+	api.Delete("/artists/:id", edit, h.deleteArtist)
+	api.Get("/artists/:id/invitations", view, h.listInvitations)
+	api.Put("/artists/:id/invitations", edit, h.updateInvitations)
+	api.Get("/performance-schedules", view, h.listSchedules)
+	api.Post("/performance-schedules", edit, h.replaceSchedules)
+	api.Put("/concerts/:id/performance-schedules", edit, h.replaceConcertSchedules)
+	api.Get("/performance-details", view, h.listDetails)
+	api.Post("/performance-details", edit, h.createDetail)
+	api.Get("/artist-requirements", view, h.listRequirements)
+	api.Post("/artist-requirements", edit, h.createRequirement)
+	api.Get("/artist-history", view, h.listHistory)
+	api.Get("/artist-dashboard", view, h.dashboard)
 	h.seed()
 }
 

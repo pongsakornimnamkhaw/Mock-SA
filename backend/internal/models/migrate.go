@@ -2,21 +2,199 @@ package models
 
 import (
 	"fmt"
-
 	"gorm.io/gorm"
 )
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
-	if err := prepareSeatColumnTypes(db); err != nil {
+	if err := dropLegacyVenueSeatTables(db); err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(
+	if err := detachOrphanEmployeeActivityUsers(db); err != nil {
+		return err
+	}
+	if err := dropManagedForeignKeyConstraints(db); err != nil {
+		return err
+	}
+	if err := migrateLegacyNumericTicketIDs(db); err != nil {
+		return err
+	}
+	// Build every table before adding relationship constraints. Several domain
+	// models reference each other, so a single FK-enabled pass can target a
+	// table that has not been created yet on a brand-new schema.
+	foreignKeysDisabled := db.Config.DisableForeignKeyConstraintWhenMigrating
+	db.Config.DisableForeignKeyConstraintWhenMigrating = true
+	baseErr := db.AutoMigrate(allModels()...)
+	db.Config.DisableForeignKeyConstraintWhenMigrating = foreignKeysDisabled
+	if baseErr != nil {
+		return baseErr
+	}
+	if err := ensureTicketPlanningConstraints(db); err != nil {
+		return err
+	}
+	if err := db.Model(&User{}).
+		Where("(LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND COALESCE(personnel_type, '') = ''", []string{"employee", "staff", "admin", "พนักงาน"}).
+		Update("personnel_type", PersonnelTypeInternal).Error; err != nil {
+		return err
+	}
+	if err := normalizeOperationalDateTimeColumns(db); err != nil {
+		return err
+	}
+	return ensureForeignKeyConstraints(db)
+}
+
+func dropLegacyVenueSeatTables(db *gorm.DB) error {
+	return db.Exec(`
+		DROP TABLE IF EXISTS venue_layout_objects CASCADE;
+		DROP TABLE IF EXISTS venue_seats CASCADE;
+		DROP TABLE IF EXISTS venue_seat_zones CASCADE;
+		DROP TABLE IF EXISTS venue_seat_rounds CASCADE;
+		DROP TABLE IF EXISTS venue_seat_publications CASCADE;
+		DROP TABLE IF EXISTS venue_seat_plans CASCADE;
+	`).Error
+}
+
+// migrateLegacyNumericTicketIDs preserves installations that used readable
+// string IDs (for example ST_R01_A_0001). The current models use auto-increment
+// numeric IDs, so related rows must be remapped together before AutoMigrate.
+func migrateLegacyNumericTicketIDs(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		var legacySeats, legacyTickets bool
+		if err := tx.Raw(`
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = current_schema() AND table_name = 'seats'
+				  AND column_name = 'seat_id' AND data_type NOT IN ('smallint', 'integer', 'bigint')
+			)`).Scan(&legacySeats).Error; err != nil {
+			return err
+		}
+		if err := tx.Raw(`
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = current_schema() AND table_name = 'tickets'
+				  AND column_name = 'ticket_id' AND data_type NOT IN ('smallint', 'integer', 'bigint')
+			)`).Scan(&legacyTickets).Error; err != nil {
+			return err
+		}
+		if !legacySeats && !legacyTickets {
+			return nil
+		}
+
+		// Foreign keys must be recreated after the referenced ID columns change type.
+		if err := tx.Exec(`
+DO $$
+DECLARE constraint_row record;
+BEGIN
+    FOR constraint_row IN
+        SELECT n.nspname AS schema_name, t.relname AS table_name, c.conname AS constraint_name
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE c.contype = 'f' AND n.nspname = current_schema()
+          AND c.confrelid IN ('seats'::regclass, 'tickets'::regclass)
+    LOOP
+        EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I', constraint_row.schema_name, constraint_row.table_name, constraint_row.constraint_name);
+    END LOOP;
+END $$`).Error; err != nil {
+			return err
+		}
+
+		if legacySeats {
+			if err := tx.Exec(`
+CREATE TEMP TABLE legacy_seat_id_map (old_id text PRIMARY KEY, new_id bigint UNIQUE) ON COMMIT DROP;
+INSERT INTO legacy_seat_id_map (old_id, new_id)
+SELECT seat_id::text, row_number() OVER (ORDER BY seat_id::text) FROM seats;
+
+UPDATE tickets AS t SET seat_id = m.new_id::text
+FROM legacy_seat_id_map AS m WHERE t.seat_id::text = m.old_id;
+UPDATE seats AS s SET seat_id = m.new_id::text
+FROM legacy_seat_id_map AS m WHERE s.seat_id::text = m.old_id;
+
+ALTER TABLE seats DROP CONSTRAINT IF EXISTS seats_pkey;
+ALTER TABLE seats ALTER COLUMN seat_id TYPE bigint USING seat_id::bigint;
+ALTER TABLE tickets ALTER COLUMN seat_id TYPE bigint USING seat_id::bigint;
+ALTER TABLE seats ADD CONSTRAINT seats_pkey PRIMARY KEY (seat_id);
+CREATE SEQUENCE IF NOT EXISTS seats_seat_id_seq OWNED BY seats.seat_id;
+ALTER TABLE seats ALTER COLUMN seat_id SET DEFAULT nextval('seats_seat_id_seq');
+SELECT setval('seats_seat_id_seq', COALESCE((SELECT MAX(seat_id) FROM seats), 1), EXISTS (SELECT 1 FROM seats));`).Error; err != nil {
+				return fmt.Errorf("migrate legacy seat IDs: %w", err)
+			}
+		}
+
+		if legacyTickets {
+			if err := tx.Exec(`
+CREATE TEMP TABLE legacy_ticket_id_map (old_id text PRIMARY KEY, new_id bigint UNIQUE) ON COMMIT DROP;
+INSERT INTO legacy_ticket_id_map (old_id, new_id)
+SELECT ticket_id::text, row_number() OVER (ORDER BY ticket_id::text) FROM tickets;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'gate_check_ins' AND column_name = 'ticket_id'
+    ) THEN
+        EXECUTE 'UPDATE gate_check_ins AS g SET ticket_id = m.new_id::text FROM legacy_ticket_id_map AS m WHERE g.ticket_id::text = m.old_id';
+    END IF;
+END $$;
+UPDATE tickets AS t SET ticket_id = m.new_id::text
+FROM legacy_ticket_id_map AS m WHERE t.ticket_id::text = m.old_id;
+
+ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_pkey;
+ALTER TABLE tickets ALTER COLUMN ticket_id TYPE bigint USING ticket_id::bigint;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'gate_check_ins' AND column_name = 'ticket_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE gate_check_ins ALTER COLUMN ticket_id TYPE bigint USING ticket_id::bigint';
+    END IF;
+END $$;
+ALTER TABLE tickets ADD CONSTRAINT tickets_pkey PRIMARY KEY (ticket_id);
+CREATE SEQUENCE IF NOT EXISTS tickets_ticket_id_seq OWNED BY tickets.ticket_id;
+ALTER TABLE tickets ALTER COLUMN ticket_id SET DEFAULT nextval('tickets_ticket_id_seq');
+SELECT setval('tickets_ticket_id_seq', COALESCE((SELECT MAX(ticket_id) FROM tickets), 1), EXISTS (SELECT 1 FROM tickets));`).Error; err != nil {
+				return fmt.Errorf("migrate legacy ticket IDs: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// dropManagedForeignKeyConstraints removes constraints created by
+// ensureForeignKeyConstraints before GORM changes legacy column types. They are
+// recreated from the current schema after AutoMigrate completes.
+func dropManagedForeignKeyConstraints(db *gorm.DB) error {
+	return db.Exec(`
+DO $$
+DECLARE
+    constraint_row record;
+BEGIN
+    FOR constraint_row IN
+        SELECT n.nspname AS schema_name, t.relname AS table_name, c.conname AS constraint_name
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE c.contype = 'f'
+          AND n.nspname = current_schema()
+          AND c.conname LIKE 'fk_app_%'
+    LOOP
+        EXECUTE format('ALTER TABLE %I.%I DROP CONSTRAINT %I',
+            constraint_row.schema_name,
+            constraint_row.table_name,
+            constraint_row.constraint_name);
+    END LOOP;
+END $$`).Error
+}
+
+func allModels() []any {
+	return []any{
 		// User & Access
 		&User{},
 		&CusActivityLogs{},
 		&EmpActivityLogs{},
 		&EmployeePasswordResetRequest{},
+		&EmployeePasswordSetupToken{},
 		&Permission{},
 		&Inquiry{},
 
@@ -26,6 +204,10 @@ func MigrateAllModels(db *gorm.DB) error {
 		&ConcertDocument{},
 		&ModifiedHistory{},
 		&SummaryReport{},
+		&PerformanceSchedule{},
+		&PerformanceDetail{},
+		&Publication{},
+		&LayoutObject{},
 
 		// Artist
 		&Artist{},
@@ -51,34 +233,57 @@ func MigrateAllModels(db *gorm.DB) error {
 		&GateCheckIn{},
 		&SalesReport{},
 
-		// Performance
-		&PerformanceSchedule{},
-		&PerformanceDetail{},
-
 		// Work
 		&WorkPlan{},
 		&SponsorshipRequest{},
 		&Task{},
+	}
+}
 
-		// Venue Seat Plan
-		&VenueSeatPlan{},
-		&VenueSeatRound{},
-		&VenueSeatZone{},
-		&VenueSeat{},
-		&VenueLayoutObject{},
-		&VenueSeatPublication{},
-	); err != nil {
+func ensureTicketPlanningConstraints(db *gorm.DB) error {
+	for _, statement := range ticketPlanningConstraintStatements() {
+		if err := db.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ticketPlanningConstraintStatements() []string {
+	return []string{
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_zones_concert' AND conrelid = 'zones'::regclass) THEN ALTER TABLE zones ADD CONSTRAINT fk_zones_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE RESTRICT; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM zones WHERE concert_id IS NULL) THEN ALTER TABLE zones ALTER COLUMN concert_id SET NOT NULL; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert' AND conrelid = 'layout_objects'::regclass) THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert' AND conrelid = 'publications'::regclass) THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
+	}
+}
+
+// detachOrphanEmployeeActivityUsers repairs legacy audit/session rows created
+// for synthetic employee accounts before GORM adds the users foreign key.
+// Audit rows are retained; only their invalid optional reference is cleared.
+func detachOrphanEmployeeActivityUsers(db *gorm.DB) error {
+	var ready bool
+	if err := db.Raw(`
+		SELECT to_regclass(current_schema() || '.emp_activity_logs') IS NOT NULL
+		   AND to_regclass(current_schema() || '.users') IS NOT NULL
+		   AND EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'emp_activity_logs'
+			  AND column_name = 'user_id'
+		   )`).Scan(&ready).Error; err != nil {
 		return err
 	}
-	if err := db.Model(&User{}).
-		Where("(LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND COALESCE(personnel_type, '') = ''", []string{"employee", "staff", "admin", "พนักงาน"}).
-		Update("personnel_type", PersonnelTypeInternal).Error; err != nil {
-		return err
+	if !ready {
+		return nil
 	}
-	if err := normalizeOperationalDateTimeColumns(db); err != nil {
-		return err
-	}
-	return ensureForeignKeyConstraints(db)
+	return db.Exec(`
+		UPDATE emp_activity_logs AS logs
+		SET user_id = NULL
+		WHERE logs.user_id IS NOT NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM users WHERE users.user_id = logs.user_id
+		  )`).Error
 }
 
 type foreignKeyDefinition struct {
@@ -104,6 +309,7 @@ func ensureForeignKeyConstraints(db *gorm.DB) error {
 		{"fk_app_promotion_approvals_user", "promotion_approvals", "user_id", "users", "user_id", "SET NULL"},
 		{"fk_app_password_resets_user", "employee_password_reset_requests", "user_id", "users", "user_id", "CASCADE"},
 		{"fk_app_password_resets_approver", "employee_password_reset_requests", "approved_by", "users", "user_id", "SET NULL"},
+		{"fk_app_employee_password_setup_user", "employee_password_setup_tokens", "user_id", "users", "user_id", "CASCADE"},
 
 		// Concerts and artists
 		{"fk_app_concert_artists_concert", "concert_artists", "concert_id", "concerts", "concert_id", "CASCADE"},
@@ -134,17 +340,13 @@ func ensureForeignKeyConstraints(db *gorm.DB) error {
 		{"fk_app_ticket_categories_zone", "ticket_categories", "zone_id", "zones", "zone_id", "CASCADE"},
 		{"fk_app_tickets_seat", "tickets", "seat_id", "seats", "seat_id", "RESTRICT"},
 		{"fk_app_tickets_booking", "tickets", "booking_id", "bookings", "booking_id", "CASCADE"},
+		{"fk_app_gate_check_ins_ticket", "gate_check_ins", "ticket_id", "tickets", "ticket_id", "RESTRICT"},
+		{"fk_app_ticket_sales_infos_seat", "ticket_sales_infos", "seat_id", "seats", "seat_id", "SET NULL"},
 
-		// Work and venue layout
+		// Work
 		{"fk_app_work_plans_concert", "work_plans", "concert_id", "concerts", "concert_id", "CASCADE"},
 		{"fk_app_sponsorship_requests_concert", "sponsorship_requests", "concert_id", "concerts", "concert_id", "CASCADE"},
 		{"fk_app_tasks_concert", "tasks", "concert_id", "concerts", "concert_id", "CASCADE"},
-		{"fk_app_venue_seat_plans_concert", "venue_seat_plans", "concert_id", "concerts", "concert_id", "CASCADE"},
-		{"fk_app_venue_seat_rounds_concert", "venue_seat_rounds", "concert_id", "concerts", "concert_id", "CASCADE"},
-		{"fk_app_venue_seat_zones_concert", "venue_seat_zones", "concert_id", "concerts", "concert_id", "CASCADE"},
-		{"fk_app_venue_seats_zone", "venue_seats", "zone_id", "venue_seat_zones", "zone_id", "CASCADE"},
-		{"fk_app_venue_layout_objects_concert", "venue_layout_objects", "concert_id", "concerts", "concert_id", "CASCADE"},
-		{"fk_app_venue_publications_concert", "venue_seat_publications", "concert_id", "concerts", "concert_id", "CASCADE"},
 	}
 
 	return db.Transaction(func(tx *gorm.DB) error {
@@ -159,7 +361,19 @@ func ensureForeignKeyConstraints(db *gorm.DB) error {
 			statement := fmt.Sprintf(`
 DO $$
 BEGIN
-    IF NOT EXISTS (
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = '%s'
+          AND column_name = '%s'
+    ) AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = '%s'
+          AND column_name = '%s'
+    ) AND NOT EXISTS (
         SELECT 1
         FROM pg_constraint c
         JOIN pg_class t ON t.oid = c.conrelid
@@ -174,7 +388,8 @@ BEGIN
             REFERENCES "%s" ("%s")
             ON UPDATE CASCADE ON DELETE %s NOT VALID;
     END IF;
-END $$`, fk.table, fk.name, fk.table, fk.name, fk.column,
+END $$`, fk.table, fk.column, fk.referencedTable, fk.referencedColumn,
+				fk.table, fk.name, fk.table, fk.name, fk.column,
 				fk.referencedTable, fk.referencedColumn, fk.onDelete)
 			if err := tx.Exec(statement).Error; err != nil {
 				return fmt.Errorf("create foreign key %s: %w", fk.name, err)
@@ -202,7 +417,6 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE performance_schedules ALTER COLUMN end_show TYPE time without time zone USING end_show::time`,
 		`ALTER TABLE artist_requirements ALTER COLUMN start_req TYPE time without time zone USING start_req::time`,
 		`ALTER TABLE artist_requirements ALTER COLUMN end_req TYPE time without time zone USING end_req::time`,
-		`ALTER TABLE venue_seat_rounds ALTER COLUMN door_time TYPE time without time zone USING door_time::time`,
 		`ALTER TABLE work_plans ALTER COLUMN update_date TYPE date USING update_date::date`,
 		`ALTER TABLE sponsorship_requests ALTER COLUMN submit_date TYPE date USING submit_date::date`,
 		`ALTER TABLE ticket_sales_infos ALTER COLUMN publish_date TYPE date USING publish_date::date`,
@@ -221,17 +435,8 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		`ALTER TABLE promotions ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
 		`ALTER TABLE promotions ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 		`ALTER TABLE promotion_usage_logs ALTER COLUMN used_at TYPE timestamp without time zone USING used_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_plans ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_plans ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_publications ALTER COLUMN created_at TYPE timestamp without time zone USING created_at AT TIME ZONE 'UTC'`,
-		`ALTER TABLE venue_seat_publications ALTER COLUMN updated_at TYPE timestamp without time zone USING updated_at AT TIME ZONE 'UTC'`,
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		// Customer sessions now reuse cus_activity_logs. Remove the obsolete table
-		// that an earlier version of the customer login feature created.
-		if err := tx.Exec(`DROP TABLE IF EXISTS customer_auth_sessions`).Error; err != nil {
-			return err
-		}
 		for _, statement := range statements {
 			if err := tx.Exec(statement).Error; err != nil {
 				return err
@@ -239,39 +444,4 @@ func normalizeOperationalDateTimeColumns(db *gorm.DB) error {
 		}
 		return nil
 	})
-}
-
-// MigrateVenueSeatModels รัน AutoMigrate เฉพาะตาราง Venue/Seat
-// (ถูกเรียกใช้จาก main.go)
-func MigrateVenueSeatModels(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&Concert{},
-		&VenueSeatPlan{},
-		&VenueSeatRound{},
-		&VenueSeatZone{},
-		&VenueSeat{},
-		&VenueLayoutObject{},
-		&VenueSeatPublication{},
-	)
-}
-
-// prepareSeatColumnTypes แปลง seats.seat_row / seat_column จาก integer เป็น varchar
-// ต้องรันก่อน AutoMigrate เพราะ PostgreSQL แปลง integer → varchar ให้เองไม่ได้ ต้องระบุ USING
-// ฟังก์ชันนี้ idempotent: ติดตั้งใหม่ (ยังไม่มีตาราง) หรือแปลงไปแล้ว จะไม่ทำอะไร
-func prepareSeatColumnTypes(db *gorm.DB) error {
-	var dataType string
-	if err := db.Raw(
-		`SELECT data_type FROM information_schema.columns
-		 WHERE table_schema = current_schema() AND table_name = 'seats' AND column_name = 'seat_row'`,
-	).Scan(&dataType).Error; err != nil {
-		return err
-	}
-	if dataType == "" || dataType == "character varying" {
-		return nil
-	}
-	return db.Exec(
-		`ALTER TABLE seats
-		   ALTER COLUMN seat_row TYPE varchar(50) USING seat_row::varchar,
-		   ALTER COLUMN seat_column TYPE varchar(50) USING seat_column::varchar`,
-	).Error
 }

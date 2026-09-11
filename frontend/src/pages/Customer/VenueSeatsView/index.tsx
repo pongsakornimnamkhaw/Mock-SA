@@ -39,6 +39,7 @@ type LayoutItem = {
 type Zone = LayoutItem & {
   seats?: number
   seatItems?: Seat[]
+  zonePrice?: number
   price?: number
   type?: string
 }
@@ -337,7 +338,7 @@ export default function VenueSeatsViewPage() {
                               {getSeatCount(zone)}
                             </Typography>
                             <Typography sx={{ fontSize: 'clamp(11px, .75vw, 14px)', lineHeight: 1.35, opacity: 0.9 }}>
-                              {Number(zone.price ?? 0).toLocaleString('th-TH')} ฿
+                              {Number(zone.zonePrice ?? zone.price ?? 0).toLocaleString('th-TH')} ฿
                             </Typography>
                           </>
                         )}
@@ -377,7 +378,7 @@ export default function VenueSeatsViewPage() {
                       {zone.name}
                     </Typography>
                     <Typography sx={{ color: '#777b91', fontSize: 14, lineHeight: 1.5 }}>
-                      {Number(zone.price ?? 0).toLocaleString('th-TH')} บาท
+                      {Number(zone.zonePrice ?? zone.price ?? 0).toLocaleString('th-TH')} บาท
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'right' }}>

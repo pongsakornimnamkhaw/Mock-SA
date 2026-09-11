@@ -111,6 +111,13 @@ export type ApprovalTab = 'all' | ApprovalStatus;
 // ============================================================
 
 export type EmployeePermission = 'view_only' | 'edit' | 'admin';
+export type EmployeeJobRole = 'staff' | 'organizer' | 'co_organizer' | 'event_staff' | 'approver' | 'sales';
+export type EmployeeModuleAccess = 'none' | 'view' | 'edit';
+
+export interface EmployeeModulePermission {
+  module: string;
+  level: EmployeeModuleAccess;
+}
 
 export interface Employee {
   employee_id: string;
@@ -118,11 +125,13 @@ export interface Employee {
   last_name: string;
   employee_code: string;
   department: string;
+  job_role?: EmployeeJobRole;
   email: string;
   phone: string;
   permission: EmployeePermission;
   edit_scope?: string;
   personnel_type?: PersonnelType;
+  module_permissions?: EmployeeModulePermission[];
 }
 
 export interface ActivityLog {

@@ -12,7 +12,7 @@ import { calculateDiscount, filterEligiblePromotions, type PromotionOrder } from
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
 import { seatInventoryApi } from '@/api/seatInventoryApi';
 import { getCustomerSession } from '@/utils/customerSession';
-import { pulse } from '@/assets/Poster';
+import { pulse } from '@/assets/poster';
 
 // Sub-components
 import TopNavbar from '@/components/SeatSelection/TopNavbar';

@@ -19,8 +19,10 @@ import PersonIcon from '@mui/icons-material/Person';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LogoutIcon from '@mui/icons-material/Logout';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import logoImage from '../../assets/octavia-logo.png';
 import { getEmployeeSession, clearEmployeeSession, EMPLOYEE_SESSION_EVENT } from '@/utils/employeeSession';
+import { effectiveModulePermissions, hasModuleAccess, type BackofficeModule } from '@/access/backofficeAccess';
 import { employeeAccountApi } from '@/api/employeeAccountApi';
 import { employeeAuthApi } from '@/api/employeeAuthApi';
 
@@ -118,6 +120,17 @@ export default function Sidebar() {
 
   const [employee, setEmployee] = useState(getEmployeeSession);
   const [pendingResetCount, setPendingResetCount] = useState(0);
+  const effectivePermissions = employee
+    ? effectiveModulePermissions(employee.role, employee.department, employee.modulePermissions, employee.jobRole)
+    : undefined;
+  const canView = (module: BackofficeModule) => !!effectivePermissions && hasModuleAccess(effectivePermissions, module, 'view');
+  const lockProps = (module: BackofficeModule) => ({
+    disabled: !canView(module),
+    'aria-description': !canView(module) ? 'ไม่มีสิทธิ์ใช้งานเมนูนี้' : undefined,
+  });
+  const lockIcon = (module: BackofficeModule) => !canView(module)
+    ? <LockOutlinedIcon aria-label="ล็อก" sx={{ ml: 'auto', fontSize: 15, color: '#64748b' }} />
+    : null;
 
   useEffect(() => {
     const sync = () => setEmployee(getEmployeeSession());
@@ -217,9 +230,10 @@ export default function Sidebar() {
       <SectionLabel>ภาพรวม</SectionLabel>
       <List dense disablePadding>
         <ListItem disablePadding>
-          <NavItem active={path === '/dashboard' ? 1 : 0} onClick={() => navigate('/dashboard')}>
+          <NavItem {...lockProps('dashboard')} active={path === '/dashboard' ? 1 : 0} onClick={() => navigate('/dashboard')}>
             <DotIcon color={path === '/dashboard' ? '#fff' : '#94a3b8'} />
             <ListItemText primary="ภาพรวมทั้งหมด" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {lockIcon('dashboard')}
           </NavItem>
         </ListItem>
       </List>
@@ -231,6 +245,7 @@ export default function Sidebar() {
         {/* งานคอนเสิร์ต - expandable */}
         <ListItem disablePadding>
           <NavItem
+            {...lockProps('concerts')}
             active={concertOpen ? 1 : 0}
             onClick={() => setConcertOpen(!concertOpen)}
             sx={{ justifyContent: 'space-between' }}
@@ -239,12 +254,12 @@ export default function Sidebar() {
               <MusicNoteIcon sx={{ fontSize: 16, mr: 1, color: concertOpen ? '#fff' : '#ef4444' }} />
               <ListItemText primary="งานคอนเสิร์ต" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 600 } } }} />
             </Box>
-            {concertOpen
+            {lockIcon('concerts') || (concertOpen
               ? <ExpandLessIcon sx={{ fontSize: 18 }} />
-              : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
+              : <ExpandMoreIcon sx={{ fontSize: 18 }} />)}
           </NavItem>
         </ListItem>
-        <Collapse in={concertOpen} timeout="auto" unmountOnExit>
+        <Collapse in={concertOpen && canView('concerts')} timeout="auto" unmountOnExit>
           <List dense disablePadding>
             {concertSubItems.map((item) => (
               <ListItem key={item.route} disablePadding>
@@ -262,6 +277,7 @@ export default function Sidebar() {
         {/* ศิลปินและการแสดง - expandable */}
         <ListItem disablePadding>
           <NavItem
+            {...lockProps('artists')}
             active={artistOpen ? 1 : 0}
             onClick={() => setArtistOpen(!artistOpen)}
             sx={{ justifyContent: 'space-between' }}
@@ -270,12 +286,12 @@ export default function Sidebar() {
               <PersonIcon sx={{ fontSize: 16, mr: 1, color: artistOpen ? '#fff' : '#ef4444' }} />
               <ListItemText primary="ศิลปินและการแสดง" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 600 } } }} />
             </Box>
-            {artistOpen
+            {lockIcon('artists') || (artistOpen
               ? <ExpandLessIcon sx={{ fontSize: 18 }} />
-              : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
+              : <ExpandMoreIcon sx={{ fontSize: 18 }} />)}
           </NavItem>
         </ListItem>
-        <Collapse in={artistOpen} timeout="auto" unmountOnExit>
+        <Collapse in={artistOpen && canView('artists')} timeout="auto" unmountOnExit>
           <List dense disablePadding>
             {artistSubItems.map((item) => (
               <ListItem key={item.route} disablePadding>
@@ -292,17 +308,19 @@ export default function Sidebar() {
 
         {/* ห้องสถานที่และที่นั่ง */}
         <ListItem disablePadding>
-          <NavItem active={isVenueSeats ? 1 : 0} onClick={() => navigate('/venues-seats')}>
+          <NavItem {...lockProps('venues')} active={isVenueSeats ? 1 : 0} onClick={() => navigate('/venues-seats')}>
             <DotIcon color={isVenueSeats ? '#fff' : '#ef4444'} />
             <ListItemText primary="ห้องสถานที่และที่นั่ง" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {lockIcon('venues')}
           </NavItem>
         </ListItem>
 
         {/* ลงทะเบียนเข้างาน */}
         <ListItem disablePadding>
-          <NavItem active={isEventRegistration ? 1 : 0} onClick={() => navigate('/event-registration')}>
+          <NavItem {...lockProps('registration')} active={isEventRegistration ? 1 : 0} onClick={() => navigate('/event-registration')}>
             <DotIcon color={isEventRegistration ? '#fff' : '#ef4444'} />
             <ListItemText primary="ลงทะเบียนเข้างาน" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {lockIcon('registration')}
           </NavItem>
         </ListItem>
 
@@ -312,21 +330,24 @@ export default function Sidebar() {
       <SectionLabel>จัดการหน้าเว็บ</SectionLabel>
       <List dense disablePadding>
         <ListItem disablePadding>
-          <NavItem active={path === '/search-concert' ? 1 : 0} onClick={() => navigate('/search-concert')}>
+          <NavItem {...lockProps('concert_catalog')} active={path === '/search-concert' ? 1 : 0} onClick={() => navigate('/search-concert')}>
             <DotIcon color={path === '/search-concert' ? '#fff' : '#f59e0b'} />
             <ListItemText primary="จัดการรายการคอนเสิร์ต" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {lockIcon('concert_catalog')}
           </NavItem>
         </ListItem>
         <ListItem disablePadding>
-          <NavItem active={isPromo ? 1 : 0} onClick={() => navigate('/promotions')}>
+          <NavItem {...lockProps('promotions')} active={isPromo ? 1 : 0} onClick={() => navigate('/promotions')}>
             <DotIcon color={isPromo ? '#fff' : '#f59e0b'} />
             <ListItemText primary="จัดการโปรโมชั่น" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 600 } } }} />
+            {lockIcon('promotions')}
           </NavItem>
         </ListItem>
         <ListItem disablePadding>
-          <NavItem active={isApproval ? 1 : 0} onClick={() => navigate('/approvals')}>
+          <NavItem {...lockProps('promotion_approvals')} active={isApproval ? 1 : 0} onClick={() => navigate('/approvals')}>
             <DotIcon color={isApproval ? '#fff' : '#f59e0b'} />
             <ListItemText primary="ตรวจสอบการอนุมัติ" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {lockIcon('promotion_approvals')}
           </NavItem>
         </ListItem>
       </List>
@@ -335,9 +356,10 @@ export default function Sidebar() {
       <SectionLabel sx={{ color: '#10b981' }}>ฝ่ายขายและการชำระเงิน</SectionLabel>
       <List dense disablePadding>
         <ListItem disablePadding>
-          <NavItem active={path.startsWith('/sales') || path === '/payment-verification' ? 1 : 0} onClick={() => navigate('/sales/bookings')}>
+          <NavItem {...lockProps('sales')} active={path.startsWith('/sales') || path === '/payment-verification' ? 1 : 0} onClick={() => navigate('/sales/bookings')}>
             <DotIcon color={path.startsWith('/sales') || path === '/payment-verification' ? '#fff' : '#10b981'} />
             <ListItemText primary="ตรวจสอบสลิปและออกบัตร" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 600 } } }} />
+            {lockIcon('sales')}
           </NavItem>
         </ListItem>
       </List>
@@ -346,13 +368,14 @@ export default function Sidebar() {
       <SectionLabel>แอดมินดูแลระบบ</SectionLabel>
       <List dense disablePadding>
         <ListItem disablePadding>
-          <NavItem active={isHistory ? 1 : 0} onClick={() => navigate('/history')}>
+          <NavItem {...lockProps('audit')} active={isHistory ? 1 : 0} onClick={() => navigate('/history')}>
             <DotIcon color={isHistory ? '#fff' : '#94a3b8'} />
             <ListItemText primary="ตรวจสอบประวัติ" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
+            {lockIcon('audit')}
           </NavItem>
         </ListItem>
         <ListItem disablePadding>
-          <NavItem active={isEmployees ? 1 : 0} onClick={() => navigate('/employees')}>
+          <NavItem {...lockProps('employees')} active={isEmployees ? 1 : 0} onClick={() => navigate('/employees')}>
             <DotIcon color={isEmployees ? '#fff' : '#94a3b8'} />
             <ListItemText primary="จัดการสิทธิ์พนักงาน" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 500 } } }} />
             {pendingResetCount > 0 && (
@@ -370,6 +393,7 @@ export default function Sidebar() {
                 }}
               />
             )}
+            {lockIcon('employees')}
           </NavItem>
         </ListItem>
       </List>
@@ -378,9 +402,10 @@ export default function Sidebar() {
       <SectionLabel sx={{ color: '#d63384' }}>สรุปรายงานหลังจบคอนเสิร์ต</SectionLabel>
       <List dense disablePadding>
         <ListItem disablePadding>
-          <NavItem active={isReport ? 1 : 0} onClick={() => navigate('/report')}>
+          <NavItem {...lockProps('reports')} active={isReport ? 1 : 0} onClick={() => navigate('/report')}>
             <DotIcon color={isReport ? '#fff' : '#d63384'} />
             <ListItemText primary="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" slotProps={{ primary: { sx: { fontSize: '0.8rem', fontWeight: 600 } } }} />
+            {lockIcon('reports')}
           </NavItem>
         </ListItem>
       </List>
