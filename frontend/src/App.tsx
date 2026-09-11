@@ -40,6 +40,8 @@ import EditPerformancePage from './pages/Employee/EditPerfomance'
 import PerformanceDetailPage from './pages/Employee/PerfomanceDetail'
 import ArtistRequirementsPage from './pages/Employee/ArtistRequirement'
 import ArtistEditHistoryPage from './pages/Employee/ArtistEditHistory'
+import ArtistSearchPage from './pages/Employee/ArtistSearch'
+import ArtistDetailPage from './pages/Employee/ArtistDetail'
 
 import VenueSeatsViewPage from './pages/Customer/VenueSeatsView'
 
@@ -114,6 +116,8 @@ function App() {
       <Route path="/search-concert" element={<EmployeeRouteGuard><Layout title="วางแผนหารจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/concert-search" element={<EmployeeRouteGuard><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/artist-dashboard" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-search" element={<EmployeeRouteGuard><Layout title="ค้นหาศิลปินและการแสดง" showBack={false}><ArtistSearchPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artists/:id" element={<EmployeeRouteGuard><Layout title="รายละเอียดข้อมูลศิลปิน"><ArtistDetailPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/artist-info" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/invitation" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><InvitationPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/performance-schedule" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceSchedulePage /></Layout></EmployeeRouteGuard>} />

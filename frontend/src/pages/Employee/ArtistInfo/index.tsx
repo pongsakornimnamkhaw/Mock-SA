@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, Paper, Grid, Select, MenuItem, FormControl, Radio, RadioGroup, FormControlLabel } from '@mui/material';
 import { artistApi, type ArtistData } from '@/api/artistApi';
 import ConfirmDeleteDialog from '@/components/common/ConfirmDeleteDialog';
+import { useSearchParams } from 'react-router-dom';
 
 const ArtistInfoPage = () => {
-  const [activeTab, setActiveTab] = useState<'add' | 'edit'>('add');
+  const [searchParams] = useSearchParams();
+  const requestedArtist = searchParams.get('id') || '';
+  const [activeTab, setActiveTab] = useState<'add' | 'edit'>(() => requestedArtist ? 'edit' : 'add');
   const [artists, setArtists] = useState<ArtistData[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -21,7 +24,7 @@ const ArtistInfoPage = () => {
   const [email, setEmail] = useState('');
 
   // Edit mode states
-  const [selectedArtist, setSelectedArtist] = useState('');
+  const [selectedArtist, setSelectedArtist] = useState(requestedArtist);
   const [editArtistType, setEditArtistType] = useState('เดี่ยว');
   const [editLabel, setEditLabel] = useState('');
   const [editContact, setEditContact] = useState('');
