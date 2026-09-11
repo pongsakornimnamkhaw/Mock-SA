@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -49,34 +50,36 @@ func RegisterConcertRoutes(app *fiber.App, db *gorm.DB) {
 	// Auto seed default concerts if empty
 	handler.seedDefaultData()
 
+	view := requireEmployeeModule(db, access.Concerts, access.View)
+	edit := requireEmployeeModule(db, access.Concerts, access.Edit)
 	api := app.Group("/api")
 
 	// Concerts
-	api.Get("/concerts", handler.listConcerts)
-	api.Get("/concerts/:id", handler.getConcert)
-	api.Post("/concerts", handler.createConcert)
-	api.Put("/concerts/:id", handler.updateConcert)
-	api.Delete("/concerts/:id", handler.deleteConcert)
-	api.Put("/concerts/:id/status", handler.updateConcertStatus)
-	api.Patch("/concerts/:id/status", handler.updateConcertStatus)
+	api.Get("/concerts", view, handler.listConcerts)
+	api.Get("/concerts/:id", view, handler.getConcert)
+	api.Post("/concerts", edit, handler.createConcert)
+	api.Put("/concerts/:id", edit, handler.updateConcert)
+	api.Delete("/concerts/:id", edit, handler.deleteConcert)
+	api.Put("/concerts/:id/status", edit, handler.updateConcertStatus)
+	api.Patch("/concerts/:id/status", edit, handler.updateConcertStatus)
 
 	// Tasks / Responsibility
-	api.Get("/concerts/:id/tasks", handler.listTasks)
-	api.Post("/concerts/:id/tasks", handler.createTask)
-	api.Put("/tasks/:taskId/status", handler.updateTaskStatus)
-	api.Patch("/tasks/:taskId/status", handler.updateTaskStatus)
-	api.Put("/concerts/:id/tasks/:taskId/status", handler.updateTaskStatus)
+	api.Get("/concerts/:id/tasks", view, handler.listTasks)
+	api.Post("/concerts/:id/tasks", edit, handler.createTask)
+	api.Put("/tasks/:taskId/status", edit, handler.updateTaskStatus)
+	api.Patch("/tasks/:taskId/status", edit, handler.updateTaskStatus)
+	api.Put("/concerts/:id/tasks/:taskId/status", edit, handler.updateTaskStatus)
 
 	// Documents
-	api.Get("/concerts/:id/documents", handler.listDocuments)
-	api.Post("/concerts/:id/documents", handler.createDocument)
-	api.Get("/documents/:docId/file", handler.getDocumentFile)
-	api.Get("/documents/:docId/view", handler.getDocumentFile)
-	api.Delete("/documents/:docId", handler.deleteDocument)
+	api.Get("/concerts/:id/documents", view, handler.listDocuments)
+	api.Post("/concerts/:id/documents", edit, handler.createDocument)
+	api.Get("/documents/:docId/file", view, handler.getDocumentFile)
+	api.Get("/documents/:docId/view", view, handler.getDocumentFile)
+	api.Delete("/documents/:docId", edit, handler.deleteDocument)
 
 	// Edit History
-	api.Get("/history", handler.listHistory)
-	api.Get("/concerts/:id/history", handler.listHistoryByConcert)
+	api.Get("/history", view, handler.listHistory)
+	api.Get("/concerts/:id/history", view, handler.listHistoryByConcert)
 }
 
 func (h *ConcertHandler) seedDefaultData() {

@@ -56,6 +56,7 @@ import EmployeeListPage from './pages/Employee/employees/EmployeeListPage'
 import EmployeeFormPage from './pages/Employee/employees/EmployeeFormPage'
 import EmployeeAccountPage from './pages/Employee/Account'
 import EmployeePasswordRecoveryPage from './pages/Employee/PasswordRecovery'
+import EmployeePasswordSetupPage from './pages/Employee/PasswordSetup'
 import type { EditHistoryEntry } from './types/promotion'
 
 // B6733377 - External Contact
@@ -80,6 +81,7 @@ function App() {
       <Route path="/employee/login" element={<EmployeeLoginPage />} />
       <Route path="/staff/login" element={<EmployeeLoginPage />} />
       <Route path="/employee/forgot-password" element={<EmployeePasswordRecoveryPage />} />
+      <Route path="/employee/setup-password" element={<EmployeePasswordSetupPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -99,47 +101,47 @@ function App() {
       <Route path="/change-password" element={<CustomerRouteGuard><CustomerAccountPage mode="password" /></CustomerRouteGuard>} />
 
       {/* Sales Officer - Booking & Payment Verification (final document SA.docx: U4, UP2, UP3, UP5) */}
-      <Route path="/sales/bookings" element={<EmployeeRouteGuard><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/sales-bookings" element={<EmployeeRouteGuard><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/payment-verification" element={<EmployeeRouteGuard><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/sales/bookings" element={<EmployeeRouteGuard module="sales"><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/sales-bookings" element={<EmployeeRouteGuard module="sales"><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/payment-verification" element={<EmployeeRouteGuard module="sales"><Layout title="จัดการการจองและตรวจสอบการชำระเงิน"><SalesBookingManagementPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6707651 - Concert Management Routes */}
-      <Route path="/dashboard" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ตทั้งหมด" showBack={false}><DashboardPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/add-concert" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><AddConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/edit-concert" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><EditConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/responsibility" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/concert-status" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><ConcertStatusPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/documents" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/edit-history" element={<EmployeeRouteGuard><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/concert-search" element={<EmployeeRouteGuard><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/search-concert" element={<EmployeeRouteGuard><Layout title="วางแผนจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-dashboard" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-info" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/invitation" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><InvitationPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/performance-schedule" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceSchedulePage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/edit-performance" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><EditPerformancePage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/performance-detail" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceDetailPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-requirements" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistRequirementsPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-edit-history" element={<EmployeeRouteGuard><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistEditHistoryPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/dashboard" element={<EmployeeRouteGuard module="dashboard"><Layout title="ข้อมูลงานคอนเสิร์ตทั้งหมด" showBack={false}><DashboardPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/add-concert" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><AddConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/edit-concert" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/responsibility" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/concert-status" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ConcertStatusPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/documents" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/edit-history" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/search-concert" element={<EmployeeRouteGuard module="concert_catalog"><Layout title="วางแผนจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/concert-search" element={<EmployeeRouteGuard module="concerts"><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-dashboard" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-info" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/invitation" element={<EmployeeRouteGuard module="artists" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><InvitationPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/performance-schedule" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceSchedulePage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/edit-performance" element={<EmployeeRouteGuard module="artists" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><EditPerformancePage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/performance-detail" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceDetailPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-requirements" element={<EmployeeRouteGuard module="artists" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistRequirementsPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-edit-history" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistEditHistoryPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6708856 - seats & registration */}
-      <Route path="/venues-seats/*" element={<EmployeeRouteGuard><Layout title="ห้องสถานที่และที่นั่ง"><VenueSeatsViewPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/event-registration" element={<EmployeeRouteGuard><Layout title="ลงทะเบียนเข้างาน"><RegistrationModule /></Layout></EmployeeRouteGuard>} />
+      <Route path="/venues-seats/*" element={<EmployeeRouteGuard module="venues"><Layout title="ห้องสถานที่และที่นั่ง"><VenueSeatsViewPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/event-registration" element={<EmployeeRouteGuard module="registration"><Layout title="ลงทะเบียนเข้างาน"><RegistrationModule /></Layout></EmployeeRouteGuard>} />
 
       {/* B6717537 - Promotion & Employee Routes */}
-      <Route path="/promotions" element={<EmployeeRouteGuard><PromotionLayout><PromotionListPage editHistory={editHistory} onAddHistory={handleAddHistory} /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/promotions/new" element={<EmployeeRouteGuard><PromotionLayout><PromotionFormPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/promotions/:id" element={<EmployeeRouteGuard><PromotionLayout><PromotionDetailPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/promotions/:id/edit" element={<EmployeeRouteGuard><PromotionLayout><PromotionFormPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/approvals" element={<EmployeeRouteGuard><PromotionLayout><PromotionApprovalPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/history" element={<EmployeeRouteGuard><PromotionLayout><UsageHistoryPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/employees" element={<EmployeeRouteGuard><PromotionLayout><EmployeeListPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/employees/new" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
-      <Route path="/employees/:id/edit" element={<EmployeeRouteGuard><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/promotions" element={<EmployeeRouteGuard module="promotions"><PromotionLayout><PromotionListPage editHistory={editHistory} onAddHistory={handleAddHistory} /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/promotions/new" element={<EmployeeRouteGuard module="promotions" required="edit"><PromotionLayout><PromotionFormPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/promotions/:id" element={<EmployeeRouteGuard module="promotions"><PromotionLayout><PromotionDetailPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/promotions/:id/edit" element={<EmployeeRouteGuard module="promotions" required="edit"><PromotionLayout><PromotionFormPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/approvals" element={<EmployeeRouteGuard module="promotion_approvals"><PromotionLayout><PromotionApprovalPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/history" element={<EmployeeRouteGuard module="audit"><PromotionLayout><UsageHistoryPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/employees" element={<EmployeeRouteGuard module="employees"><PromotionLayout><EmployeeListPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/employees/new" element={<EmployeeRouteGuard module="employees"><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
+      <Route path="/employees/:id/edit" element={<EmployeeRouteGuard module="employees"><PromotionLayout><EmployeeFormPage /></PromotionLayout></EmployeeRouteGuard>} />
       <Route path="/employee/account" element={<EmployeeRouteGuard><PromotionLayout><EmployeeAccountPage /></PromotionLayout></EmployeeRouteGuard>} />
 
       {/* B6733377 - Concert Report System */}
-      <Route path="/report/*" element={<EmployeeRouteGuard><Layout title="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" showBack={false}><ConsertReportPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/report/*" element={<EmployeeRouteGuard module="reports"><Layout title="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" showBack={false}><ConsertReportPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6733377 - External Contact */}
       <Route path="/contact" element={<ExternalContactLayout />}>

@@ -1,11 +1,23 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 // MigrateAllModels รัน AutoMigrate สำหรับ model ทั้งหมดในระบบ
 func MigrateAllModels(db *gorm.DB) error {
-	if err := db.AutoMigrate(allModels()...); err != nil {
+	if err := detachOrphanEmployeeActivityUsers(db); err != nil {
 		return err
+	}
+	// Build every table before adding relationship constraints. Several domain
+	// models reference each other, so a single FK-enabled pass can target a
+	// table that has not been created yet on a brand-new schema.
+	foreignKeysDisabled := db.Config.DisableForeignKeyConstraintWhenMigrating
+	db.Config.DisableForeignKeyConstraintWhenMigrating = true
+	baseErr := db.AutoMigrate(allModels()...)
+	db.Config.DisableForeignKeyConstraintWhenMigrating = foreignKeysDisabled
+	if baseErr != nil {
+		return baseErr
 	}
 	if err := ensureTicketPlanningConstraints(db); err != nil {
 		return err
@@ -25,6 +37,7 @@ func allModels() []any {
 		&CusActivityLogs{},
 		&EmpActivityLogs{},
 		&EmployeePasswordResetRequest{},
+		&EmployeePasswordSetupToken{},
 		&Permission{},
 		&Inquiry{},
 
@@ -85,6 +98,34 @@ func ticketPlanningConstraintStatements() []string {
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_layout_objects_concert' AND conrelid = 'layout_objects'::regclass) THEN ALTER TABLE layout_objects ADD CONSTRAINT fk_layout_objects_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
 		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_publications_concert' AND conrelid = 'publications'::regclass) THEN ALTER TABLE publications ADD CONSTRAINT fk_publications_concert FOREIGN KEY (concert_id) REFERENCES concerts(concert_id) ON UPDATE CASCADE ON DELETE CASCADE; END IF; END $$`,
 	}
+}
+
+// detachOrphanEmployeeActivityUsers repairs legacy audit/session rows created
+// for synthetic employee accounts before GORM adds the users foreign key.
+// Audit rows are retained; only their invalid optional reference is cleared.
+func detachOrphanEmployeeActivityUsers(db *gorm.DB) error {
+	var ready bool
+	if err := db.Raw(`
+		SELECT to_regclass(current_schema() || '.emp_activity_logs') IS NOT NULL
+		   AND to_regclass(current_schema() || '.users') IS NOT NULL
+		   AND EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'emp_activity_logs'
+			  AND column_name = 'user_id'
+		   )`).Scan(&ready).Error; err != nil {
+		return err
+	}
+	if !ready {
+		return nil
+	}
+	return db.Exec(`
+		UPDATE emp_activity_logs AS logs
+		SET user_id = NULL
+		WHERE logs.user_id IS NOT NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM users WHERE users.user_id = logs.user_id
+		  )`).Error
 }
 
 // normalizeOperationalDateTimeColumns keeps business dates and clock values

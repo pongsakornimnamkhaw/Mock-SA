@@ -1,4 +1,5 @@
 import type { PersonnelType } from '@/types/promotion';
+import type { ModulePermissions } from '@/access/backofficeAccess';
 
 export interface EmployeeSession {
   userId: string;
@@ -8,11 +9,13 @@ export interface EmployeeSession {
   name: string;
   department: string;
   role: string;
+  jobRole?: string;
   email: string;
   phone?: string;
   userType?: string;
   personnelType?: PersonnelType;
   lastLoginAt?: string;
+  modulePermissions?: ModulePermissions;
 }
 
 const EMPLOYEE_SESSION_KEY = 'octavia-employee-session-ui-v1';

@@ -11,15 +11,15 @@ import {
   Typography,
 } from '@mui/material';
 import { Visibility, VisibilityOff, BadgeOutlined, ArrowBack } from '@mui/icons-material';
-import { useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom';
 import Logo from '@/components/common/Logo';
 import { employeeAuthApi } from '@/api/employeeAuthApi';
 import { saveEmployeeSession } from '@/utils/employeeSession';
+import { getCustomerSession } from '@/utils/customerSession';
 
 export default function EmployeeLoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectUrl = searchParams.get('redirect') || '/sales/bookings';
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -27,15 +27,23 @@ export default function EmployeeLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  if (getCustomerSession()) {
+    return <Navigate to="/home" replace />;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const session = await employeeAuthApi.login(username.trim(), password);
-      saveEmployeeSession(session);
-      navigate(redirectUrl, { replace: true });
+      const result = await employeeAuthApi.login(username.trim(), password);
+      if (result.kind === 'password_setup_required') {
+        navigate('/employee/setup-password', { replace: true });
+        return;
+      }
+      saveEmployeeSession(result.session);
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'ไม่สามารถเข้าสู่ระบบพนักงานได้');
     } finally {
@@ -75,16 +83,23 @@ export default function EmployeeLoginPage() {
             <Typography variant="h5" sx={{ fontWeight: 800, color: '#050C38', mb: 0.5 }}>
               ระบบงานพนักงาน (Staff Portal)
             </Typography>
-            <Typography variant="body2" sx={{ color: '#64748b' }}>
-              ฝ่ายขายและการตรวจสอบสลิป
-              <br />
-              จัดการคอนเสิร์ตและโปรโมชั่น
-            </Typography>
           </Box>
 
           {error && (
             <Alert severity="error" sx={{ width: '100%', borderRadius: 2 }}>
               {error}
+            </Alert>
+          )}
+
+          {searchParams.get('password_setup') === 'success' && (
+            <Alert severity="success" sx={{ width: '100%', borderRadius: 2 }}>
+              ตั้งรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่
+            </Alert>
+          )}
+
+          {searchParams.get('password_setup') === 'missing' && (
+            <Alert severity="warning" sx={{ width: '100%', borderRadius: 2 }}>
+              ขั้นตอนตั้งรหัสผ่านหมดอายุหรือไม่สมบูรณ์ กรุณาเข้าสู่ระบบใหม่
             </Alert>
           )}
 

@@ -17,6 +17,7 @@ import {
 } from '@/utils/bookingStore';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
 import { getEmployeeSession } from '@/utils/employeeSession';
+import { useModuleAccess } from '@/access/useModuleAccess';
 
 const money = (val: number) => `${val.toLocaleString('th-TH')} ฿`;
 
@@ -34,6 +35,7 @@ const formatDate = (val?: string) => {
 
 export default function SalesBookingManagementPage() {
   const employee = getEmployeeSession();
+  const { canEdit } = useModuleAccess('sales');
   const [bookings, setBookings] = useState<BookingRecord[]>(getBookingsSnapshot());
   const [searchQuery, setSearchQuery] = useState('');
   const [tabStatus, setTabStatus] = useState<string>('all');
@@ -263,7 +265,7 @@ export default function SalesBookingManagementPage() {
                     <TableCell sx={{ textAlign: 'center' }}>
                       <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
                         {/* Action for under_review: ตรวจสอบสลิป */}
-                        {b.status === 'under_review' && (
+                        {b.status === 'under_review' && canEdit && (
                           <Button
                             size="small"
                             variant="contained"
@@ -289,7 +291,7 @@ export default function SalesBookingManagementPage() {
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="ขอส่งบัตรซ้ำทางอีเมล (UP5)">
-                              <IconButton size="small" color="secondary" onClick={() => handleResend(b)}>
+                              <IconButton size="small" color="secondary" disabled={!canEdit} onClick={() => handleResend(b)}>
                                 <SendOutlinedIcon />
                               </IconButton>
                             </Tooltip>
@@ -388,12 +390,13 @@ export default function SalesBookingManagementPage() {
                 size="small"
                 fullWidth
                 value={verifierName}
+                disabled={!canEdit}
                 onChange={(e) => setVerifierName(e.target.value)}
                 sx={{ mb: 2 }}
               />
 
               {/* Reject Reason Form if toggled */}
-              {showRejectInput && (
+              {showRejectInput && canEdit && (
                 <Box sx={{ mt: 1, p: 2, bgcolor: '#fff5f5', borderRadius: 2, border: '1px solid #ffcdd2' }}>
                   <Typography variant="subtitle2" sx={{ color: '#c62828', fontWeight: 700, mb: 1 }}>
                     ระบุเหตุผลการปฏิเสธ (จะส่งแจ้งลูกค้าให้แก้ไข):
@@ -424,7 +427,7 @@ export default function SalesBookingManagementPage() {
             </DialogContent>
 
             <DialogActions sx={{ px: 3, py: 2, justifyContent: 'space-between' }}>
-              {!showRejectInput ? (
+              {!showRejectInput && canEdit ? (
                 <>
                   <Button
                     variant="outlined"
@@ -481,6 +484,7 @@ export default function SalesBookingManagementPage() {
               <Button onClick={() => setTicketViewBooking(null)}>ปิด</Button>
               <Button
                 variant="contained"
+                disabled={!canEdit}
                 startIcon={<SendOutlinedIcon />}
                 onClick={() => {
                   handleResend(ticketViewBooking);

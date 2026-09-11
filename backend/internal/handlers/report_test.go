@@ -40,3 +40,16 @@ func TestReportConcertBaseNormalizesDatesAndKeepsTimestamp(t *testing.T) {
 		t.Fatalf("invalid JSON timestamp %q: %v", value, err)
 	}
 }
+
+func TestCompletedConcertStatusRejectsUnfinishedStatuses(t *testing.T) {
+	for _, status := range []string{"เสร็จสิ้น", "ตรวจสอบข้อมูลเสร็จสิ้น"} {
+		if !isCompletedConcertStatus(status) {
+			t.Fatalf("completed status %q rejected", status)
+		}
+	}
+	for _, status := range []string{"ร่าง", "ยกเลิกการจัด", "กำลังแสดง", "วางแผน"} {
+		if isCompletedConcertStatus(status) {
+			t.Fatalf("unfinished status %q accepted", status)
+		}
+	}
+}

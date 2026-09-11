@@ -30,6 +30,7 @@ import { managementApi } from '../../../../api/managementApi';
 import type { DiscountType, Concert, Zone } from '../../../../types/promotion';
 import { useNavigate, useParams } from 'react-router-dom';
 import ConfirmDeleteDialog from '../../../../components/common/ConfirmDeleteDialog';
+import { useModuleAccess } from '../../../../access/useModuleAccess';
 
 interface FormState {
   promotion_name: string;
@@ -69,6 +70,7 @@ export default function PromotionFormPage() {
   const { id } = useParams<{ id: string }>();
   const mode = id ? 'edit' : 'create';
   const navigate = useNavigate();
+  const { canEdit } = useModuleAccess('promotions');
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [concerts, setConcerts] = useState<Concert[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -145,7 +147,7 @@ export default function PromotionFormPage() {
   }, [id, retry]);
 
   const ready = !loading && !loadError && loadedId === (id ?? '');
-  const disabled = !ready || saving || deleting;
+  const disabled = !ready || saving || deleting || !canEdit;
 
   const set = (key: keyof FormState, value: string | string[]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -312,7 +314,7 @@ export default function PromotionFormPage() {
             <Button
               variant="outlined"
               startIcon={<DeleteIcon />}
-              disabled={!ready || saving || deleting}
+              disabled={!ready || saving || deleting || !canEdit}
               onClick={() => setDeleteOpen(true)}
               sx={{ borderColor: '#dc2626', color: '#dc2626', '&:hover': { borderColor: '#b91c1c', bgcolor: '#fef2f2' } }}
             >

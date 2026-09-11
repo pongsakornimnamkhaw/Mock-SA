@@ -39,6 +39,7 @@ import type { Promotion, PromotionApproval } from '../../../../types/promotion';
 import Pagination from '../../../../components/ui/Pagination';
 import { useNavigate } from 'react-router-dom';
 import { promotionFontSizes, promotionPageSx, promotionTitleSx } from '../typography';
+import { useModuleAccess } from '../../../../access/useModuleAccess';
 
 interface ApprovalItem {
   approval: PromotionApproval;
@@ -99,6 +100,7 @@ const PAGE_SIZE = 8;
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function PromotionApprovalPage() {
   const navigate = useNavigate();
+  const { canEdit } = useModuleAccess('promotion_approvals');
   const [allItems, setAllItems] = useState<ApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -399,11 +401,11 @@ export default function PromotionApprovalPage() {
 
                 {/* Buttons */}
                 <Box sx={{ display: 'flex', gap: 1.5 }}>
-                  <Button fullWidth variant="contained" startIcon={<CancelIcon />} disabled={busy} onClick={() => handleDecision('rejected')}
+                  <Button fullWidth variant="contained" startIcon={<CancelIcon />} disabled={busy || !canEdit} onClick={() => handleDecision('rejected')}
                     sx={{ background: 'linear-gradient(135deg,#f43f5e,#e11d48)', '&:hover': { background: 'linear-gradient(135deg,#e11d48,#be123c)' }, py: 1.25, fontWeight: 700, boxShadow: '0 4px 12px rgba(244,63,94,0.3)' }}>
                     ปฏิเสธคำขอ
                   </Button>
-                  <Button fullWidth variant="contained" startIcon={<CheckCircleIcon />} disabled={busy} onClick={() => handleDecision('approved')}
+                  <Button fullWidth variant="contained" startIcon={<CheckCircleIcon />} disabled={busy || !canEdit} onClick={() => handleDecision('approved')}
                     sx={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', '&:hover': { background: 'linear-gradient(135deg,#6d28d9,#4338ca)' }, py: 1.25, fontWeight: 700, boxShadow: '0 4px 12px rgba(124,58,237,0.3)' }}>
                     อนุมัติโปรโมชั่น
                   </Button>

@@ -14,11 +14,13 @@ import (
 
 	"backend/internal/config"
 	"backend/internal/eventregistration"
+	"backend/internal/handlers"
 	"backend/internal/models"
 	"backend/internal/ticketplanning"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -88,9 +90,48 @@ func setupTestApp(db *gorm.DB) *fiber.App {
 			"status":  "success",
 		})
 	})
+	handlers.RegisterEmployeeAuthRoutes(app, db)
 	ticketplanning.RegisterRoutes(app, db)
 	eventregistration.RegisterRoutes(app, db)
 	return app
+}
+
+func authenticateTestEmployee(t *testing.T, db *gorm.DB, app *fiber.App) *http.Cookie {
+	t.Helper()
+	password := "IntegrationPassword123!"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprintf("test-admin-%d", time.Now().UnixNano())
+	code := id
+	user := models.User{
+		UserID: id, FirstName: "Integration", LastName: "Admin", Email: id + "@example.test",
+		PhoneNumber: "0812345678", UserType: "employee", Role: "admin", EmployeeCode: &code,
+		PasswordHash: string(hash), DateOfBirth: time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC), Gender: "Other",
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Where("user_id = ?", id).Delete(&models.EmpActivityLogs{})
+		db.Where("user_id = ?", id).Delete(&models.Permission{})
+		db.Where("user_id = ?", id).Delete(&models.User{})
+	})
+	body, _ := json.Marshal(map[string]string{"username": user.Email, "password": password})
+	request := httptest.NewRequest(http.MethodPost, "/api/employee/auth/login", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request, -1)
+	if err != nil || response.StatusCode != http.StatusOK {
+		t.Fatalf("employee login failed: status=%d err=%v", response.StatusCode, err)
+	}
+	for _, cookie := range response.Cookies() {
+		if cookie.Name == "octavia_employee_session" {
+			return cookie
+		}
+	}
+	t.Fatal("employee login did not issue session cookie")
+	return nil
 }
 
 // Test 1: ทดสอบยิง GET /
@@ -233,6 +274,7 @@ func TestEventRegistrationDashboardDerivesConcertThroughZone(t *testing.T) {
 func TestCreateAndGetConcertAPI(t *testing.T) {
 	db := setupTestDB(t)
 	app := setupTestApp(db)
+	cookie := authenticateTestEmployee(t, db, app)
 
 	testConcertID := fmt.Sprintf("test-cc-%d", time.Now().UnixNano())
 	payload := map[string]interface{}{
@@ -269,6 +311,7 @@ func TestCreateAndGetConcertAPI(t *testing.T) {
 	// POST /api/ticket-planning/concerts
 	req := httptest.NewRequest(http.MethodPost, "/api/ticket-planning/concerts", bytes.NewReader(jsonBytes))
 	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("POST concerts request failed: %v", err)
@@ -281,6 +324,7 @@ func TestCreateAndGetConcertAPI(t *testing.T) {
 
 	// GET /api/ticket-planning/concerts/:id
 	getReq := httptest.NewRequest(http.MethodGet, "/api/ticket-planning/concerts/"+testConcertID, nil)
+	getReq.AddCookie(cookie)
 	getResp, err := app.Test(getReq, -1)
 	if err != nil {
 		t.Fatalf("GET concert request failed: %v", err)
@@ -312,6 +356,7 @@ func TestCreateAndGetConcertAPI(t *testing.T) {
 func TestSaveLayoutAPI(t *testing.T) {
 	db := setupTestDB(t)
 	app := setupTestApp(db)
+	cookie := authenticateTestEmployee(t, db, app)
 
 	testConcertID := fmt.Sprintf("test-layout-%d", time.Now().UnixNano())
 	// สร้าง concert ก่อน
@@ -374,6 +419,7 @@ func TestSaveLayoutAPI(t *testing.T) {
 	jsonBytes, _ := json.Marshal(layoutPayload)
 	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/ticket-planning/concerts/%s/layout", testConcertID), bytes.NewReader(jsonBytes))
 	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("PUT layout request failed: %v", err)

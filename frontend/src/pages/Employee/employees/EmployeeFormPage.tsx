@@ -18,15 +18,19 @@ import IconButton from '@mui/material/IconButton';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
-import type { Employee, EmployeePermission, PersonnelType } from '../../../types/promotion';
+import type { Employee, EmployeeJobRole, EmployeeModuleAccess, EmployeePermission, PersonnelType } from '../../../types/promotion';
+import { BACKOFFICE_MODULES, defaultModuleAccess, moduleOverridesForSave, type BackofficeModule } from '../../../access/backofficeAccess';
 import { managementApi } from '../../../api/managementApi';
 import { useNavigate, useParams } from 'react-router-dom';
 
 const DEPARTMENTS = ['ฝ่ายสถานที่', 'ฝ่ายการเงิน', 'ฝ่ายโปรดักชั่น', 'ฝ่ายการตลาด', 'ฝ่ายประชาสัมพันธ์', 'ฝ่ายบุคคล'];
-const EDIT_SCOPES = [
-  { value: 'all', label: 'ทั้งหมด' },
-  { value: 'promotions', label: 'จัดการโปรโมชั่น' },
-  { value: 'users', label: 'จัดการผู้ใช้งาน' },
+const JOB_ROLES: { value: EmployeeJobRole; label: string }[] = [
+  { value: 'staff', label: 'พนักงานทั่วไป' },
+  { value: 'organizer', label: 'ผู้จัดงาน' },
+  { value: 'co_organizer', label: 'ผู้จัดงานร่วม' },
+  { value: 'event_staff', label: 'สตาฟงาน' },
+  { value: 'approver', label: 'ผู้มีอำนาจอนุมัติ' },
+  { value: 'sales', label: 'ฝ่ายขาย' },
 ];
 type EmployeePayload = Omit<Employee, 'employee_id'>;
 type FieldErrors = Partial<Record<keyof EmployeePayload, string>>;
@@ -43,12 +47,14 @@ function EmployeeForm({ id }: { id?: string }) {
   const [lastName, setLastName] = useState('');
   const [employeeCode, setEmployeeCode] = useState('');
   const [department, setDepartment] = useState('');
+  const [jobRole, setJobRole] = useState<EmployeeJobRole>('staff');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [personnelType, setPersonnelType] = useState<PersonnelType>('internal');
   
   const [permission, setPermission] = useState<EmployeePermission>('view_only');
   const [editScope, setEditScope] = useState('');
+  const [modulePermissions, setModulePermissions] = useState<Partial<Record<BackofficeModule, EmployeeModuleAccess>>>({});
   
   const [loading, setLoading] = useState(!!id);
   const [loadError, setLoadError] = useState('');
@@ -75,11 +81,13 @@ function EmployeeForm({ id }: { id?: string }) {
         setLastName(emp.last_name);
         setEmployeeCode(emp.employee_code);
         setDepartment(emp.department);
+        setJobRole(emp.job_role ?? 'staff');
         setEmail(emp.email);
         setPhone(emp.phone);
         setPersonnelType(emp.personnel_type ?? 'internal');
         setPermission(emp.permission);
         setEditScope(emp.edit_scope ?? '');
+        setModulePermissions(Object.fromEntries((emp.module_permissions ?? []).map(item => [item.module, item.level])));
       } catch (error) {
         if (active) setLoadError(error instanceof Error ? error.message || 'โหลดข้อมูลพนักงานไม่สำเร็จ' : 'โหลดข้อมูลพนักงานไม่สำเร็จ');
       } finally {
@@ -96,8 +104,10 @@ function EmployeeForm({ id }: { id?: string }) {
     const payload: EmployeePayload = {
       first_name: firstName.trim(), last_name: lastName.trim(),
       employee_code: employeeCode.trim(), department: department.trim(),
+      job_role: jobRole,
       email: email.trim(), phone: phone.trim(), permission,
       edit_scope: permission === 'edit' ? editScope.trim() : '',
+      module_permissions: moduleOverridesForSave(permission, modulePermissions),
       personnel_type: personnelType,
     };
     const nextErrors: FieldErrors = {};
@@ -108,7 +118,6 @@ function EmployeeForm({ id }: { id?: string }) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) nextErrors.email = 'กรุณากรอกอีเมลให้ถูกต้อง';
     const phoneDigits = payload.phone.replace(/\D/g, '');
     if (!/^\+?[0-9()\s-]+$/.test(payload.phone) || phoneDigits.length < 9 || phoneDigits.length > 15) nextErrors.phone = 'กรุณากรอกเบอร์โทร 9–15 หลัก';
-    if (permission === 'edit' && !EDIT_SCOPES.some(scope => scope.value === payload.edit_scope)) nextErrors.edit_scope = 'กรุณาเลือกขอบเขตการแก้ไข';
     const maxLengths = { first_name: 100, last_name: 100, employee_code: 50, email: 255, phone: 20 } as const;
     for (const field of Object.keys(maxLengths) as (keyof typeof maxLengths)[]) {
       if (payload[field].length > maxLengths[field]) nextErrors[field] = `กรุณากรอกไม่เกิน ${maxLengths[field]} ตัวอักษร`;
@@ -228,7 +237,14 @@ function EmployeeForm({ id }: { id?: string }) {
                 </Select>
               </FormControl>
             </Box>
-            <Box sx={{ flex: 1 }} />
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>บทบาทงาน*</Typography>
+              <FormControl fullWidth size="small" disabled={disabled}>
+                <Select value={jobRole} onChange={e => setJobRole(e.target.value as EmployeeJobRole)} inputProps={{ 'aria-label': 'บทบาทงาน' }}>
+                  {JOB_ROLES.map(item => <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Box>
           </Box>
         </CardContent>
       </Card>
@@ -256,22 +272,6 @@ function EmployeeForm({ id }: { id?: string }) {
                 label="มีสิทธิ์แก้ไข" 
                 sx={{ mr: 0 }}
               />
-              {permission === 'edit' && (
-                <FormControl size="small" error={!!errors.edit_scope} disabled={disabled} sx={{ width: 200 }}>
-                  <Select
-                    size="small"
-                    value={editScope}
-                    onChange={(e) => setEditScope(e.target.value)}
-                    displayEmpty
-                    inputProps={{ 'aria-label': 'ขอบเขตการแก้ไข', 'aria-describedby': errors.edit_scope ? 'edit-scope-error' : undefined }}
-                  >
-                    <MenuItem value="" disabled>เลือกขอบเขตการแก้ไข</MenuItem>
-                    {editScope && !EDIT_SCOPES.some(scope => scope.value === editScope) && <MenuItem value={editScope}>{editScope}</MenuItem>}
-                    {EDIT_SCOPES.map(scope => <MenuItem key={scope.value} value={scope.value}>{scope.label}</MenuItem>)}
-                  </Select>
-                  {errors.edit_scope && <FormHelperText id="edit-scope-error">{errors.edit_scope}</FormHelperText>}
-                </FormControl>
-              )}
             </Box>
 
             <FormControlLabel 
@@ -281,6 +281,40 @@ function EmployeeForm({ id }: { id?: string }) {
               label="แอดมิน" 
             />
           </RadioGroup>
+
+          {permission !== 'admin' && (
+            <Box sx={{ mt: 2, borderTop: '1px solid #e2e8f0', pt: 2 }}>
+              <Typography sx={{ fontWeight: 700, mb: 0.5 }}>กำหนดสิทธิ์รายโมดูล</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                โมดูลที่เกี่ยวข้องกับบทบาทจะถูกกำหนดให้อัตโนมัติ และผู้ดูแลระบบเพิ่มหรือลดสิทธิ์รายบุคคลได้ โมดูลอื่นจะถูกล็อก
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
+                {BACKOFFICE_MODULES.map(({ key, label }) => {
+                  const lockedLevel: EmployeeModuleAccess | undefined = key === 'dashboard' ? 'view' : (key === 'audit' || key === 'employees') ? 'none' : undefined;
+                  const fallback = lockedLevel ?? defaultModuleAccess(jobRole, department, key);
+                  const configuredLevel = lockedLevel ?? modulePermissions[key] ?? fallback;
+                  const level = permission === 'view_only' && configuredLevel === 'edit' ? 'view' : configuredLevel;
+                  return (
+                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1.5, border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                      <Typography variant="body2" sx={{ flex: 1, fontWeight: 600 }}>{label}</Typography>
+                      <FormControl size="small" disabled={disabled || lockedLevel !== undefined} sx={{ width: 145 }}>
+                        <Select
+                          value={level}
+                          onChange={(event) => setModulePermissions(current => ({ ...current, [key]: event.target.value as EmployeeModuleAccess }))}
+                          inputProps={{ 'aria-label': `สิทธิ์ ${label}` }}
+                        >
+                          <MenuItem value="none">ไม่ให้เข้า</MenuItem>
+                          <MenuItem value="view">ดูอย่างเดียว</MenuItem>
+                          {permission === 'edit' && <MenuItem value="edit">ดูและแก้ไข</MenuItem>}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  );
+                })}
+              </Box>
+              {errors.edit_scope && <FormHelperText error sx={{ mt: 1 }}>{errors.edit_scope}</FormHelperText>}
+            </Box>
+          )}
         </CardContent>
       </Card>
 

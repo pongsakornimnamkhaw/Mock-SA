@@ -5,11 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"strconv"
 	"strings"
 	"time"
 
+	"backend/internal/access"
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
@@ -35,19 +35,21 @@ type employeeLoginInput struct {
 }
 
 type employeeAccountDTO struct {
-	UserID        string     `json:"user_id"`
-	EmployeeCode  string     `json:"employee_code"`
-	FirstName     string     `json:"first_name"`
-	LastName      string     `json:"last_name"`
-	Name          string     `json:"name"`
-	Department    string     `json:"department"`
-	Role          string     `json:"role"`
-	Email         string     `json:"email"`
-	Phone         string     `json:"phone"`
-	UserType      string     `json:"user_type"`
-	PersonnelType string     `json:"personnel_type"`
-	LastLoginAt   *time.Time `json:"last_login_at"`
-	Active        bool       `json:"active"`
+	UserID            string                         `json:"user_id"`
+	EmployeeCode      string                         `json:"employee_code"`
+	FirstName         string                         `json:"first_name"`
+	LastName          string                         `json:"last_name"`
+	Name              string                         `json:"name"`
+	Department        string                         `json:"department"`
+	Role              string                         `json:"role"`
+	JobRole           string                         `json:"job_role"`
+	Email             string                         `json:"email"`
+	Phone             string                         `json:"phone"`
+	UserType          string                         `json:"user_type"`
+	PersonnelType     string                         `json:"personnel_type"`
+	LastLoginAt       *time.Time                     `json:"last_login_at"`
+	Active            bool                           `json:"active"`
+	ModulePermissions map[access.Module]access.Level `json:"module_permissions"`
 }
 
 func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
@@ -58,6 +60,7 @@ func RegisterEmployeeAuthRoutes(app *fiber.App, db *gorm.DB) {
 	group.Get("/me", h.requireEmployee, h.getMe)
 	registerEmployeeAccountRoutes(app, db, h)
 	registerEmployeePasswordResetRoutes(app, db, h)
+	registerEmployeePasswordSetupRoute(app, db)
 }
 
 func employeeAuthAccountView(u models.User) employeeAccountDTO {
@@ -78,18 +81,20 @@ func employeeAuthAccountView(u models.User) employeeAccountDTO {
 		role = "sales"
 	}
 	return employeeAccountDTO{
-		UserID:        u.UserID,
-		EmployeeCode:  empCode,
-		FirstName:     u.FirstName,
-		LastName:      u.LastName,
-		Name:          name,
-		Department:    dept,
-		Role:          role,
-		Email:         u.Email,
-		Phone:         u.PhoneNumber,
-		UserType:      u.UserType,
-		PersonnelType: u.PersonnelType,
-		Active:        !u.EmployeeInactive,
+		UserID:            u.UserID,
+		EmployeeCode:      empCode,
+		FirstName:         u.FirstName,
+		LastName:          u.LastName,
+		Name:              name,
+		Department:        dept,
+		Role:              role,
+		JobRole:           u.JobRole,
+		Email:             u.Email,
+		Phone:             u.PhoneNumber,
+		UserType:          u.UserType,
+		PersonnelType:     u.PersonnelType,
+		Active:            !u.EmployeeInactive,
+		ModulePermissions: employeeEffectiveAccess(u),
 	}
 }
 
@@ -107,40 +112,35 @@ func (h *employeeAuthHandler) login(c *fiber.Ctx) error {
 
 	var user models.User
 	var sessionCookie *fiber.Cookie
+	var setupToken string
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		// Keep the same user lock used by password reset until both password
 		// verification and session insertion finish. Reset can then revoke every
 		// session authenticated with the old password before it commits.
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
-			"(LOWER(email) = ? OR UPPER(employee_code) = ?) AND (LOWER(user_type) IN ? OR employee_code IS NOT NULL)",
+		err := tx.Preload("Permissions").Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"(LOWER(email) = ? OR UPPER(employee_code) = ?) AND (LOWER(user_type) IN ? OR employee_code IS NOT NULL) AND employee_inactive = ?",
 			strings.ToLower(username), strings.ToUpper(username),
 			[]string{"employee", "staff", "admin", "พนักงาน"},
+			false,
 		).First(&user).Error
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) && (strings.EqualFold(username, "B6728786") || strings.EqualFold(username, "CD-1234") || strings.Contains(strings.ToLower(username), "sales")) {
-				// Synthetic fallback needs no persisted row lock. Both lookups must
-				// confirm absence so an alias cannot impersonate a real account.
-				var persisted models.User
-				if lookupErr := tx.Select("user_id").First(&persisted, "user_id = ?", "EMP-B6728786").Error; !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-					return fiber.NewError(fiber.StatusUnauthorized, "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง")
-				}
-				user = models.User{
-					UserID: "EMP-B6728786", FirstName: "พงกรศกร", LastName: "อิ่มน้ำขาว",
-					Email: "sales.b6728786@octavia.test", Department: "ฝ่ายขาย", Role: "sales", UserType: "employee",
-				}
-				code := "B6728786"
-				user.EmployeeCode = &code
-			} else {
-				return fiber.NewError(fiber.StatusUnauthorized, "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง")
-			}
+			return fiber.NewError(fiber.StatusUnauthorized, "ไม่พบบัญชีพนักงานในระบบ หรือไม่มีสิทธิ์เข้าถึง")
 		} else if !employeeLoginPasswordMatches(user.PasswordHash, password) {
 			return fiber.NewError(fiber.StatusUnauthorized, "รหัสผ่านไม่ถูกต้อง")
+		}
+		if user.MustChangePassword {
+			setupToken, err = createEmployeePasswordSetupToken(tx, user.UserID, time.Now().UTC())
+			return err
 		}
 		sessionCookie, err = createEmployeeSession(tx, user.UserID)
 		return err
 	})
 	if err != nil {
 		return employeeAccountError(c, err)
+	}
+	if setupToken != "" {
+		c.Set("Cache-Control", "no-store")
+		return c.JSON(fiber.Map{"requires_password_setup": true, "setup_token": setupToken})
 	}
 	// A successful insert is insufficient if the transaction's commit fails.
 	// Only expose the browser token after the complete transaction succeeds.

@@ -10,6 +10,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import { useNavigate } from 'react-router-dom';
 import { celestial, flux, pulse, starlight } from '@/assets/poster';
 import ConfirmDeleteDialog from '@/components/common/ConfirmDeleteDialog';
+import { useModuleAccess } from '@/access/useModuleAccess';
 
 const statusOptions = [
   { label: 'ทั้งหมด', emoji: '✨' }, { label: 'วางแผน', emoji: '📝' },
@@ -34,6 +35,7 @@ const statusStyle: Record<string, { bg: string; color: string }> = {
 
 const ConcertSearchPage = () => {
   const navigate = useNavigate();
+  const { canEdit } = useModuleAccess('concerts');
   const [concerts, setConcerts] = useState(concertData);
   const [inputValue, setInputValue] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('ทั้งหมด');
@@ -93,10 +95,10 @@ const ConcertSearchPage = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Typography sx={{ fontSize: '17px', fontWeight: 800 }}>สถานะ:</Typography><Chip label={concert.status} sx={{ bgcolor: colors.bg, color: colors.color, fontWeight: 800, fontSize: '16px' }} /></Box>
                 <Typography sx={{ color: '#68758b', fontSize: '15px' }}>• อัปเดตล่าสุด {concert.updated}</Typography>
                 <Box sx={{ display: 'flex', gap: 0.75 }}>
-                  <IconButton title="แก้ไขข้อมูลคอนเสิร์ต" aria-label={`แก้ไข ${concert.title}`} onClick={() => navigate('/edit-concert', { state: { concert } })} sx={{ color: '#3b921c' }}><EditIcon /></IconButton>
-                  <IconButton title="ลบข้อมูลคอนเสิร์ต" aria-label={`ลบ ${concert.title}`} onClick={() => setConcertToDelete(concert)} sx={{ color: '#ef4444' }}><DeleteIcon /></IconButton>
+                  {canEdit && <IconButton title="แก้ไขข้อมูลคอนเสิร์ต" aria-label={`แก้ไข ${concert.title}`} onClick={() => navigate('/edit-concert', { state: { concert } })} sx={{ color: '#3b921c' }}><EditIcon /></IconButton>}
+                  {canEdit && <IconButton title="ลบข้อมูลคอนเสิร์ต" aria-label={`ลบ ${concert.title}`} onClick={() => setConcertToDelete(concert)} sx={{ color: '#ef4444' }}><DeleteIcon /></IconButton>}
                   <IconButton title="แนบเอกสาร" aria-label={`เอกสาร ${concert.title}`} onClick={() => navigate('/documents', { state: { concert } })} sx={{ color: '#626775' }}><DescriptionOutlinedIcon /></IconButton>
-                  <IconButton title="ผู้รับผิดชอบ" aria-label={`เพิ่มผู้รับผิดชอบ ${concert.title}`} onClick={() => navigate('/responsibility', { state: { concert } })} sx={{ color: '#071044' }}><PersonAddAltOutlinedIcon /></IconButton>
+                  {canEdit && <IconButton title="ผู้รับผิดชอบ" aria-label={`เพิ่มผู้รับผิดชอบ ${concert.title}`} onClick={() => navigate('/responsibility', { state: { concert } })} sx={{ color: '#071044' }}><PersonAddAltOutlinedIcon /></IconButton>}
                 </Box>
               </Box>
             </Paper>
@@ -105,7 +107,7 @@ const ConcertSearchPage = () => {
         {results.length === 0 && <Paper variant="outlined" sx={{ p: 6, borderRadius: 4, textAlign: 'center', color: 'text.secondary' }}><Typography sx={{ fontSize: '18px' }}>ไม่พบคอนเสิร์ตที่ตรงกับคำค้นหาและสถานะที่เลือก</Typography></Paper>}
       </Box>
 
-      <ConfirmDeleteDialog
+      {canEdit && <ConfirmDeleteDialog
         open={Boolean(concertToDelete)}
         message={concertToDelete ? `คุณยืนยันที่จะลบคอนเสิร์ต “${concertToDelete.title}” หรือไม่` : undefined}
         onCancel={() => setConcertToDelete(null)}
@@ -115,7 +117,7 @@ const ConcertSearchPage = () => {
           }
           setConcertToDelete(null);
         }}
-      />
+      />}
     </Box>
   );
 };
