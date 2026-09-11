@@ -1,9 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getEmployeeSession } from '@/utils/employeeSession';
-import { getCustomerSession } from '@/utils/customerSession';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { employeeAuthApi } from '@/api/employeeAuthApi';
+import { clearEmployeeSession, getEmployeeSession, saveEmployeeSession } from '@/utils/employeeSession';
+import { getCustomerSession } from '@/utils/customerSession';
 import { effectiveModulePermissions, hasModuleAccess, type AccessLevel, type BackofficeModule } from '@/access/backofficeAccess';
 
 interface EmployeeRouteGuardProps {
@@ -13,10 +14,34 @@ interface EmployeeRouteGuardProps {
 }
 
 export default function EmployeeRouteGuard({ children, module, required = 'view' }: EmployeeRouteGuardProps) {
-  const session = getEmployeeSession();
   const location = useLocation();
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
 
-  if (!session) {
+  useEffect(() => {
+    let active = true;
+
+    employeeAuthApi.getMe().then((session) => {
+      if (!active) return;
+
+      if (session) {
+        saveEmployeeSession(session);
+        setAuthenticated(true);
+        return;
+      }
+
+      clearEmployeeSession();
+      setAuthenticated(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Do not render protected content while the server-side session is being checked.
+  if (authenticated === null) return null;
+
+  if (!authenticated) {
     if (getCustomerSession()) {
       return <Navigate to="/home" replace />;
     }
@@ -24,7 +49,8 @@ export default function EmployeeRouteGuard({ children, module, required = 'view'
     return <Navigate to={`/employee/login?redirect=${returnUrl}`} replace />;
   }
 
-  if (module) {
+  const session = getEmployeeSession();
+  if (module && session) {
     const permissions = effectiveModulePermissions(session.role, session.department, session.modulePermissions, session.jobRole);
     if (!hasModuleAccess(permissions, module, required)) {
       return (
