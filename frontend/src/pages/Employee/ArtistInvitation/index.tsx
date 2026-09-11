@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Box, Typography, Button, Paper, Grid, Select, MenuItem, FormControl, Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material';
 import { artistApi, type ArtistData, type InvitationData } from '@/api/artistApi';
+import { useFeatureAccess } from '@/access/useFeatureAccess';
 
 const InvitationPage = () => {
+  const { canEdit } = useFeatureAccess('artist.invitation');
   const [selectedArtist, setSelectedArtist] = useState('');
   const [artists, setArtists] = useState<ArtistData[]>([]);
   const [invitations, setInvitations] = useState<InvitationData[]>([]);
@@ -32,7 +34,7 @@ const InvitationPage = () => {
         <TableCell sx={{ textAlign: 'center', fontSize: '22px', border: '1px solid #e0e0e0' }}>{row.start_date}{row.end_date !== row.start_date ? ` - ${row.end_date}` : ''}</TableCell>
         <TableCell sx={{ textAlign: 'center', fontSize: '22px', border: '1px solid #e0e0e0' }}>{row.start_time?.slice(0,5)} - {row.end_time?.slice(0,5)}</TableCell>
         <TableCell sx={{ textAlign: 'center', fontSize: '22px', border: '1px solid #e0e0e0' }}>{row.location}</TableCell>
-        <TableCell sx={{ border: '1px solid #e0e0e0' }}><FormControl fullWidth size="small"><Select value={row.invitation_status} onChange={(e) => setInvitations((prev) => prev.map((item, i) => i === index ? { ...item, invitation_status: e.target.value } : item))}><MenuItem value="รอการตอบรับ">รอการตอบรับ</MenuItem><MenuItem value="เข้าร่วม">เข้าร่วม</MenuItem><MenuItem value="ปฏิเสธ">ปฏิเสธ</MenuItem></Select></FormControl></TableCell>
+        <TableCell sx={{ border: '1px solid #e0e0e0' }}><FormControl fullWidth size="small"><Select disabled={!canEdit} value={row.invitation_status} onChange={(e) => setInvitations((prev) => prev.map((item, i) => i === index ? { ...item, invitation_status: e.target.value } : item))}><MenuItem value="รอการตอบรับ">รอการตอบรับ</MenuItem><MenuItem value="เข้าร่วม">เข้าร่วม</MenuItem><MenuItem value="ปฏิเสธ">ปฏิเสธ</MenuItem></Select></FormControl></TableCell>
       </TableRow>
     ));
 
@@ -100,7 +102,7 @@ const InvitationPage = () => {
           </TableBody>
         </Table>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
+        {canEdit && <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
           <Button
             variant="contained"
             onClick={handleCancel}
@@ -129,7 +131,7 @@ const InvitationPage = () => {
           >
             บันทึกข้อมูล
           </Button>
-        </Box>
+        </Box>}
       </Paper>
     </Box>
   );

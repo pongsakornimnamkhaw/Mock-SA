@@ -22,8 +22,10 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Dayjs } from 'dayjs';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { concertApi, ConcertData, TaskData } from '@/api/concertApi';
+import { useFeatureAccess } from '@/access/useFeatureAccess';
 
 const ResponsibilityPage = () => {
+  const { canEdit } = useFeatureAccess('concert.assignment');
   const [concerts, setConcerts] = useState<ConcertData[]>([]);
   const [concert, setConcert] = useState('');
   const [taskName, setTaskName] = useState('');
@@ -126,7 +128,7 @@ const ResponsibilityPage = () => {
       </Typography>
 
       {/* Input Form Paper */}
-      <Paper sx={{ p: 4, borderRadius: 3, backgroundColor: '#e8f5e9' }}>
+      {canEdit && <Paper sx={{ p: 4, borderRadius: 3, backgroundColor: '#e8f5e9' }}>
         <Grid container spacing={3} sx={{ alignItems: 'flex-start' }}>
           {/* คอนเสิร์ต */}
           <Grid size={{ xs: 12, sm: 1.7 }}>
@@ -267,7 +269,7 @@ const ResponsibilityPage = () => {
             {loading ? 'กำลังบันทึก...' : 'บันทึกผู้รับผิดชอบ'}
           </Button>
         </Box>
-      </Paper>
+      </Paper>}
 
       {/* Tasks Table (styled similarly to EditConcert) */}
       <Box sx={{ mt: 4 }}>
@@ -337,7 +339,7 @@ const ResponsibilityPage = () => {
                         {task.actual_finish_date}
                       </TableCell>
                       <TableCell sx={{ textAlign: 'center' }}>
-                        <Tooltip title="กดติ๊กเพื่อบันทึกว่างานนี้เสร็จสิ้นแล้ว">
+                        {canEdit && <Tooltip title="กดติ๊กเพื่อบันทึกว่างานนี้เสร็จสิ้นแล้ว">
                           <Button
                             variant="contained"
                             size="small"
@@ -357,7 +359,7 @@ const ResponsibilityPage = () => {
                           >
                             เสร็จแล้ว
                           </Button>
-                        </Tooltip>
+                        </Tooltip>}
                       </TableCell>
                     </TableRow>
                   ))

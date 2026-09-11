@@ -18,10 +18,10 @@ describe('Sidebar module locks', () => {
     });
   });
 
-  it('locks unrelated modules while dashboard and reports remain enabled', () => {
+  it('lets finance view concerts and reports while locking the artist module', () => {
     render(<MemoryRouter initialEntries={['/dashboard']}><Sidebar /></MemoryRouter>);
-    expect(screen.getByRole('button', { name: /งานคอนเสิร์ต/ })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('button', { name: /งานคอนเสิร์ต/ })).toHaveAccessibleDescription(/ไม่มีสิทธิ์/);
+    expect(screen.getByRole('button', { name: /งานคอนเสิร์ต/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /ศิลปินและการแสดง/ })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: /ภาพรวมทั้งหมด/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: /รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว/ })).toBeEnabled();
   });

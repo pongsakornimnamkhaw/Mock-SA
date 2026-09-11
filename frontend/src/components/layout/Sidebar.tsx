@@ -22,7 +22,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import logoImage from '../../assets/octavia-logo.png';
 import { getEmployeeSession, clearEmployeeSession, EMPLOYEE_SESSION_EVENT } from '@/utils/employeeSession';
-import { effectiveModulePermissions, hasModuleAccess, type BackofficeModule } from '@/access/backofficeAccess';
+import { effectiveFeatureAccess, effectiveModulePermissions, hasModuleAccess, type BackofficeFeature, type BackofficeModule } from '@/access/backofficeAccess';
 import { employeeAccountApi } from '@/api/employeeAccountApi';
 import { employeeAuthApi } from '@/api/employeeAuthApi';
 
@@ -124,6 +124,7 @@ export default function Sidebar() {
     ? effectiveModulePermissions(employee.role, employee.department, employee.modulePermissions, employee.jobRole)
     : undefined;
   const canView = (module: BackofficeModule) => !!effectivePermissions && hasModuleAccess(effectivePermissions, module, 'view');
+  const canViewFeature = (feature: BackofficeFeature) => !!employee && effectiveFeatureAccess(employee.role, employee.jobRole, employee.department, feature) !== 'none';
   const lockProps = (module: BackofficeModule) => ({
     disabled: !canView(module),
     'aria-description': !canView(module) ? 'ไม่มีสิทธิ์ใช้งานเมนูนี้' : undefined,
@@ -193,24 +194,24 @@ export default function Sidebar() {
   const isEventRegistration = path.startsWith('/event-registration');
 
   const concertSubItems = [
-    { label: 'เพิ่มข้อมูลคอนเสิร์ต', route: '/add-concert' },
-    { label: 'แก้ไขข้อมูลคอนเสิร์ต', route: '/edit-concert' },
-    { label: 'มอบหมายงาน', route: '/responsibility' },
-    { label: 'สถานะคอนเสิร์ต', route: '/concert-status' },
-    { label: 'แบบเอกสาร', route: '/documents' },
-    { label: 'ประวัติการแก้ไข', route: '/edit-history' },
-  ];
+    { label: 'เพิ่มข้อมูลคอนเสิร์ต', route: '/add-concert', feature: 'concert.create' },
+    { label: 'แก้ไขข้อมูลคอนเสิร์ต', route: '/edit-concert', feature: 'concert.edit' },
+    { label: 'ผู้รับผิดชอบคอนเสิร์ต', route: '/responsibility', feature: 'concert.assignment' },
+    { label: 'สถานะคอนเสิร์ต', route: '/concert-status', feature: 'concert.status' },
+    { label: 'แบบเอกสาร', route: '/documents', feature: 'concert.documents' },
+    { label: 'ประวัติการแก้ไข', route: '/edit-history', feature: 'concert.history' },
+  ] satisfies { label: string; route: string; feature: BackofficeFeature }[];
 
   const artistSubItems = [
-    { label: 'หน้าแรก', route: '/artist-dashboard' },
-    { label: 'จัดการข้อมูลศิลปิน', route: '/artist-info' },
-    { label: 'คำเชิญ', route: '/invitation' },
-    { label: 'ตารางการแสดง', route: '/performance-schedule' },
-    { label: 'แก้ไขกำหนดการแสดง', route: '/edit-performance' },
-    { label: 'รายละเอียดการแสดง', route: '/performance-detail' },
-    { label: 'ความต้องการของศิลปิน', route: '/artist-requirements' },
-    { label: 'ประวัติการแก้ไข', route: '/artist-edit-history' },
-  ];
+    { label: 'หน้าแรก', route: '/artist-dashboard', feature: 'artist.dashboard' },
+    { label: 'จัดการข้อมูลศิลปิน', route: '/artist-info', feature: 'artist.manage' },
+    { label: 'คำเชิญ', route: '/invitation', feature: 'artist.invitation' },
+    { label: 'ตารางการแสดง', route: '/performance-schedule', feature: 'artist.schedule.view' },
+    { label: 'แก้ไขกำหนดการแสดง', route: '/edit-performance', feature: 'artist.performance.manage' },
+    { label: 'รายละเอียดการแสดง', route: '/performance-detail', feature: 'artist.performance.manage' },
+    { label: 'ความต้องการของศิลปิน', route: '/artist-requirements', feature: 'artist.performance.manage' },
+    { label: 'ประวัติการแก้ไข', route: '/artist-edit-history', feature: 'artist.history' },
+  ] satisfies { label: string; route: string; feature: BackofficeFeature }[];
 
   return (
     <SidebarRoot>
@@ -261,7 +262,7 @@ export default function Sidebar() {
         </ListItem>
         <Collapse in={concertOpen && canView('concerts')} timeout="auto" unmountOnExit>
           <List dense disablePadding>
-            {concertSubItems.map((item) => (
+            {concertSubItems.filter(item => canViewFeature(item.feature)).map((item) => (
               <ListItem key={item.route} disablePadding>
                 <SubNavItem
                   active={path === item.route ? 1 : 0}
@@ -293,7 +294,7 @@ export default function Sidebar() {
         </ListItem>
         <Collapse in={artistOpen && canView('artists')} timeout="auto" unmountOnExit>
           <List dense disablePadding>
-            {artistSubItems.map((item) => (
+            {artistSubItems.filter(item => canViewFeature(item.feature)).map((item) => (
               <ListItem key={item.route} disablePadding>
                 <SubNavItem
                   active={path === item.route ? 1 : 0}

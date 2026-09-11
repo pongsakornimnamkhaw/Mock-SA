@@ -109,24 +109,24 @@ function App() {
 
       {/* B6707651 - Concert Management Routes */}
       <Route path="/dashboard" element={<EmployeeRouteGuard module="dashboard"><Layout title="ข้อมูลงานคอนเสิร์ตทั้งหมด" showBack={false}><DashboardPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/add-concert" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><AddConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/edit-concert" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/responsibility" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/concert-status" element={<EmployeeRouteGuard module="concerts" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ConcertStatusPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/documents" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/edit-history" element={<EmployeeRouteGuard module="concerts"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/add-concert" element={<EmployeeRouteGuard feature="concert.create" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><AddConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/edit-concert" element={<EmployeeRouteGuard feature="concert.edit" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditConcertPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/responsibility" element={<EmployeeRouteGuard feature="concert.assignment"><Layout title="ข้อมูลงานคอนเสิร์ต"><ResponsibilityPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/concert-status" element={<EmployeeRouteGuard feature="concert.status" required="edit"><Layout title="ข้อมูลงานคอนเสิร์ต"><ConcertStatusPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/documents" element={<EmployeeRouteGuard feature="concert.documents"><Layout title="ข้อมูลงานคอนเสิร์ต"><DocumentsPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/edit-history" element={<EmployeeRouteGuard feature="concert.history"><Layout title="ข้อมูลงานคอนเสิร์ต"><EditHistoryPage /></Layout></EmployeeRouteGuard>} />
       <Route path="/search-concert" element={<EmployeeRouteGuard module="concert_catalog"><Layout title="วางแผนจำหน่ายบัตร"><SearchConcertPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/concert-search" element={<EmployeeRouteGuard module="concerts"><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-dashboard" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-search" element={<EmployeeRouteGuard module="artists"><Layout title="ค้นหาศิลปินและการแสดง" showBack={false}><ArtistSearchPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artists/:id" element={<EmployeeRouteGuard module="artists"><Layout title="รายละเอียดข้อมูลศิลปิน"><ArtistDetailPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-info" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/invitation" element={<EmployeeRouteGuard module="artists" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><InvitationPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/performance-schedule" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceSchedulePage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/edit-performance" element={<EmployeeRouteGuard module="artists" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><EditPerformancePage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/performance-detail" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceDetailPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-requirements" element={<EmployeeRouteGuard module="artists" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistRequirementsPage /></Layout></EmployeeRouteGuard>} />
-      <Route path="/artist-edit-history" element={<EmployeeRouteGuard module="artists"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistEditHistoryPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/concert-search" element={<EmployeeRouteGuard feature="concert.search"><Layout title="ค้นหาคอนเสิร์ต"><ConcertSearchPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-dashboard" element={<EmployeeRouteGuard feature="artist.dashboard"><Layout title="ข้อมูลศิลปินและการแสดงทั้งหมด"><ArtistDashboardPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-search" element={<EmployeeRouteGuard feature="artist.search"><Layout title="ค้นหาศิลปินและการแสดง" showBack={false}><ArtistSearchPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artists/:id" element={<EmployeeRouteGuard feature="artist.search"><Layout title="รายละเอียดข้อมูลศิลปิน"><ArtistDetailPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-info" element={<EmployeeRouteGuard feature="artist.manage" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistInfoPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/invitation" element={<EmployeeRouteGuard feature="artist.invitation"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><InvitationPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/performance-schedule" element={<EmployeeRouteGuard feature="artist.schedule.view"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceSchedulePage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/edit-performance" element={<EmployeeRouteGuard feature="artist.performance.manage" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><EditPerformancePage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/performance-detail" element={<EmployeeRouteGuard feature="artist.performance.manage"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><PerformanceDetailPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-requirements" element={<EmployeeRouteGuard feature="artist.performance.manage" required="edit"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistRequirementsPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/artist-edit-history" element={<EmployeeRouteGuard feature="artist.history"><Layout title="ข้อมูลศิลปินและตารางการแสดง"><ArtistEditHistoryPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6708856 - seats & registration */}
       <Route path="/venues-seats/*" element={<EmployeeRouteGuard module="venues"><Layout title="ห้องสถานที่และที่นั่ง"><VenueSeatsViewPage /></Layout></EmployeeRouteGuard>} />
@@ -145,7 +145,7 @@ function App() {
       <Route path="/employee/account" element={<EmployeeRouteGuard><PromotionLayout><EmployeeAccountPage /></PromotionLayout></EmployeeRouteGuard>} />
 
       {/* B6733377 - Concert Report System */}
-      <Route path="/report/*" element={<EmployeeRouteGuard module="reports"><Layout title="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" showBack={false}><ConsertReportPage /></Layout></EmployeeRouteGuard>} />
+      <Route path="/report/*" element={<EmployeeRouteGuard feature="report.view"><Layout title="รายการคอนเสิร์ตที่เสร็จสิ้นแล้ว" showBack={false}><ConsertReportPage /></Layout></EmployeeRouteGuard>} />
 
       {/* B6733377 - External Contact */}
       <Route path="/contact" element={<ExternalContactLayout />}>
