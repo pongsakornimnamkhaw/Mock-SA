@@ -1,9 +1,37 @@
 package ticketplanning
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
+
+func TestDecodeConcertCoverDataURLStoresRawImageBytes(t *testing.T) {
+	want := []byte("\x89PNG\r\n\x1a\nraw-poster")
+	got, err := decodeConcertCover("data:image/png;base64,iVBORw0KGgpyYXctcG9zdGVy")
+	if err != nil {
+		t.Fatalf("decode concert cover: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("decoded poster = %q, want %q", got, want)
+	}
+}
+
+func TestEncodeConcertCoverReturnsBrowserDataURL(t *testing.T) {
+	raw := []byte("\x89PNG\r\n\x1a\nraw-poster")
+	if got, want := encodeConcertCover(raw), "data:image/png;base64,iVBORw0KGgpyYXctcG9zdGVy"; got != want {
+		t.Fatalf("encoded poster = %q, want %q", got, want)
+	}
+}
+
+func TestEncodeConcertCoverPreservesSVGMediaType(t *testing.T) {
+	raw := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>`)
+	got := encodeConcertCover(raw)
+	if wantPrefix := "data:image/svg+xml;base64,"; !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("encoded SVG = %q, want prefix %q", got, wantPrefix)
+	}
+}
 
 func TestLayoutSeatStatusPreservesIssuedSeatState(t *testing.T) {
 	if got := layoutSeatStatus(false, "SOLD", true); got != "SOLD" {

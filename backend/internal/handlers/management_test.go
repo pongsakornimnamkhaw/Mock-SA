@@ -220,6 +220,31 @@ func TestManagementBannerValidation(t *testing.T) {
 	}
 }
 
+func TestPromotionZoneOptionsIncludeConcertID(t *testing.T) {
+	raw, err := json.Marshal(promotionZoneUI{
+		ZoneID: "ZONE_A", ZoneName: "โซน A", ConcertID: "CONCERT_A",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"concert_id":"CONCERT_A"`) {
+		t.Fatalf("promotion zone option omitted concert ownership: %s", raw)
+	}
+}
+
+func TestPromotionZoneOwnershipValidation(t *testing.T) {
+	zones := []models.Zone{
+		{ZoneID: "ZONE_A", ConcertID: "CONCERT_A"},
+		{ZoneID: "ZONE_B", ConcertID: "CONCERT_B"},
+	}
+	if err := validatePromotionZonesForConcert("CONCERT_A", []string{"ZONE_A"}, zones[:1]); err != nil {
+		t.Fatalf("same-concert zone rejected: %v", err)
+	}
+	if err := validatePromotionZonesForConcert("CONCERT_A", []string{"ZONE_B"}, zones[1:]); err == nil {
+		t.Fatal("zone from another concert was accepted")
+	}
+}
+
 // Opt-in only. All migrations and writes are isolated in a uniquely named schema.
 // This never calls the existing tests that migrate/seed the application's public data.
 func managementTestDB(t *testing.T) *gorm.DB {
@@ -336,7 +361,7 @@ func TestManagementPostgres(t *testing.T) {
 	if err := db.Create(&concert).Error; err != nil {
 		t.Fatal(err)
 	}
-	zone := models.Zone{ZoneID: "ZONE_TEST", ZoneType: "VIP", Capacity: 100}
+	zone := models.Zone{ZoneID: "ZONE_TEST", ConcertID: "CONCERT_TEST", ZoneType: "VIP", Capacity: 100}
 	if err := db.Create(&zone).Error; err != nil {
 		t.Fatal(err)
 	}

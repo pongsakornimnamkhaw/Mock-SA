@@ -1,31 +1,34 @@
 package handlers
 
 import (
-	"fmt"
+	"errors"
+	"strings"
+	"time"
 
 	"backend/internal/models"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type seatInventoryHandler struct {
 	db *gorm.DB
 }
 
-// defaultZonePrices เป็นราคาตั้งต้นของคอนเสิร์ตสาธิตที่ยังไม่มีผังจริง
-// ค่าตรงกับที่หน้าเว็บใช้มาก่อนหน้านี้ (frontend/src/components/SeatSelection/constants.ts)
-var defaultZonePrices = map[byte]float64{'A': 2000, 'B': 1500, 'C': 1000}
-
 const (
-	defaultGridRows    = 5
-	defaultGridColumns = 8
+	seatInventoryStatusHeld   = "HELD"
+	seatInventoryStatusLocked = "LOCKED"
+	seatHoldDuration          = 15 * time.Minute
 )
 
 func RegisterSeatInventoryRoutes(app *fiber.App, db *gorm.DB) {
 	h := &seatInventoryHandler{db: db}
 	app.Get("/api/concerts/:id/zones", h.listZones)
 	app.Get("/api/concerts/:id/zones/:zoneId/seats", h.listSeats)
+	app.Post("/api/seat-holds", h.createSeatHold)
+	app.Delete("/api/seat-holds/:token", h.releaseSeatHold)
 }
 
 type zoneInventoryDTO struct {
@@ -51,6 +54,7 @@ type seatInventoryDTO struct {
 // listZones returns zones owned by this concert.
 func (h *seatInventoryHandler) listZones(c *fiber.Ctx) error {
 	concertID := c.Params("id")
+	now := time.Now().UTC()
 
 	var zones []models.Zone
 	if err := h.db.Where("concert_id = ?", concertID).Order("zone_id").Find(&zones).Error; err != nil {
@@ -61,7 +65,7 @@ func (h *seatInventoryHandler) listZones(c *fiber.Ctx) error {
 	for _, zone := range zones {
 		var available int64
 		h.db.Model(&models.Seat{}).
-			Where("zone_id = ? AND status_seat = ?", zone.ZoneID, seatStatusAvailable).
+			Where("zone_id = ? AND status_seat IN ? AND (hold_expires_at IS NULL OR hold_expires_at <= ?)", zone.ZoneID, seatAvailableStatuses, now).
 			Count(&available)
 
 		var capacity int64
@@ -83,14 +87,19 @@ func (h *seatInventoryHandler) listZones(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": result})
 }
 
-// listSeats คืนที่นั่งทั้งหมดในโซนพร้อมสถานะ
-// คอนเสิร์ต/โซนที่ยังไม่มีผังจริงจะถูกสร้างผังเริ่มต้น 5x8 ให้ก่อน
+// listSeats คืนที่นั่งจริงที่สร้างจากหน้าวางผัง โดย GET จะไม่สร้างข้อมูลใหม่
 func (h *seatInventoryHandler) listSeats(c *fiber.Ctx) error {
 	concertID := c.Params("id")
 	zoneID := c.Params("zoneId")
+	holdToken := strings.TrimSpace(c.Query("hold_token"))
+	now := time.Now().UTC()
 
-	if err := ensureZoneSeats(h.db, concertID, zoneID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถเตรียมผังที่นั่งได้"})
+	var zone models.Zone
+	if err := h.db.Where("zone_id = ? AND concert_id = ?", zoneID, concertID).First(&zone).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบโซนในคอนเสิร์ตนี้"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถตรวจสอบโซนได้"})
 	}
 
 	var seats []models.Seat
@@ -102,12 +111,23 @@ func (h *seatInventoryHandler) listSeats(c *fiber.Ctx) error {
 
 	result := make([]seatInventoryDTO, 0, len(seats))
 	for i := range seats {
+		status := seats[i].StatusSeat
+		if isSeatAvailable(status) {
+			status = seatStatusAvailable
+		}
+		if status == seatStatusAvailable && seats[i].HoldToken != nil && seats[i].HoldExpiresAt != nil && seats[i].HoldExpiresAt.After(now) {
+			if holdToken != "" && *seats[i].HoldToken == holdToken {
+				status = seatInventoryStatusLocked
+			} else {
+				status = seatInventoryStatusHeld
+			}
+		}
 		result = append(result, seatInventoryDTO{
 			SeatID:     seats[i].SeatID,
 			Label:      seats[i].Label(),
 			SeatRow:    seats[i].SeatRow,
 			SeatColumn: seats[i].SeatColumn,
-			Status:     seats[i].StatusSeat,
+			Status:     status,
 			PositionX:  seats[i].PositionX,
 			PositionY:  seats[i].PositionY,
 		})
@@ -116,51 +136,69 @@ func (h *seatInventoryHandler) listSeats(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": result})
 }
 
-// ensureZoneSeats สร้างผังเริ่มต้น 5 แถว x 8 ที่ (A1–E8) พร้อมโซนและหมวดหมู่ราคา
-// เมื่อคอนเสิร์ต/โซนนั้นยังไม่มีที่นั่งในฐานข้อมูล
-func ensureZoneSeats(db *gorm.DB, concertID, zoneID string) error {
-	if concertID == "" || zoneID == "" {
-		return nil
+type createSeatHoldInput struct {
+	ConcertID string `json:"concert_id"`
+	ZoneID    string `json:"zone_id"`
+	SeatIDs   []uint `json:"seat_ids"`
+}
+
+func (h *seatInventoryHandler) createSeatHold(c *fiber.Ctx) error {
+	var input createSeatHoldInput
+	if err := c.BodyParser(&input); err != nil || strings.TrimSpace(input.ConcertID) == "" || strings.TrimSpace(input.ZoneID) == "" || len(input.SeatIDs) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ข้อมูลการล็อกที่นั่งไม่ถูกต้อง"})
 	}
 
-	var existing int64
-	var zone models.Zone
-	err := db.Where("zone_id = ?", zoneID).First(&zone).Error
-	if err == nil && zone.ConcertID != concertID {
-		return fmt.Errorf("zone %s belongs to another concert", zoneID)
-	}
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return err
-	}
-	if err := db.Model(&models.Seat{}).Where("zone_id = ?", zoneID).Count(&existing).Error; err != nil {
-		return err
-	}
-	if existing > 0 {
-		return nil
-	}
-
-	price := defaultZonePrices[zoneID[0]]
-
-	return db.Transaction(func(tx *gorm.DB) error {
-		zone := models.Zone{ZoneID: zoneID, ConcertID: concertID, ZoneType: "ที่นั่ง", Capacity: defaultGridRows * defaultGridColumns, ZonePrice: price}
-		if err := tx.Where("zone_id = ?", zoneID).FirstOrCreate(&zone).Error; err != nil {
+	now := time.Now().UTC()
+	expiresAt := now.Add(seatHoldDuration)
+	token := uuid.NewString()
+	unavailable := make([]string, 0)
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		var zone models.Zone
+		if err := tx.Where("zone_id = ? AND concert_id = ?", input.ZoneID, input.ConcertID).First(&zone).Error; err != nil {
 			return err
 		}
-
-		seats := make([]models.Seat, 0, defaultGridRows*defaultGridColumns)
-		for rowIndex := 0; rowIndex < defaultGridRows; rowIndex++ {
-			row := string(rune('A' + rowIndex))
-			for column := 1; column <= defaultGridColumns; column++ {
-				label := fmt.Sprintf("%s%d", row, column)
-				seats = append(seats, models.Seat{
-					SeatLabel:  label,
-					SeatRow:    rowIndex + 1,
-					SeatColumn: column,
-					StatusSeat: seatStatusAvailable,
-					ZoneID:     zoneID,
-				})
+		var seats []models.Seat
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("zone_id = ? AND seat_id IN ?", input.ZoneID, input.SeatIDs).
+			Order("seat_id").Find(&seats).Error; err != nil {
+			return err
+		}
+		if len(seats) != len(input.SeatIDs) {
+			return seatConflictError{Labels: []string{"ไม่พบที่นั่งบางรายการ"}}
+		}
+		for i := range seats {
+			activeHold := seats[i].HoldToken != nil && seats[i].HoldExpiresAt != nil && seats[i].HoldExpiresAt.After(now)
+			if !isSeatAvailable(seats[i].StatusSeat) || activeHold {
+				unavailable = append(unavailable, seats[i].Label())
 			}
 		}
-		return tx.Create(&seats).Error
+		if len(unavailable) > 0 {
+			return seatConflictError{Labels: unavailable}
+		}
+		return tx.Model(&models.Seat{}).Where("zone_id = ? AND seat_id IN ?", input.ZoneID, input.SeatIDs).
+			Updates(map[string]any{"hold_token": token, "hold_expires_at": expiresAt}).Error
 	})
+	if err != nil {
+		var conflict seatConflictError
+		if errors.As(err, &conflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": conflict.Error(), "unavailable_seats": conflict.Labels})
+		}
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "ไม่พบโซนในคอนเสิร์ตนี้"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถล็อกที่นั่งได้"})
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"hold_token": token, "expires_at": expiresAt})
+}
+
+func (h *seatInventoryHandler) releaseSeatHold(c *fiber.Ctx) error {
+	token := strings.TrimSpace(c.Params("token"))
+	if token == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ไม่พบรหัสล็อกที่นั่ง"})
+	}
+	if err := h.db.Model(&models.Seat{}).Where("hold_token = ?", token).
+		Updates(map[string]any{"hold_token": nil, "hold_expires_at": nil}).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "ไม่สามารถยกเลิกการล็อกที่นั่งได้"})
+	}
+	return c.JSON(fiber.Map{"message": "ยกเลิกการล็อกที่นั่งแล้ว"})
 }

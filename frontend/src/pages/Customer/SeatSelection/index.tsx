@@ -3,21 +3,22 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // Types & Constants
-import type { SeatData } from '@/components/SeatSelection/types';
-import { eventsMap, zonePriceMap, LOCK_DURATION, STEPS } from '@/components/SeatSelection/constants';
+import type { EventData, SeatData, ZoneInfo } from '@/components/SeatSelection/types';
+import { LOCK_DURATION, STEPS } from '@/components/SeatSelection/constants';
 import { customerPromotionApi } from '@/api/customerPromotionApi';
 import { formatThaiDate } from '@/utils/customerPromotion';
 import type { CustomerPromotion } from '@/types/customerPromotion';
 import { calculateDiscount, filterEligiblePromotions, type PromotionOrder } from '@/utils/seatPromotion';
 import { bookingPaymentApi } from '@/api/bookingPaymentApi';
-import { seatInventoryApi } from '@/api/seatInventoryApi';
+import { seatInventoryApi, SeatHoldConflictError, type PlanningLayout } from '@/api/seatInventoryApi';
 import { getCustomerSession } from '@/utils/customerSession';
-import { pulse } from '@/assets/poster';
+import { posterForConcert } from '@/utils/customerConcertCard';
 
 // Sub-components
 import TopNavbar from '@/components/SeatSelection/TopNavbar';
 import ConcertInfoCard from '@/components/SeatSelection/ConcertInfoCard';
-import SeatMap from '@/components/SeatSelection/SeatMap';
+import CustomerLayoutCanvas from '@/components/SeatSelection/CustomerLayoutCanvas';
+import { mergeSeatInventory } from '@/components/SeatSelection/customerSeatState';
 import OrderSummary from '@/components/SeatSelection/OrderSummary';
 import QRCodeDialog from '@/components/SeatSelection/dialogs/QRCodeDialog';
 import SuccessDialog from '@/components/SeatSelection/dialogs/SuccessDialog';
@@ -27,8 +28,14 @@ import { ErrorAlert } from '@/components/ErrorAlert';
 const SeatSelectionPage = () => {
     const navigate = useNavigate();
     const { id, zone } = useParams<{ id: string; zone: string }>();
-    const [event, setEvent] = useState(() => (id && eventsMap[id]) ? eventsMap[id] : eventsMap['2']);
-    const zoneInfo = (zone && zonePriceMap[zone]) ? zonePriceMap[zone] : zonePriceMap['A1'];
+    const [event, setEvent] = useState<EventData>({ title: '', image: '', eventDate: '' });
+    const [layout, setLayout] = useState<PlanningLayout>({ zones: [], layoutObjects: [] });
+    const selectedZone = layout.zones.find((item) => item.id === zone);
+    const zoneInfo = useMemo<ZoneInfo>(() => ({
+        price: Number(selectedZone?.zonePrice || 0),
+        color: selectedZone?.color || '#e62573',
+        label: selectedZone?.name || selectedZone?.type || zone || 'โซน',
+    }), [selectedZone, zone]);
 
     const [seats, setSeats] = useState<SeatData[]>([]);
     const [bookingError, setBookingError] = useState('');
@@ -49,49 +56,34 @@ const SeatSelectionPage = () => {
     const [codeError, setCodeError] = useState('');
     const [codeSuccess, setCodeSuccess] = useState('');
     const [codeSubmitting, setCodeSubmitting] = useState(false);
+    const [holdToken, setHoldToken] = useState('');
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const holdTokenRef = useRef('');
 
     useEffect(() => {
-        if (!id || eventsMap[id]) {
-            if (id && eventsMap[id]) setEvent(eventsMap[id]);
-            return;
-        }
+        if (!id) return;
         let active = true;
-        customerPromotionApi.getConcert(id).then(({ data }) => {
+        Promise.all([customerPromotionApi.getConcert(id), seatInventoryApi.getLayout(id)]).then(([{ data }, plan]) => {
             if (!active) return;
-            const date = data.end_date && data.end_date !== data.start_date
-                ? `${formatThaiDate(data.start_date)} – ${formatThaiDate(data.end_date)}`
-                : formatThaiDate(data.start_date);
-            setEvent({
-                title: data.concert_name,
-                image: data.poster_data || pulse,
-                eventDate: date,
-                location: data.location,
-                openTime: data.start_time ? `${data.start_time.slice(0, 5)} น.` : undefined,
-            });
-        }).catch(() => {
-            // Keep the fallback card; seat inventory/payment are still simulated.
-        });
+            const date = data.end_date && data.end_date !== data.start_date ? `${formatThaiDate(data.start_date)} – ${formatThaiDate(data.end_date)}` : formatThaiDate(data.start_date);
+            setEvent({ title: data.concert_name, image: posterForConcert(data), eventDate: date, location: data.location, openTime: data.start_time ? `${data.start_time.slice(0, 5)} น.` : undefined });
+            setLayout(plan);
+        }).catch((reason) => active && setBookingError(reason instanceof Error ? reason.message : 'ไม่สามารถโหลดผังที่นั่งได้'));
         return () => { active = false; };
     }, [id]);
 
     useEffect(() => {
         if (!id || !zone) return;
         let active = true;
-        seatInventoryApi.listSeats(id, zone)
+        const refresh = () => seatInventoryApi.listSeats(id, zone, holdTokenRef.current || undefined)
             .then((rows) => {
                 if (!active) return;
-                setSeats(rows.map((seat) => ({
-                    id: seat.label,
-                    row: seat.row,
-                    number: Number(seat.column) || 0,
-                    status: seat.status === 'ว่าง' ? 'available' : 'reserved',
-                })));
+                setSeats((current) => mergeSeatInventory(rows, current));
             })
-            .catch(() => {
-                if (active) setSeats([]);
-            });
-        return () => { active = false; };
+            .catch((reason) => active && setBookingError(reason instanceof Error ? reason.message : 'ไม่สามารถโหลดที่นั่งได้'));
+        refresh();
+        const poller = window.setInterval(refresh, 5000);
+        return () => { active = false; window.clearInterval(poller); };
     }, [id, zone]);
 
     useEffect(() => {
@@ -219,24 +211,35 @@ const SeatSelectionPage = () => {
     }, [isLocked, clearTimer]);
 
     // ========== Lock ที่นั่งชั่วคราว ==========
-    const handleLockSeats = () => {
+    const handleLockSeats = async () => {
         if (selectedSeats.length === 0) {
             alert('กรุณาเลือกที่นั่งอย่างน้อย 1 ที่นั่ง');
             return;
         }
-        setSeats((prev) =>
-            prev.map((seat) => ({
-                ...seat,
-                status: seat.status === 'selected' ? 'locked' : seat.status,
-            }))
-        );
-        setIsLocked(true);
-        setTimeLeft(LOCK_DURATION);
-        setActiveStep(2); // ไปขั้นตอนชำระเงิน
+        if (!id || !zone) return;
+        setBookingError('');
+        try {
+            const hold = await seatInventoryApi.createHold(id, zone, selectedSeats.map((seat) => seat.seatId));
+            holdTokenRef.current = hold.holdToken;
+            setHoldToken(hold.holdToken);
+            setSeats((current) => current.map((seat) => ({ ...seat, status: seat.status === 'selected' ? 'locked' : seat.status })));
+            setIsLocked(true);
+            setTimeLeft(Math.max(1, Math.ceil((new Date(hold.expiresAt).getTime() - Date.now()) / 1000)));
+            setActiveStep(2);
+        } catch (reason) {
+            const message = reason instanceof Error ? reason.message : 'ไม่สามารถล็อกที่นั่งได้';
+            setBookingError(reason instanceof SeatHoldConflictError && reason.unavailableSeats.length ? `${message} กรุณาเลือกใหม่` : message);
+            const rows = await seatInventoryApi.listSeats(id, zone).catch(() => []);
+            setSeats((current) => mergeSeatInventory(rows, current));
+        }
     };
 
     // ========== หมดเวลา Lock ==========
     const handleLockExpired = () => {
+        const token = holdTokenRef.current;
+        holdTokenRef.current = '';
+        setHoldToken('');
+        if (token) void seatInventoryApi.releaseHold(token).catch(() => undefined);
         setSeats((prev) =>
             prev.map((seat) => ({
                 ...seat,
@@ -249,8 +252,12 @@ const SeatSelectionPage = () => {
     };
 
     // ========== ยกเลิก Lock ==========
-    const handleCancelLock = () => {
+    const handleCancelLock = async () => {
         clearTimer();
+        const token = holdTokenRef.current;
+        holdTokenRef.current = '';
+        setHoldToken('');
+        if (token) await seatInventoryApi.releaseHold(token).catch(() => undefined);
         setSeats((prev) =>
             prev.map((seat) => ({
                 ...seat,
@@ -260,6 +267,11 @@ const SeatSelectionPage = () => {
         setIsLocked(false);
         setTimeLeft(LOCK_DURATION);
         setActiveStep(1);
+    };
+
+    const handleBackToZones = async () => {
+        if (isLocked) await handleCancelLock();
+        navigate(`/event/${id}/zones`);
     };
 
     // ========== ยืนยันชำระเงิน (เปิด QR) ==========
@@ -275,16 +287,6 @@ const SeatSelectionPage = () => {
         slipFileName: string;
         slipDataUrl?: string;
     }) => {
-        clearTimer();
-        setSeats((prev) =>
-            prev.map((seat) => ({
-                ...seat,
-                status: seat.status === 'locked' ? 'reserved' : seat.status,
-            }))
-        );
-        setIsLocked(false);
-        setShowQRDialog(false);
-
         setBookingError('');
         const session = getCustomerSession();
         const seatLabels = activeSeats.map((s) => s.id);
@@ -307,8 +309,15 @@ const SeatSelectionPage = () => {
                 userId: session?.userId,
                 slipFileName: paymentData.slipFileName,
                 slipDataUrl: paymentData.slipDataUrl,
+                holdToken,
             });
 
+            clearTimer();
+            holdTokenRef.current = '';
+            setHoldToken('');
+            setSeats((current) => current.map((seat) => ({ ...seat, status: seat.status === 'locked' ? 'reserved' : seat.status })));
+            setIsLocked(false);
+            setShowQRDialog(false);
             setLatestBookingId(record.id);
             setShowSuccessDialog(true);
         } catch (error) {
@@ -316,13 +325,8 @@ const SeatSelectionPage = () => {
             setBookingError(message);
             // ที่นั่งอาจถูกคนอื่นชิงไป — ดึงผังล่าสุดมาแสดงใหม่
             if (id && zone) {
-                const rows = await seatInventoryApi.listSeats(id, zone).catch(() => []);
-                setSeats(rows.map((seat) => ({
-                    id: seat.label,
-                    row: seat.row,
-                    number: Number(seat.column) || 0,
-                    status: seat.status === 'ว่าง' ? 'available' : 'reserved',
-                })));
+                const rows = await seatInventoryApi.listSeats(id, zone, holdTokenRef.current || undefined).catch(() => []);
+                setSeats((current) => mergeSeatInventory(rows, current));
             }
         }
     };
@@ -333,7 +337,7 @@ const SeatSelectionPage = () => {
         setSeats((prev) =>
             prev.map((seat) => {
                 if (seat.id !== seatId) return seat;
-                if (seat.status === 'reserved' || seat.status === 'locked') return seat;
+                if (seat.status === 'reserved' || seat.status === 'locked' || seat.status === 'held' || seat.status === 'disabled') return seat;
                 return {
                     ...seat,
                     status: seat.status === 'selected' ? 'available' : 'selected',
@@ -355,7 +359,7 @@ const SeatSelectionPage = () => {
                 isLocked={isLocked} 
                 timeLeft={timeLeft} 
                 handleCancelLock={handleCancelLock}
-                onBack={() => navigate(`/event/${id}/zones`)}
+                onBack={handleBackToZones}
             />
 
             <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
@@ -384,13 +388,18 @@ const SeatSelectionPage = () => {
                     gap: 4, justifyContent: 'center',
                     alignItems: { xs: 'center', md: 'flex-start' }
                 }}>
-                    <SeatMap
-                        zone={zone || ''} 
-                        zoneInfo={zoneInfo} 
-                        seats={seats} 
-                        isLocked={isLocked} 
-                        handleSeatClick={handleSeatClick} 
-                    />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <CustomerLayoutCanvas layout={layout} mode="seats" selectedZoneId={zone} seats={seats}
+                            interactionLocked={isLocked} onSeatClick={handleSeatClick} />
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center', mt: 2 }}>
+                            {[
+                                { color: zoneInfo.color, label: 'ว่าง', opacity: 1 },
+                                { color: '#2196F3', label: 'เลือกแล้ว', opacity: 1 },
+                                { color: '#FF9800', label: 'ล็อกของคุณ', opacity: 1 },
+                                { color: '#616161', label: 'ไม่ว่าง / ถูกล็อก', opacity: .48 },
+                            ].map((item) => <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Box sx={{ width: 20, height: 20, bgcolor: item.color, borderRadius: 1, opacity: item.opacity }} /><Box sx={{ color: '#ccc', fontSize: 13 }}>{item.label}</Box></Box>)}
+                        </Box>
+                    </Box>
 
                     <OrderSummary 
                         event={event}
@@ -422,7 +431,7 @@ const SeatSelectionPage = () => {
                         handleLockSeats={handleLockSeats}
                         handlePayment={handlePayment}
                         handleCancelLock={handleCancelLock}
-                        onBack={() => navigate(`/event/${id}/zones`)}
+                        onBack={handleBackToZones}
                     />
                 </Box>
             </Container>

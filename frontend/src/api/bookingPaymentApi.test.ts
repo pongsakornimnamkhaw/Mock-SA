@@ -19,6 +19,7 @@ const bookingArgs = {
     customerName: 'ลูกค้า',
     customerEmail: 'test@example.com',
     customerPhone: '0800000000',
+    holdToken: 'hold-1',
 };
 
 afterEach(() => {
@@ -26,6 +27,19 @@ afterEach(() => {
 });
 
 describe('bookingPaymentApi.createBooking', () => {
+    it('ส่ง hold_token ไปพร้อม Booking', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(201, {
+            data: {
+                booking_id: 'BK-1', concert_id: 'CC1', concert_title: 'งานทดสอบ', zone_id: 'A1', tier_name: 'โซน A',
+                quantity: 2, unit_price: 2000, discount_amount: 0, total_price: 4000, customer_name: 'ลูกค้า',
+                customer_email: 'test@example.com', customer_phone: '0800000000', status: 'under_review', booking_date: '2026-09-11',
+            },
+        }));
+
+        await bookingPaymentApi.createBooking(bookingArgs);
+
+        expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).hold_token).toBe('hold-1');
+    });
     it('โยน error พร้อมข้อความจากเซิร์ฟเวอร์เมื่อที่นั่งถูกจองไปแล้ว (409)', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(
             jsonResponse(409, { error: 'ที่นั่งไม่ว่างแล้ว: A2', unavailable_seats: ['A2'] }),
@@ -37,10 +51,16 @@ describe('bookingPaymentApi.createBooking', () => {
     it('ยังบันทึกลง local store ได้เมื่อต่อเซิร์ฟเวอร์ไม่ติด', async () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
 
-        const record = await bookingPaymentApi.createBooking(bookingArgs);
+        const record = await bookingPaymentApi.createBooking({ ...bookingArgs, holdToken: undefined });
 
         expect(record.id).toBeTruthy();
         expect(record.quantity).toBe(2);
+    });
+
+    it('ไม่แกล้งบอกว่าสำเร็จเมื่อ booking ที่มี hold token ต่อ Backend ไม่ได้', async () => {
+        vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+
+        await expect(bookingPaymentApi.createBooking(bookingArgs)).rejects.toThrow('ไม่สามารถเชื่อมต่อระบบจองที่นั่งได้');
     });
 });
 

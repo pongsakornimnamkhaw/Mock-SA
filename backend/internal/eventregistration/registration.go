@@ -16,7 +16,8 @@ import (
 )
 
 var (
-	errTicketConflict     = errors.New("ticket cannot be checked in")
+	errTicketUsed         = errors.New("ticket has already been used")
+	errTicketUnavailable  = errors.New("ticket is not ready for check-in")
 	errTicketWrongConcert = errors.New("ticket belongs to another concert")
 )
 
@@ -50,6 +51,8 @@ type checkInRequest struct {
 }
 
 type registrationTicketDTO struct {
+	ErrorCode      string     `json:"code,omitempty"`
+	ErrorMessage   string     `json:"error,omitempty"`
 	TicketID       uint       `json:"ticketId"`
 	ConcertID      string     `json:"concertId"`
 	ConcertName    string     `json:"concertName"`
@@ -178,7 +181,7 @@ func (h *RegistrationHandler) lookupTicket(c *fiber.Ctx) error {
 	ticket, err := h.loadTicket(ticketID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return apiError(c, fiber.StatusNotFound, "ticket not found", nil)
+			return apiErrorCode(c, fiber.StatusNotFound, "TICKET_NOT_FOUND", "ticket not found", nil)
 		}
 		return apiError(c, fiber.StatusInternalServerError, "load ticket", err)
 	}
@@ -187,9 +190,18 @@ func (h *RegistrationHandler) lookupTicket(c *fiber.Ctx) error {
 		return apiError(c, fiber.StatusInternalServerError, "load check-in status", err)
 	}
 	if concertID := strings.TrimSpace(c.Query("concertId")); concertID != "" && result.ConcertID != concertID {
-		return apiError(c, fiber.StatusConflict, "ticket belongs to another concert", nil)
+		result.ErrorCode = "WRONG_CONCERT"
+		result.ErrorMessage = "ticket belongs to another concert"
+		return c.Status(fiber.StatusConflict).JSON(result)
 	}
-	if !CanCheckIn(ticket.StatusTicket) {
+	if statusErr := ticketStatusError(ticket.StatusTicket, result.CheckedIn); statusErr != nil {
+		if errors.Is(statusErr, errTicketUsed) {
+			result.ErrorCode = "TICKET_USED"
+			result.ErrorMessage = "ticket has already been used"
+		} else {
+			result.ErrorCode = "TICKET_UNAVAILABLE"
+			result.ErrorMessage = "ticket is not ready for check-in"
+		}
 		return c.Status(fiber.StatusConflict).JSON(result)
 	}
 	return c.JSON(result)
@@ -264,9 +276,6 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&ticket, "ticket_id = ?", ticketID).Error; err != nil {
 			return err
 		}
-		if !CanCheckIn(ticket.StatusTicket) {
-			return errTicketConflict
-		}
 		var seat models.Seat
 		if err := tx.First(&seat, "seat_id = ?", ticket.SeatID).Error; err != nil {
 			return err
@@ -280,9 +289,12 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		}
 		var existing models.GateCheckIn
 		if err := tx.First(&existing, "ticket_id = ?", ticketID).Error; err == nil {
-			return errTicketConflict
+			return errTicketUsed
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		if statusErr := ticketStatusError(ticket.StatusTicket, false); statusErr != nil {
+			return statusErr
 		}
 
 		entry := models.GateCheckIn{
@@ -291,7 +303,7 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 		}
 		if err := tx.Create(&entry).Error; err != nil {
 			if isUniqueConflict(err) {
-				return errTicketConflict
+				return errTicketUsed
 			}
 			return err
 		}
@@ -300,11 +312,13 @@ func (h *RegistrationHandler) checkIn(c *fiber.Ctx) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			return apiError(c, fiber.StatusNotFound, "ticket not found", nil)
-		case errors.Is(err, errTicketConflict):
-			return apiError(c, fiber.StatusConflict, "ticket has already been used or is unavailable", nil)
+			return apiErrorCode(c, fiber.StatusNotFound, "TICKET_NOT_FOUND", "ticket not found", nil)
+		case errors.Is(err, errTicketUsed):
+			return apiErrorCode(c, fiber.StatusConflict, "TICKET_USED", "ticket has already been used", nil)
+		case errors.Is(err, errTicketUnavailable):
+			return apiErrorCode(c, fiber.StatusConflict, "TICKET_UNAVAILABLE", "ticket is not ready for check-in", nil)
 		case errors.Is(err, errTicketWrongConcert):
-			return apiError(c, fiber.StatusConflict, "ticket belongs to another concert", nil)
+			return apiErrorCode(c, fiber.StatusConflict, "WRONG_CONCERT", "ticket belongs to another concert", nil)
 		default:
 			return apiError(c, fiber.StatusInternalServerError, "check in ticket", err)
 		}
@@ -362,6 +376,13 @@ func ticketImageURL(ticket models.Ticket) string {
 
 func parseTicketID(value string) (uint, error) {
 	normalized := strings.TrimSpace(strings.ToUpper(value))
+	if strings.HasPrefix(normalized, "OCTAVIA|") {
+		parts := strings.Split(normalized, "|")
+		if len(parts) < 2 {
+			return 0, fmt.Errorf("invalid ticket id %q", value)
+		}
+		normalized = strings.TrimSpace(parts[1])
+	}
 	normalized = strings.TrimPrefix(normalized, "#")
 	normalized = strings.TrimPrefix(normalized, "TK-")
 	parsed, err := strconv.ParseUint(normalized, 10, 64)
@@ -369,6 +390,16 @@ func parseTicketID(value string) (uint, error) {
 		return 0, fmt.Errorf("invalid ticket id %q", value)
 	}
 	return uint(parsed), nil
+}
+
+func ticketStatusError(status string, checkedIn bool) error {
+	if checkedIn || strings.EqualFold(strings.TrimSpace(status), "USED") {
+		return errTicketUsed
+	}
+	if !CanCheckIn(status) {
+		return errTicketUnavailable
+	}
+	return nil
 }
 
 func CanCheckIn(status string) bool {
@@ -387,6 +418,14 @@ func isUniqueConflict(err error) bool {
 
 func apiError(c *fiber.Ctx, status int, message string, err error) error {
 	payload := fiber.Map{"error": message}
+	if err != nil {
+		payload["detail"] = err.Error()
+	}
+	return c.Status(status).JSON(payload)
+}
+
+func apiErrorCode(c *fiber.Ctx, status int, code, message string, err error) error {
+	payload := fiber.Map{"code": code, "error": message}
 	if err != nil {
 		payload["detail"] = err.Error()
 	}

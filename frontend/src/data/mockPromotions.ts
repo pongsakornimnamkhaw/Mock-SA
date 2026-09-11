@@ -7,12 +7,12 @@ import type {
 } from '../types/promotion';
 
 export const ZONES: Zone[] = [
-  { zone_id: 'z1', zone_name: 'VIP' },
-  { zone_id: 'z2', zone_name: 'A1' },
-  { zone_id: 'z3', zone_name: 'A2' },
-  { zone_id: 'z4', zone_name: 'B1' },
-  { zone_id: 'z5', zone_name: 'B2' },
-  { zone_id: 'z6', zone_name: 'C1' },
+  { zone_id: 'z1', zone_name: 'VIP', concert_id: 'c1' },
+  { zone_id: 'z2', zone_name: 'A1', concert_id: 'c1' },
+  { zone_id: 'z3', zone_name: 'A2', concert_id: 'c1' },
+  { zone_id: 'z4', zone_name: 'B1', concert_id: 'c2' },
+  { zone_id: 'z5', zone_name: 'B2', concert_id: 'c2' },
+  { zone_id: 'z6', zone_name: 'C1', concert_id: 'c3' },
 ];
 
 export const CONCERTS: Concert[] = [

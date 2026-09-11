@@ -50,6 +50,67 @@ func TestCreateBookingReservesSelectedSeatsWithoutIssuingTickets(t *testing.T) {
 	}
 }
 
+func TestCreateBookingConsumesValidSeatHold(t *testing.T) {
+	db := managementTestDB(t)
+	app := fiber.New()
+	RegisterSeatInventoryRoutes(app, db)
+	RegisterBookingPaymentRoutes(app, db)
+
+	if err := ensureZoneSeats(db, "CCBOOK", "A1"); err != nil {
+		t.Fatal(err)
+	}
+	var seat models.Seat
+	if err := db.Where("zone_id = ? AND seat_label = ?", "A1", "A1").First(&seat).Error; err != nil {
+		t.Fatal(err)
+	}
+	hold := managementRequest(t, app, "POST", "/api/seat-holds", map[string]any{
+		"concert_id": "CCBOOK", "zone_id": "A1", "seat_ids": []uint{seat.SeatID},
+	}, fiber.StatusCreated)
+	token := hold["hold_token"].(string)
+
+	input := bookingInput([]string{"A1"})
+	input["hold_token"] = token
+	managementRequest(t, app, "POST", "/api/bookings", input, fiber.StatusCreated)
+
+	if err := db.First(&seat, seat.SeatID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if seat.StatusSeat != seatStatusTaken || seat.ReservedBookingID == nil {
+		t.Fatalf("สร้าง booking แล้วต้องจองที่นั่งจริง: %+v", seat)
+	}
+	if seat.HoldToken != nil || seat.HoldExpiresAt != nil {
+		t.Fatalf("สร้าง booking แล้วต้องล้าง hold: %+v", seat)
+	}
+}
+
+func TestCreateBookingRejectsSeatHeldByAnotherToken(t *testing.T) {
+	db := managementTestDB(t)
+	app := fiber.New()
+	RegisterSeatInventoryRoutes(app, db)
+	RegisterBookingPaymentRoutes(app, db)
+
+	if err := ensureZoneSeats(db, "CCBOOK", "A1"); err != nil {
+		t.Fatal(err)
+	}
+	var seat models.Seat
+	if err := db.Where("zone_id = ? AND seat_label = ?", "A1", "A1").First(&seat).Error; err != nil {
+		t.Fatal(err)
+	}
+	managementRequest(t, app, "POST", "/api/seat-holds", map[string]any{
+		"concert_id": "CCBOOK", "zone_id": "A1", "seat_ids": []uint{seat.SeatID},
+	}, fiber.StatusCreated)
+
+	input := bookingInput([]string{"A1"})
+	input["hold_token"] = "another-customer-token"
+	managementRequest(t, app, "POST", "/api/bookings", input, fiber.StatusConflict)
+
+	var bookings int64
+	db.Model(&models.Booking{}).Count(&bookings)
+	if bookings != 0 {
+		t.Fatalf("token ผิดต้อง rollback booking แต่มี %d รายการ", bookings)
+	}
+}
+
 func TestCreateBookingRejectsSeatsThatAreAlreadyTaken(t *testing.T) {
 	db := managementTestDB(t)
 	app := fiber.New()

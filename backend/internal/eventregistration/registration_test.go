@@ -2,6 +2,7 @@ package eventregistration
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"backend/internal/models"
@@ -61,7 +62,10 @@ func TestTicketBelongsToSelectedConcert(t *testing.T) {
 }
 
 func TestParseTicketIDAcceptsNumericAndDisplayCodes(t *testing.T) {
-	for input, want := range map[string]uint{"45": 45, "TK-45": 45, "#TK-45": 45} {
+	for input, want := range map[string]uint{
+		"45": 45, "TK-45": 45, "#TK-45": 45,
+		"OCTAVIA|45|Neon Nights Vol.3|ZONE-A|A12|สมชาย ใจดี": 45,
+	} {
 		got, err := parseTicketID(input)
 		if err != nil {
 			t.Fatalf("parseTicketID(%q) returned error: %v", input, err)
@@ -69,6 +73,21 @@ func TestParseTicketIDAcceptsNumericAndDisplayCodes(t *testing.T) {
 		if got != want {
 			t.Fatalf("parseTicketID(%q) = %d, want %d", input, got, want)
 		}
+	}
+}
+
+func TestTicketStatusErrorSeparatesUsedFromUnavailable(t *testing.T) {
+	if !errors.Is(ticketStatusError("USED", false), errTicketUsed) {
+		t.Fatal("USED ticket must return errTicketUsed")
+	}
+	if !errors.Is(ticketStatusError("READY", true), errTicketUsed) {
+		t.Fatal("existing check-in must return errTicketUsed")
+	}
+	if !errors.Is(ticketStatusError("PENDING", false), errTicketUnavailable) {
+		t.Fatal("non-ready ticket must return errTicketUnavailable")
+	}
+	if err := ticketStatusError("READY", false); err != nil {
+		t.Fatalf("ready unused ticket rejected: %v", err)
 	}
 }
 

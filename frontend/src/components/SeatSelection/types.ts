@@ -1,10 +1,13 @@
-export type SeatStatus = 'available' | 'reserved' | 'selected' | 'locked';
+export type SeatStatus = 'available' | 'reserved' | 'selected' | 'locked' | 'held' | 'disabled';
 
 export interface SeatData {
+    seatId: number;
     id: string;
     row: string;
     number: number;
     status: SeatStatus;
+    x: number;
+    y: number;
 }
 
 export interface EventData {

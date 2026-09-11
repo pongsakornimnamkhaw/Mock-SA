@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BrowserQRCodeReader } from '@zxing/browser'
 import { registrationApi } from './api'
-import { classifyLookupConflict, STATUS_EXAMPLES } from './statusExamples'
+import { STATUS_EXAMPLES } from './statusExamples'
 import { formatTicketCode, normalizeTicketCode } from './ticketCode'
+import { runAutomaticCheckIn } from './checkInFlow'
 
 const SAMPLE_TICKET = { ticketId:'TK-2026-0459',concertName:'Acoustic Sessions: Bangkok',zoneType:'B',seatRow:'B',seatColumn:'24',ticketStatus:'VALID' }
 const formatDateTime = value => value ? new Intl.DateTimeFormat('th-TH',{dateStyle:'medium',timeStyle:'medium'}).format(new Date(value)) : '-'
@@ -40,17 +42,47 @@ function Dashboard({ concert,gateId,setGateId,onBack,onScan,onExamples }) {
 function TicketDetails({ ticket }) { return <dl className="reg-ticket-details"><div><dt>งานแสดง</dt><dd>{ticket.concertName||'-'}</dd></div><div><dt>รหัสบัตร</dt><dd>#{formatTicketCode(ticket.ticketId)}</dd></div><div><dt>โซน / ที่นั่ง</dt><dd>{ticket.zoneType||'-'} · {ticket.seatRow||'-'}-{ticket.seatColumn||'-'}</dd></div><div><dt>สถานะบัตร</dt><dd>{ticket.ticketStatus||'-'}</dd></div></dl> }
 
 function Scanner({ concert,gateId,onBack,onResult }) {
-  const videoRef=useRef(null), streamRef=useRef(null), scanLock=useRef(false), lookupBusyRef=useRef(false)
-  const [ticketCode,setTicketCode]=useState(''), [cameraState,setCameraState]=useState('requesting'), [busy,setBusy]=useState(false), [ticket,setTicket]=useState(null), [lookupTone,setLookupTone]=useState('')
-  const lookup=useCallback(async raw=>{ const code=normalizeTicketCode(raw); if(!code||lookupBusyRef.current)return; lookupBusyRef.current=true;setBusy(true);setTicket(null);setLookupTone(''); try{const data=await registrationApi.lookupTicket(code,concert.id);setTicket(data);setLookupTone('success')}catch(error){if(error.status===409&&error.data?.ticketId){setTicket(error.data);setLookupTone(classifyLookupConflict(error.data))}else{setTicket({ticketId:code});setLookupTone('danger')}}finally{lookupBusyRef.current=false;setBusy(false)} },[concert.id])
-  useEffect(()=>{let stopped=false,frame=0; const startCamera=async()=>{if(!navigator.mediaDevices?.getUserMedia){setCameraState('unsupported');return}try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});if(stopped){stream.getTracks().forEach(track=>track.stop());return}streamRef.current=stream;if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play().catch(()=>{})}setCameraState('active');if('BarcodeDetector'in window){const detector=new window.BarcodeDetector({formats:['qr_code']});const detect=async()=>{if(stopped)return;try{const codes=videoRef.current?.readyState>=2?await detector.detect(videoRef.current):[];if(codes[0]?.rawValue&&!scanLock.current){scanLock.current=true;setTicketCode(codes[0].rawValue);await lookup(codes[0].rawValue)}}catch{/* manual entry remains available */}frame=requestAnimationFrame(detect)};frame=requestAnimationFrame(detect)}}catch(error){setCameraState(error?.name==='NotAllowedError'?'denied':'unavailable')}};startCamera();return()=>{stopped=true;cancelAnimationFrame(frame);streamRef.current?.getTracks().forEach(track=>track.stop())}},[lookup])
-  const confirm=async()=>{if(!ticket?.ticketId||lookupTone!=='success')return;setBusy(true);try{await registrationApi.checkIn(ticket.ticketId,gateId,concert.id);onResult('success',ticket)}catch(error){onResult(error.status===409?'warning':'danger',ticket)}finally{setBusy(false)}}
-  const cameraMessage=cameraState==='denied'?'ไม่ได้รับสิทธิ์เปิดกล้อง':cameraState==='unsupported'?'อุปกรณ์นี้ไม่รองรับกล้อง':cameraState==='active'?'':'กำลังเปิดกล้อง...'
-  return <main className="reg-page reg-scanner-page"><header className="reg-dashboard-header"><div><button className="reg-back" onClick={onBack}>← กลับไปหน้าภาพรวม</button><h1>สแกนและค้นหาบัตร</h1><p><b>{concert.name}</b> · ประตู {String.fromCharCode(64+gateId)}</p></div><span className={`reg-camera-status ${cameraState}`}>{cameraState==='active'?'● กล้องพร้อมใช้งาน':cameraState==='requesting'?'กำลังขอสิทธิ์กล้อง...':'ใช้การกรอกรหัสบัตร'}</span></header><section className="reg-scan-workspace"><div className="reg-camera-panel"><h2>สแกน QR Code</h2><p>วาง QR Code ให้อยู่ในกรอบ</p><div className="reg-live-camera"><video ref={videoRef} playsInline muted/><div className="reg-scan-corners"/><i/><span>{cameraMessage}</span></div></div><div className="reg-lookup-panel"><h2>หรือค้นหาด้วยรหัสบัตร</h2><label>รหัสบัตร<input value={ticketCode} onChange={event=>setTicketCode(event.target.value)} onKeyDown={event=>event.key==='Enter'&&lookup(ticketCode)} placeholder="เช่น TK-000001"/></label><button className="reg-primary-button" disabled={!ticketCode.trim()||busy} onClick={()=>lookup(ticketCode)}>{busy?'กำลังตรวจสอบ...':'ค้นหาบัตร'}</button>{lookupTone&&<section className={`reg-inline-result ${lookupTone}`}><h3>{lookupTone==='success'?'✓ พบข้อมูลบัตร':lookupTone==='warning'?'! บัตรถูกใช้แล้ว':lookupTone==='unavailable'?'! บัตรยังใช้ไม่ได้':'× ไม่พบบัตรในระบบ'}</h3>{lookupTone!=='danger'&&<TicketDetails ticket={ticket}/>} {lookupTone==='success'&&<button className="reg-primary-button" onClick={confirm} disabled={busy}>ตรวจสอบและบันทึกการเข้างาน</button>}</section>}</div></section></main>
+  const videoRef=useRef(null),streamRef=useRef(null),scanLock=useRef(false),lookupBusyRef=useRef(false),zxingControlsRef=useRef(null)
+  const [ticketCode,setTicketCode]=useState(''),[cameraState,setCameraState]=useState('requesting'),[busy,setBusy]=useState(false),[error,setError]=useState('')
+  const lookup=useCallback(async raw=>{
+    const code=normalizeTicketCode(raw)
+    if(!code||lookupBusyRef.current)return
+    lookupBusyRef.current=true;scanLock.current=true;setBusy(true);setError('')
+    try{onResult(await runAutomaticCheckIn(raw,concert.id,gateId,registrationApi))}
+    catch{setError('ไม่สามารถเชื่อมต่อ Server ได้ กรุณาลองอีกครั้ง');scanLock.current=false}
+    finally{lookupBusyRef.current=false;setBusy(false)}
+  },[concert.id,gateId,onResult])
+  useEffect(()=>{
+    let stopped=false,frame=0
+    const startCamera=async()=>{
+      const isLocal=['localhost','127.0.0.1','::1'].includes(window.location.hostname)
+      if(!window.isSecureContext&&!isLocal){setCameraState('insecure');return}
+      if(!navigator.mediaDevices?.getUserMedia){setCameraState('unsupported');return}
+      try{
+        const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false})
+        if(stopped){stream.getTracks().forEach(track=>track.stop());return}
+        streamRef.current=stream
+        if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play().catch(()=>{})}
+        setCameraState('active')
+        if('BarcodeDetector'in window){
+          const detector=new window.BarcodeDetector({formats:['qr_code']})
+          const detect=async()=>{if(stopped)return;try{const codes=videoRef.current?.readyState>=2?await detector.detect(videoRef.current):[];if(codes[0]?.rawValue&&!scanLock.current){setTicketCode(codes[0].rawValue);await lookup(codes[0].rawValue)}}catch{/* manual entry remains available */}frame=requestAnimationFrame(detect)}
+          frame=requestAnimationFrame(detect)
+        }else if(videoRef.current){
+          const reader=new BrowserQRCodeReader()
+          zxingControlsRef.current=await reader.decodeFromStream(stream,videoRef.current,result=>{const raw=result?.getText();if(raw&&!scanLock.current){setTicketCode(raw);void lookup(raw)}})
+        }
+      }catch(cameraError){setCameraState(cameraError?.name==='NotAllowedError'?'denied':'unavailable')}
+    }
+    void startCamera()
+    return()=>{stopped=true;cancelAnimationFrame(frame);zxingControlsRef.current?.stop();streamRef.current?.getTracks().forEach(track=>track.stop())}
+  },[lookup])
+  const cameraMessage=cameraState==='denied'?'ไม่ได้รับสิทธิ์เปิดกล้อง':cameraState==='unsupported'?'อุปกรณ์นี้ไม่รองรับกล้อง':cameraState==='insecure'?'กล้องใช้งานได้เฉพาะ localhost หรือ HTTPS':cameraState==='active'?'':'กำลังเปิดกล้อง...'
+  return <main className="reg-page reg-scanner-page"><header className="reg-dashboard-header"><div><button className="reg-back" onClick={onBack}>← กลับไปหน้าภาพรวม</button><h1>สแกนและค้นหาบัตร</h1><p><b>{concert.name}</b> · ประตู {String.fromCharCode(64+gateId)}</p></div><span className={`reg-camera-status ${cameraState}`}>{cameraState==='active'?'● กล้องพร้อมใช้งาน':cameraState==='requesting'?'กำลังขอสิทธิ์กล้อง...':'ใช้การกรอกรหัสบัตร'}</span></header>{error&&<div className="reg-notice">{error}</div>}<section className="reg-scan-workspace"><div className="reg-camera-panel"><h2>สแกน QR Code</h2><p>วาง QR Code ให้อยู่ในกรอบ ระบบจะตรวจและเช็กอินทันที</p><div className="reg-live-camera"><video ref={videoRef} playsInline muted/><div className="reg-scan-corners"/><i/><span>{cameraMessage}</span></div></div><div className="reg-lookup-panel"><h2>หรือค้นหาด้วยรหัสบัตร</h2><label>รหัสบัตรหรือ QR payload<input value={ticketCode} onChange={event=>{setTicketCode(event.target.value);scanLock.current=false}} onKeyDown={event=>event.key==='Enter'&&lookup(ticketCode)} placeholder="เช่น 45, TK-45 หรือ OCTAVIA|45|..."/></label><button className="reg-primary-button" disabled={!ticketCode.trim()||busy} onClick={()=>lookup(ticketCode)}>{busy?'กำลังตรวจสอบและเช็กอิน...':'ตรวจสอบและเช็กอิน'}</button></div></section></main>
 }
 
-function StatusPage({ tone,ticket=SAMPLE_TICKET,onBack }) { const copy=tone==='success'?['✓','ลงทะเบียนสำเร็จ','เช็คอินเรียบร้อย · ยินดีต้อนรับเข้าสู่งาน']:tone==='warning'?['!','บัตรนี้ถูกใช้ไปแล้ว',ticket.checkedInAt?`เช็คอินเมื่อ ${formatDateTime(ticket.checkedInAt)}`:'พบบันทึกการเช็คอินก่อนหน้า']:['×','ไม่พบบัตรนี้ในระบบ','กรุณาตรวจสอบ QR หรือรหัสบัตรอีกครั้ง'];return <main className="reg-status-page"><section className={`reg-ticket-card ${tone}`}><div className="reg-status-icon">{copy[0]}</div><h1>{copy[1]}</h1><p className="reg-subtitle">{copy[2]}</p><div className="reg-divider"/><TicketDetails ticket={ticket}/><button className="reg-button scan" onClick={onBack}>{tone==='danger'?'ลองสแกนอีกครั้ง':'สแกนใบถัดไป'}</button></section></main> }
+function StatusPage({ tone,ticket=SAMPLE_TICKET,message,onBack }) { const example=STATUS_EXAMPLES.find(item=>item.tone===tone)||STATUS_EXAMPLES[2];const description=message||(tone==='warning'&&ticket.checkedInAt?`เช็คอินเมื่อ ${formatDateTime(ticket.checkedInAt)}`:example.description);return <main className="reg-status-page"><section className={`reg-ticket-card ${tone}`}><div className="reg-status-icon">{example.symbol}</div><h1>{example.title}</h1><p className="reg-subtitle">{description}</p><div className="reg-divider"/><TicketDetails ticket={ticket}/><button className="reg-button scan" onClick={onBack}>{tone==='danger'?'ลองสแกนอีกครั้ง':'สแกนใบถัดไป'}</button></section></main> }
 
 function StatusExamples({ onBack }) { return <main className="reg-page reg-examples"><header className="reg-page-heading"><div><button className="reg-back" onClick={onBack}>← กลับไปหน้า Dashboard</button><span>STATUS PREVIEW</span><h1>ตัวอย่างสถานะในระบบ</h1><p>หน้านี้เป็นเพียงตัวอย่างและไม่บันทึกการเข้างาน</p></div></header><section className="reg-example-grid">{STATUS_EXAMPLES.map(example=><article className={example.tone} key={example.key}><div>{example.symbol}</div><h2>{example.title}</h2><p>{example.description}</p><TicketDetails ticket={{...SAMPLE_TICKET,ticketId:example.key==='not-found'?'TK-2026-9999':SAMPLE_TICKET.ticketId,ticketStatus:example.ticketStatus}}/></article>)}</section></main> }
 
-export default function RegistrationApp(){const[page,setPage]=useState('select'),[concert,setConcert]=useState(null),[gateId,setGateId]=useState(1),[result,setResult]=useState(null);if(page==='select'||!concert)return <ConcertPicker onSelect={item=>{setConcert(item);setPage('dashboard')}}/>;if(page==='scanner')return <Scanner concert={concert} gateId={gateId} onBack={()=>setPage('dashboard')} onResult={(tone,ticket)=>{setResult({tone,ticket});setPage('status')}}/>;if(page==='examples')return <StatusExamples onBack={()=>setPage('dashboard')}/>;if(page==='status')return <StatusPage tone={result?.tone||'danger'} ticket={result?.ticket} onBack={()=>setPage('scanner')}/>;return <Dashboard concert={concert} gateId={gateId} setGateId={setGateId} onBack={()=>setPage('select')} onScan={()=>setPage('scanner')} onExamples={()=>setPage('examples')}/>}
+export default function RegistrationApp(){const[page,setPage]=useState('select'),[concert,setConcert]=useState(null),[gateId,setGateId]=useState(1),[result,setResult]=useState(null);if(page==='select'||!concert)return <ConcertPicker onSelect={item=>{setConcert(item);setPage('dashboard')}}/>;if(page==='scanner')return <Scanner concert={concert} gateId={gateId} onBack={()=>setPage('dashboard')} onResult={next=>{setResult(next);setPage('status')}}/>;if(page==='examples')return <StatusExamples onBack={()=>setPage('dashboard')}/>;if(page==='status')return <StatusPage tone={result?.tone||'danger'} ticket={result?.ticket} message={result?.message} onBack={()=>setPage('scanner')}/>;return <Dashboard concert={concert} gateId={gateId} setGateId={setGateId} onBack={()=>setPage('select')} onScan={()=>setPage('scanner')} onExamples={()=>setPage('examples')}/>}

@@ -36,6 +36,35 @@ describe('seatInventoryApi', () => {
         ]);
     });
 
+    it('ส่ง hold token ตอนโหลดที่นั่งและคง SeatID แบบตัวเลข', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, {
+            data: [{ seat_id: 12, label: 'A12', seat_row: 1, seat_column: 12, status: 'LOCKED', position_x: 30, position_y: 40 }],
+        }));
+
+        const seats = await seatInventoryApi.listSeats('CC1', 'ZA', 'hold-1');
+
+        expect(String(fetchMock.mock.calls[0][0])).toBe('/api/concerts/CC1/zones/ZA/seats?hold_token=hold-1');
+        expect(seats[0]).toMatchObject({ seatId: 12, label: 'A12', status: 'LOCKED', positionX: 30, positionY: 40 });
+    });
+
+    it('โหลดผังจริงและสร้าง hold ด้วย SeatID', async () => {
+        const fetchMock = vi.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(jsonResponse(200, {
+                zones: [{ id: 'ZA', kind: 'zone', name: 'VIP', color: '#ff0000', zonePrice: 2500, seatItems: [] }],
+                layoutObjects: [{ id: 'stage', kind: 'object', name: 'เวที', x: 50, y: 10, width: 30, height: 8, z: 1 }],
+            }))
+            .mockResolvedValueOnce(jsonResponse(201, { hold_token: 'token-1', expires_at: '2026-09-11T10:15:00Z' }));
+
+        const layout = await seatInventoryApi.getLayout('CC1');
+        const hold = await seatInventoryApi.createHold('CC1', 'ZA', [12, 13]);
+
+        expect(layout.zones[0].zonePrice).toBe(2500);
+        expect(layout.layoutObjects[0].name).toBe('เวที');
+        expect(String(fetchMock.mock.calls[0][0])).toBe('/api/ticket-planning/concerts/CC1/layout');
+        expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ concert_id: 'CC1', zone_id: 'ZA', seat_ids: [12, 13] });
+        expect(hold).toEqual({ holdToken: 'token-1', expiresAt: '2026-09-11T10:15:00Z' });
+    });
+
     it('โยน error พร้อมข้อความจาก backend เมื่อโหลดไม่สำเร็จ', async () => {
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(500, { error: 'ไม่สามารถโหลดที่นั่งได้' }));
 
